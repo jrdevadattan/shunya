@@ -9,6 +9,7 @@ import { DestinationPage } from '../features/recovery/DestinationPage.js';
 import { GoalPage } from '../features/recovery/GoalPage.js';
 import { ScanOptionsPage } from '../features/recovery/ScanOptionsPage.js';
 import { PartitionList } from '../features/sources/PartitionList.js';
+import { ResultsPage } from '../features/results/ResultsPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -27,7 +28,7 @@ export const router = createHashRouter([
       { path: 'recovery/scan-options', element: <ScanOptionsPage /> },
       { path: 'recovery/partitions', element: <PartitionList /> },
       { path: 'jobs', element: <JobProgressPage /> },
-      { path: 'results', element: <RoutePlaceholder title="Recovered files" description="Search, preview, verify, and select recovered files." /> },
+      { path: 'results', element: <ResultsPage /> },
       { path: 'memory', element: <RoutePlaceholder title="Memory analysis" description="Analyze supported volatile-memory images." /> },
       { path: 'exports', element: <RoutePlaceholder title="Exports" description="Copy verified results to a safe destination." /> },
       { path: 'reports', element: <RoutePlaceholder title="Reports" description="Generate case and recovery reports." /> },

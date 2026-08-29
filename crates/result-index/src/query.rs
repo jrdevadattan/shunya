@@ -1,0 +1,52 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactQuery {
+    pub search: Option<String>,
+    pub method: Option<String>,
+    pub status: Option<String>,
+    pub threat: Option<String>,
+    pub mime_type: Option<String>,
+    pub partition_id: Option<String>,
+    pub min_size: Option<u64>,
+    pub max_size: Option<u64>,
+    pub cursor: Option<String>,
+    pub page_size: usize,
+}
+
+pub(crate) fn append_filters(
+    query: &ArtifactQuery,
+    clauses: &mut Vec<String>,
+    parameters: &mut Vec<rusqlite::types::Value>,
+    table: &str,
+) {
+    for (column, value) in [
+        ("method", &query.method),
+        ("status", &query.status),
+        ("threat", &query.threat),
+        ("mime_type", &query.mime_type),
+        ("partition_id", &query.partition_id),
+    ] {
+        if let Some(value) = value {
+            clauses.push(format!("{table}.{column} = ?"));
+            parameters.push(value.clone().into());
+        }
+    }
+    if let Some(minimum) = query.min_size {
+        clauses.push(format!("{table}.size_bytes >= ?"));
+        parameters.push((minimum as i64).into());
+    }
+    if let Some(maximum) = query.max_size {
+        clauses.push(format!("{table}.size_bytes <= ?"));
+        parameters.push((maximum as i64).into());
+    }
+    if let Some(cursor) = &query.cursor {
+        clauses.push(format!("{table}.artifact_id > ?"));
+        parameters.push(cursor.clone().into());
+    }
+}
+
+pub(crate) fn fts_expression(search: &str) -> String {
+    format!("\"{}\"", search.replace('"', "\"\""))
+}

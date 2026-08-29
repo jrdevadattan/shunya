@@ -1,0 +1,3 @@
+export function ResultFilters({ search, onSearch }: { search: string; onSearch(value: string): void }) {
+  return <aside className="results-filters"><h2>Filters</h2><label>Search recovered files<input type="search" value={search} onChange={(event) => onSearch(event.target.value)} /></label><fieldset><legend>Recovery method</legend><label><input type="checkbox" defaultChecked /> File record</label><label><input type="checkbox" defaultChecked /> Content signature</label></fieldset><fieldset><legend>Quality</legend><label><input type="checkbox" /> Complete</label><label><input type="checkbox" /> Partial</label><label><input type="checkbox" /> Corrupt</label></fieldset><button type="button" className="button button--secondary">Save filter</button></aside>;
+}
