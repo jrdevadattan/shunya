@@ -1,3 +1,5 @@
+use case_store::{CaseInput, CaseStore};
+use job_engine::{CheckpointStatus, JobEngine, JobStage};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -307,6 +309,97 @@ fn interrupted_job_is_recovered_paused_and_resume_completes_it() {
     assert_eq!(
         wait_for_stage(&mut restarted, &job_id, "completed")["stage"],
         "completed"
+    );
+}
+
+#[test]
+fn completed_stage_handoff_gap_is_recovered_after_restart() {
+    let temporary = tempdir().unwrap();
+    let (mut daemon, case_path, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
+    daemon.terminate();
+
+    let parsed_job_id = Uuid::parse_str(&job_id).unwrap();
+    let mut engine = JobEngine::open(&case_path).unwrap();
+    engine.start(parsed_job_id).unwrap();
+    engine
+        .checkpoint(
+            parsed_job_id,
+            JobStage::Preflight,
+            CheckpointStatus::Completed,
+            2 * 1024 * 1024,
+            json!({ "phase": "completed_before_next_stage_handoff" }),
+        )
+        .unwrap();
+    drop(engine);
+
+    let mut restarted = Daemon::start();
+    restarted.rpc("case.open", json!({ "casePath": case_path }));
+    let recovered = restarted.rpc("job.status", json!({ "jobId": job_id }));
+    assert_eq!(recovered["stage"], "paused");
+    restarted.rpc("job.resume", json!({ "jobId": job_id }));
+    assert_eq!(
+        wait_for_stage(&mut restarted, &job_id, "completed")["stage"],
+        "completed"
+    );
+}
+
+#[test]
+fn case_switch_is_refused_while_worker_runs_and_cancel_stays_controlled() {
+    let temporary = tempdir().unwrap();
+    let (mut daemon, case_path, _, _, job_id, _) = setup_job(temporary.path(), 128 * 1024 * 1024);
+    let secondary_path = temporary.path().join("secondary-case");
+    CaseStore::create(
+        &secondary_path,
+        CaseInput {
+            title: "Secondary case".into(),
+            operator: "Integration Test".into(),
+            reference_number: None,
+            organization: None,
+            notes: None,
+        },
+    )
+    .unwrap();
+
+    daemon.rpc("job.start", json!({ "jobId": job_id }));
+    let open_error = daemon.rpc_error("case.open", json!({ "casePath": secondary_path }));
+    assert_eq!(open_error["code"], "CASE_BUSY");
+    let create_error = daemon.rpc_error(
+        "case.create",
+        json!({
+            "title": "Must not replace active state",
+            "operator": "Integration Test",
+            "workspacePath": temporary.path().join("third-case")
+        }),
+    );
+    assert_eq!(create_error["code"], "CASE_BUSY");
+
+    assert_ne!(
+        daemon.rpc("job.status", json!({ "jobId": job_id }))["stage"],
+        "completed"
+    );
+    assert_eq!(
+        daemon.rpc("job.cancel", json!({ "jobId": job_id }))["stage"],
+        "cancelled"
+    );
+    let events = daemon.rpc("job.events", json!({ "jobId": job_id }));
+    assert_eq!(
+        events
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|event| event["stage"] == "cancelled")
+            .count(),
+        1
+    );
+
+    daemon.rpc("case.open", json!({ "casePath": secondary_path }));
+    assert_eq!(
+        JobEngine::open(&case_path)
+            .unwrap()
+            .snapshot(Uuid::parse_str(&job_id).unwrap())
+            .unwrap()
+            .stage,
+        JobStage::Cancelled
     );
 }
 

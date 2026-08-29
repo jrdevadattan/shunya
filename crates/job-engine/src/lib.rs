@@ -219,10 +219,9 @@ impl JobEngine {
     pub fn recover_incomplete_jobs(&mut self) -> Result<Vec<RecoveredJob>, JobEngineError> {
         let candidates = {
             let mut statement = self.connection.prepare(
-                "SELECT j.job_id, c.stage FROM jobs j JOIN job_checkpoints c ON c.job_id=j.job_id
-                 WHERE c.status IN ('started', 'in_progress')
-                   AND j.stage NOT IN ('paused', 'needs_attention', 'completed', 'cancelled', 'failed')
-                 ORDER BY c.updated_at DESC",
+                "SELECT job_id, stage FROM jobs
+                 WHERE stage NOT IN ('draft', 'paused', 'needs_attention', 'completed', 'cancelled', 'failed')
+                 ORDER BY updated_at DESC",
             )?;
             let rows = statement.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -233,16 +232,23 @@ impl JobEngine {
         for (job, stage) in candidates {
             let job_id = Uuid::parse_str(&job).expect("persisted job UUID");
             let resume_stage: JobStage = decode(&stage)?;
-            if recovered
-                .iter()
-                .any(|item: &RecoveredJob| item.job_id == job_id)
-            {
+            if resume_stage == JobStage::Cancelling {
+                self.transition(
+                    job_id,
+                    JobStage::Cancelled,
+                    "Interrupted cancellation completed during recovery",
+                )?;
                 continue;
             }
             self.set_resume_stage(job_id, resume_stage)?;
             self.connection.execute(
                 "UPDATE jobs SET stage='paused', updated_at=?1 WHERE job_id=?2",
                 params![Utc::now().to_rfc3339(), job],
+            )?;
+            self.append_event(
+                job_id,
+                JobStage::Paused,
+                Some("Interrupted recovery paused for explicit resume".into()),
             )?;
             recovered.push(RecoveredJob {
                 job_id,

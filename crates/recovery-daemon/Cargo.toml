@@ -30,5 +30,8 @@ tokio-util.workspace = true
 uuid.workspace = true
 validation = { path = "../validation" }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Security", "Win32_System_IO", "Win32_System_Ioctl"] }
+
 [dev-dependencies]
 tempfile = "3"

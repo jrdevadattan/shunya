@@ -595,6 +595,7 @@ dependencies = [
  "tokio-util",
  "uuid",
  "validation",
+ "windows-sys",
 ]
 
 [[package]]

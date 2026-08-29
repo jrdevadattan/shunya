@@ -158,6 +158,14 @@ impl JobControl {
             let _ = worker.join();
         }
     }
+
+    fn is_active(&self) -> bool {
+        self.worker
+            .lock()
+            .expect("worker lock")
+            .as_ref()
+            .is_some_and(|worker| !worker.is_finished())
+    }
 }
 
 type RouteResult = Result<Value, (&'static str, String)>;
@@ -207,6 +215,7 @@ impl DaemonState {
 
     fn create_case(&mut self, request: &RpcRequest) -> RouteResult {
         let params: CreateCaseParams = parse(request, "INVALID_CASE_INPUT")?;
+        self.ensure_case_switch_allowed()?;
         let destination_parent = params
             .workspace_path
             .parent()
@@ -252,6 +261,7 @@ impl DaemonState {
 
     fn open_case(&mut self, request: &RpcRequest) -> RouteResult {
         let params: OpenCaseParams = parse(request, "INVALID_CASE_INPUT")?;
+        self.ensure_case_switch_allowed()?;
         let store = CaseStore::open(&params.case_path)
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))?;
         self.current_case = Some(params.case_path.clone());
@@ -264,6 +274,16 @@ impl DaemonState {
             .map_err(|error| ("JOB_RECOVERY_FAILED", error.to_string()))?;
         serde_json::to_value(store.manifest())
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))
+    }
+
+    fn ensure_case_switch_allowed(&self) -> Result<(), (&'static str, String)> {
+        if self.controls.values().any(|control| control.is_active()) {
+            return Err((
+                "CASE_BUSY",
+                "Pause or cancel the active recovery job before changing cases".into(),
+            ));
+        }
+        Ok(())
     }
 
     fn list_sources(&self) -> RouteResult {
@@ -549,8 +569,17 @@ impl DaemonState {
             });
         }
         let destination = params.destination_path.clone();
-        let (source_physical_id, destination_physical_id) =
-            verified_distinct_physical_identities(&source.canonical_path, &destination)?;
+        let source_physical_id = physical_device_identity(&source.canonical_path)
+            .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+        let destination_physical_id = physical_device_identity(&destination)
+            .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+        let (source_physical_id, destination_physical_id) = validate_export_destination(
+            &source.canonical_path,
+            &root,
+            &destination,
+            &source_physical_id,
+            &destination_physical_id,
+        )?;
         let exported = run_export(ExportRequest {
             export_root: destination.clone(),
             source_physical_id,
@@ -1516,30 +1545,68 @@ fn is_active_or_unsupported(artifact: &RecoveryArtifact) -> bool {
     active_extension || !passive_preview_input
 }
 
-fn verified_distinct_physical_identities(
+fn validate_export_destination(
     source: &Path,
+    case_root: &Path,
     destination: &Path,
+    source_physical_id: &str,
+    destination_physical_id: &str,
 ) -> Result<(String, String), (&'static str, String)> {
-    let source_filesystem = filesystem_identity(source)
+    let source = normalized_target(source)
         .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
-    let destination_filesystem = filesystem_identity(destination)
+    let case_root = normalized_target(case_root)
         .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
-    if source_filesystem == destination_filesystem {
+    let destination = normalized_target(destination)
+        .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+    if paths_overlap(&destination, &source) || paths_overlap(&destination, &case_root) {
         return Err((
-            "EXPORT_DESTINATION_NOT_SEPARATE",
-            "The daemon resolved the source and destination to the same filesystem device".into(),
+            "EXPORT_DESTINATION_OVERLAP",
+            "The export destination must not contain or overwrite the source image or case workspace"
+                .into(),
         ));
     }
-    Err((
-        "EXPORT_DESTINATION_UNVERIFIED",
-        "The daemon resolved different filesystem volumes but cannot prove that they are on separate physical devices"
-            .into(),
-    ))
+    if source_physical_id == destination_physical_id {
+        return Err((
+            "EXPORT_DESTINATION_NOT_SEPARATE",
+            "The daemon resolved the source image and destination to the same physical device"
+                .into(),
+        ));
+    }
+    Ok((source_physical_id.into(), destination_physical_id.into()))
 }
 
-fn filesystem_identity(path: &Path) -> std::io::Result<String> {
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    left.starts_with(right) || right.starts_with(left)
+}
+
+fn normalized_target(path: &Path) -> std::io::Result<PathBuf> {
+    let mut existing = path.to_path_buf();
+    let mut missing = Vec::new();
+    while !existing.exists() {
+        let name = existing.file_name().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("no existing ancestor for {}", path.display()),
+            )
+        })?;
+        missing.push(name.to_os_string());
+        if !existing.pop() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("no existing ancestor for {}", path.display()),
+            ));
+        }
+    }
+    let mut normalized = fs::canonicalize(existing)?;
+    for component in missing.into_iter().rev() {
+        normalized.push(component);
+    }
+    Ok(normalized)
+}
+
+fn physical_device_identity(path: &Path) -> std::io::Result<String> {
     let existing = existing_ancestor(path)?;
-    filesystem_identity_for_existing(&existing)
+    physical_device_identity_for_existing(&existing)
 }
 
 fn existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
@@ -1556,35 +1623,109 @@ fn existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 #[cfg(windows)]
-fn filesystem_identity_for_existing(path: &Path) -> std::io::Result<String> {
+fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
     use std::path::{Component, Prefix};
+    use std::ptr::{null, null_mut};
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{
+        IOCTL_STORAGE_GET_DEVICE_NUMBER, STORAGE_DEVICE_NUMBER,
+    };
 
-    match path.components().next() {
+    let letter = match path.components().next() {
         Some(Component::Prefix(prefix)) => match prefix.kind() {
-            Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => Ok(format!(
-                "windows-volume:{}",
-                (letter as char).to_ascii_uppercase()
-            )),
-            _ => Err(std::io::Error::other(
-                "destination volume identity is not locally provable",
-            )),
+            Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => letter,
+            _ => {
+                return Err(std::io::Error::other(
+                    "physical identity for this Windows path is not provable",
+                ));
+            }
         },
-        _ => Err(std::io::Error::other(
-            "destination volume identity is not locally provable",
-        )),
+        _ => {
+            return Err(std::io::Error::other(
+                "physical identity for this Windows path is not provable",
+            ));
+        }
+    };
+    let volume = format!(r"\\.\{}:", (letter as char).to_ascii_uppercase());
+    let wide = OsStr::new(&volume)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            null(),
+            OPEN_EXISTING,
+            0,
+            null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(std::io::Error::last_os_error());
     }
+    let mut device = STORAGE_DEVICE_NUMBER::default();
+    let mut returned = 0_u32;
+    let success = unsafe {
+        DeviceIoControl(
+            handle,
+            IOCTL_STORAGE_GET_DEVICE_NUMBER,
+            null(),
+            0,
+            (&mut device as *mut STORAGE_DEVICE_NUMBER).cast(),
+            std::mem::size_of::<STORAGE_DEVICE_NUMBER>() as u32,
+            &mut returned,
+            null_mut(),
+        )
+    };
+    unsafe {
+        CloseHandle(handle);
+    }
+    if success == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(format!(
+        "windows-storage-device:{}:{}",
+        device.DeviceType, device.DeviceNumber
+    ))
 }
 
-#[cfg(unix)]
-fn filesystem_identity_for_existing(path: &Path) -> std::io::Result<String> {
+#[cfg(target_os = "linux")]
+fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String> {
     use std::os::unix::fs::MetadataExt;
-    Ok(format!("unix-device:{}", fs::metadata(path)?.dev()))
+
+    let device = fs::metadata(path)?.dev();
+    let major = ((device >> 8) & 0xfff) | ((device >> 32) & !0xfff);
+    let minor = (device & 0xff) | ((device >> 12) & !0xff);
+    let sysfs = fs::canonicalize(format!("/sys/dev/block/{major}:{minor}"))?;
+    let components = sysfs
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let block = components
+        .iter()
+        .position(|component| component == "block")
+        .and_then(|index| components.get(index + 1))
+        .ok_or_else(|| std::io::Error::other("physical block device is not provable"))?;
+    if components.iter().any(|component| component == "virtual") {
+        return Err(std::io::Error::other(
+            "virtual block-device backing is not physically provable",
+        ));
+    }
+    Ok(format!("linux-block-device:{block}"))
 }
 
-#[cfg(not(any(unix, windows)))]
-fn filesystem_identity_for_existing(_path: &Path) -> std::io::Result<String> {
+#[cfg(not(any(windows, target_os = "linux")))]
+fn physical_device_identity_for_existing(_path: &Path) -> std::io::Result<String> {
     Err(std::io::Error::other(
-        "filesystem identity is not supported on this platform",
+        "physical-device identity is not supported on this platform",
     ))
 }
 
@@ -1627,5 +1768,59 @@ fn error_frame(request: &RpcRequest, code: &str, message: String) -> RpcFrame {
             code: code.into(),
             message,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn export_policy_accepts_separate_daemon_derived_physical_devices() {
+        let result = validate_export_destination(
+            Path::new("/evidence/source.raw"),
+            Path::new("/case"),
+            Path::new("/safe-export"),
+            "physical-disk:0",
+            "physical-disk:1",
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            ("physical-disk:0".into(), "physical-disk:1".into())
+        );
+    }
+
+    #[test]
+    fn export_policy_refuses_same_device_and_case_or_source_overlap() {
+        let same_device = validate_export_destination(
+            Path::new("/evidence/source.raw"),
+            Path::new("/case"),
+            Path::new("/safe-export"),
+            "physical-disk:0",
+            "physical-disk:0",
+        )
+        .unwrap_err();
+        assert_eq!(same_device.0, "EXPORT_DESTINATION_NOT_SEPARATE");
+
+        let case_overlap = validate_export_destination(
+            Path::new("/evidence/source.raw"),
+            Path::new("/case"),
+            Path::new("/case/exports"),
+            "physical-disk:0",
+            "physical-disk:1",
+        )
+        .unwrap_err();
+        assert_eq!(case_overlap.0, "EXPORT_DESTINATION_OVERLAP");
+
+        let source_overlap = validate_export_destination(
+            Path::new("/evidence/source.raw"),
+            Path::new("/case"),
+            Path::new("/evidence"),
+            "physical-disk:0",
+            "physical-disk:1",
+        )
+        .unwrap_err();
+        assert_eq!(source_overlap.0, "EXPORT_DESTINATION_OVERLAP");
     }
 }
