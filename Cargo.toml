@@ -10,6 +10,7 @@ license = "Apache-2.0"
 anyhow = "1"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
+crc32fast = "1"
 fs2 = "0.4"
 rusqlite = { version = "0.37", features = ["bundled"] }
 sha2 = "0.10"
