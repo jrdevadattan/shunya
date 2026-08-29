@@ -12,6 +12,7 @@ import { PartitionList } from '../features/sources/PartitionList.js';
 import { ResultsPage } from '../features/results/ResultsPage.js';
 import { ExportWizard } from '../features/export/ExportWizard.js';
 import { ReportsPage } from '../features/reports/ReportsPage.js';
+import { AcquisitionOptions } from '../features/recovery/AcquisitionOptions.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -26,6 +27,7 @@ export const router = createHashRouter([
       { path: 'sources', element: <AddSourcePage /> },
       { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
       { path: 'recovery/destination', element: <DestinationPage /> },
+      { path: 'recovery/acquisition', element: <AcquisitionOptions /> },
       { path: 'recovery/goal', element: <GoalPage /> },
       { path: 'recovery/scan-options', element: <ScanOptionsPage /> },
       { path: 'recovery/partitions', element: <PartitionList /> },
