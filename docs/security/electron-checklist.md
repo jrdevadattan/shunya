@@ -10,5 +10,5 @@
 - NDJSON/RPC frames are schema-checked and capped at 8 MiB on both sides.
 - Run-as-Node, NODE_OPTIONS, CLI inspection, and file-protocol privileges are fused off.
 - Embedded ASAR integrity and ASAR-only application loading are fused on.
-- Signing identities are CI secrets; unsigned artifacts are clearly identified.
+- Signing identities stay in protected certificate/keychain storage on the native build host; unsigned artifacts are clearly identified.
 - Telemetry and automatic update/network activity are absent in the air-gapped profile.

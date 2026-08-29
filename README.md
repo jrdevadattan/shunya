@@ -38,6 +38,8 @@ pnpm test:e2e
 
 ## Releases
 
-Tagged releases build a Windows Setup executable, Linux Debian package, macOS DMG and ZIP for Intel and Apple Silicon, and the Rescue ISO. Verify downloads against `SHA256SUMS` and `release-manifest.json` on the GitHub release page. Code signing is used when the repository signing identities are configured; unsigned artifacts remain clearly identified by the operating system.
+Releases are built manually on native hosts: Windows for Setup/NuGet, Debian for `.deb` and Rescue ISO, and macOS for Intel and Apple Silicon DMG/ZIP packages. There is no CI/CD release dependency. Follow the [manual release guide](docs/operations/manual-release.md), and do not publish a release until the complete asset check passes.
 
-Start with the [recovery specification](docs/specs/recovery-module.md), [security policy](SECURITY.md), [deployment guide](docs/operations/boss10-deployment.md), and [release notes](RELEASE_NOTES.md).
+Verify downloads against `SHA256SUMS` and `release-manifest.json` on the GitHub release page. Code signing is used only when a release operator provides a signing identity securely on the build host; unsigned artifacts remain clearly identified by the operating system.
+
+Start with the [recovery specification](docs/specs/recovery-module.md), [security policy](SECURITY.md), [deployment guide](docs/operations/boss10-deployment.md), [manual release guide](docs/operations/manual-release.md), and [release notes](RELEASE_NOTES.md).

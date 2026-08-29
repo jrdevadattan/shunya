@@ -81,7 +81,7 @@ Do not begin Rescue Mode or raw physical-device work before the raw-image vertic
 
 ---
 
-### Task 1: Bootstrap the pnpm/Cargo monorepo and continuous integration
+### Task 1: Bootstrap the pnpm/Cargo monorepo and local validation
 
 **Files:**
 - Create: `package.json`
@@ -92,7 +92,6 @@ Do not begin Rescue Mode or raw physical-device work before the raw-image vertic
 - Create: `rust-toolchain.toml`
 - Create: `.editorconfig`
 - Create: `.gitignore`
-- Create: `.github/workflows/ci.yml`
 - Create: `apps/desktop/package.json`
 - Create: `packages/contracts/package.json`
 - Create: `packages/ui/package.json`
@@ -170,9 +169,9 @@ uuid = { version = "1", features = ["v7", "serde"] }
 
 Use `rustup show active-toolchain` to capture the exact stable toolchain, then write it to `rust-toolchain.toml` with `components = ["clippy", "rustfmt"]`.
 
-- [ ] **Step 4: Add CI for Ubuntu, Windows, and macOS**
+- [ ] **Step 4: Add native-host validation for Ubuntu, Windows, and macOS**
 
-CI must run formatting, TypeScript typechecking, unit tests, Rust clippy, Rust tests, and desktop packaging smoke builds. BOSS-specific VM tests are added later.
+Release operators run formatting, TypeScript typechecking, unit tests, Rust clippy, Rust tests, and desktop packaging smoke builds on the native build hosts. BOSS-specific VM tests are added later.
 
 - [ ] **Step 5: Run all bootstrap checks**
 
@@ -1409,7 +1408,7 @@ Test search by original name/path, file type, method, status, threat, size, part
 
 - [ ] **Step 2: Write million-row performance test**
 
-Seed one million generated rows in a temporary SQLite database and assert the first indexed query page returns under the project’s one-second test budget on the reference CI class. Record actual timing without making CI flaky; fail only beyond an agreed generous threshold.
+Seed one million generated rows in a temporary SQLite database and assert the first indexed query page returns under the project’s one-second test budget on the reference workstation class. Record actual timing without making validation flaky; fail only beyond an agreed generous threshold.
 
 - [ ] **Step 3: Run tests and verify failure**
 
@@ -1736,7 +1735,7 @@ cargo nextest run -p privileged-helper -p acquisition
 cargo nextest run --test raw_device_smoke
 ```
 
-Expected: PASS on supported CI jobs; capability-skipped with a stated reason elsewhere.
+Expected: PASS on supported native hosts; capability-skipped with a stated reason elsewhere.
 
 - [ ] **Step 9: Commit**
 
@@ -1817,7 +1816,6 @@ git commit -m "feat: add EWF forensic image support"
 - Create: `live/scripts/build-live.sh`
 - Create: `live/scripts/verify-live.sh`
 - Create: `tests/e2e/rescue-mode.spec.ts`
-- Create: `.github/workflows/live-iso.yml`
 
 **Interfaces:**
 - Produces bootable ISO artifact plus SHA-256 and manifest.
@@ -1891,7 +1889,7 @@ Expected: PASS in the ISO build runner.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add live tests/e2e/rescue-mode.spec.ts .github/workflows/live-iso.yml
+git add live tests/e2e/rescue-mode.spec.ts
 git commit -m "feat: add bootable recovery Rescue Mode"
 ```
 
@@ -1963,7 +1961,7 @@ cargo nextest run -p acquisition -- ddrescue
 pnpm playwright test tests/e2e/damaged-device.spec.ts
 ```
 
-Expected: PASS in Linux/Rescue CI.
+Expected: PASS on the Linux/Rescue validation host.
 
 - [ ] **Step 8: Commit**
 
@@ -2080,9 +2078,7 @@ git commit -m "feat: add memory image analysis workflow"
 - Create: `packaging/windows/service-install.ps1`
 - Create: `packaging/scripts/stage-tools.ts`
 - Create: `packaging/scripts/verify-package.ts`
-- Create: `.github/workflows/package-windows.yml`
-- Create: `.github/workflows/package-linux.yml`
-- Create: `.github/workflows/package-macos.yml`
+- Create: `docs/operations/manual-release.md`
 - Create: `tests/platform/boss10-install.sh`
 - Create: `tests/platform/package-integrity.test.ts`
 
@@ -2120,7 +2116,7 @@ Expected: FAIL.
 - Linux: `.deb` mandatory, AppImage optional.
 - macOS: DMG and ZIP for tested architectures.
 
-Use Electron 44 stable and Node 24 LTS build tooling. Production signing secrets come only from CI secret storage; no private certificate is committed.
+Use Electron 44 stable and Node 24 LTS build tooling. Production signing identities remain in protected certificate/keychain storage on the native build host; no private certificate is committed.
 
 - [ ] **Step 5: Stage native binaries by platform**
 
@@ -2136,7 +2132,7 @@ Use Electron 44 stable and Node 24 LTS build tooling. Production signing secrets
 
 - [ ] **Step 7: Run package tests**
 
-Run in platform CI:
+Run on each native platform build host:
 
 ```bash
 pnpm --filter @recovery/desktop make
@@ -2149,7 +2145,7 @@ Expected: PASS on relevant jobs.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/desktop/forge.config.ts apps/desktop/entitlements.mac.plist packaging .github/workflows tests/platform
+git add apps/desktop/forge.config.ts apps/desktop/entitlements.mac.plist packaging docs/operations/manual-release.md tests/platform
 git commit -m "build: package recovery platform across target systems"
 ```
 
@@ -2176,7 +2172,7 @@ git commit -m "build: package recovery platform across target systems"
 
 **Interfaces:**
 - Produces reproducible fixture images and expected truth manifests.
-- Produces CI test groups `unit`, `integration`, `fault`, `security`, `platform`, and `e2e`.
+- Produces validation groups `unit`, `integration`, `fault`, `security`, `platform`, and `e2e`.
 
 - [ ] **Step 1: Write fixture reproducibility test**
 
@@ -2507,4 +2503,3 @@ The plan contains no implementation placeholders. Tool checksum examples explici
 ## 7. Final definition of done
 
 The recovery module is done when a user can run the same branded application in Installed Mode or Rescue Mode, select an authorized source, receive a clear safety assessment, image the source when appropriate, recover through metadata and carving, understand exactly what was and was not recovered, safely review and export results, resume interrupted work, analyze a supported memory image, and generate a reproducible report—without any code path writing to the source or pretending that unsupported recovery is possible.
-
