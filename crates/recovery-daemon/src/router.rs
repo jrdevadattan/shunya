@@ -727,6 +727,15 @@ impl DaemonState {
             .map_err(|error| ("JOB_STATUS_FAILED", error.to_string()))?;
         value["limitations"] = serde_json::to_value(load_limitations(root, job_id)?)
             .map_err(|error| ("JOB_STATUS_FAILED", error.to_string()))?;
+        let partitions_path = job_directory(root, job_id).join("partitions.json");
+        value["partitions"] = if partitions_path.exists() {
+            partition_status_value(
+                read_json::<PartitionScanResult>(&partitions_path)
+                    .map_err(|error| ("JOB_STATUS_FAILED", error.to_string()))?,
+            )
+        } else {
+            Value::Null
+        };
         Ok(value)
     }
 
@@ -774,6 +783,33 @@ impl DaemonState {
             .or_else(|| self.current_case.clone())
             .ok_or(("JOB_NOT_FOUND", format!("job not found: {job_id}")))
     }
+}
+
+fn partition_status_value(result: PartitionScanResult) -> Value {
+    json!({
+        "sectorSize": result.sector_size,
+        "partitions": result.partitions.into_iter().map(|partition| json!({
+            "partitionId": partition.partition_id,
+            "index": partition.index,
+            "startSector": partition.start_sector.to_string(),
+            "sectorCount": partition.sector_count.to_string(),
+            "startOffsetBytes": partition.start_offset_bytes.to_string(),
+            "lengthBytes": partition.length_bytes.to_string(),
+            "partitionType": partition.partition_type,
+            "filesystem": partition.filesystem,
+            "label": partition.label,
+        })).collect::<Vec<_>>(),
+        "candidates": result.candidates.into_iter().map(|candidate| json!({
+            "startSector": candidate.start_sector.to_string(),
+            "startOffsetBytes": candidate.start_offset_bytes.to_string(),
+            "filesystem": candidate.filesystem,
+            "confidence": candidate.confidence,
+            "source": candidate.source,
+        })).collect::<Vec<_>>(),
+        "gaps": result.gaps.into_iter().map(|(offset, length)| json!([offset.to_string(), length.to_string()])).collect::<Vec<_>>(),
+        "rawToolOutput": result.raw_tool_output,
+        "toolVersion": result.tool_version,
+    })
 }
 
 struct WorkerFailure {

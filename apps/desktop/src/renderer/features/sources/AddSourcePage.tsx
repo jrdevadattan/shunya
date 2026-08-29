@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import type { SourceDescriptor } from '@recovery/contracts';
 import { addImageSource } from './source-store.js';
 import { SourceCard } from './SourceCard.js';
+import { rememberSource } from '../../application-state.js';
 
 const sourceTypes = [
   { title: 'Physical device', description: 'Discover connected disks without mounting or reading their content.' },
@@ -10,6 +12,8 @@ const sourceTypes = [
 ];
 
 export function AddSourcePage() {
+  const { caseId = '' } = useParams();
+  const navigate = useNavigate();
   const [source, setSource] = useState<SourceDescriptor>();
   const [error, setError] = useState<string>();
 
@@ -18,7 +22,10 @@ export function AddSourcePage() {
     setError(undefined);
     try {
       const path = String(new FormData(event.currentTarget).get('imagePath') ?? '');
-      setSource(await addImageSource(path));
+      const added = await addImageSource(path);
+      setSource(added);
+      rememberSource(caseId, added.sourceId);
+      await navigate(`/cases/${caseId}/sources/${added.sourceId}/assessment`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The image could not be added.');
     }

@@ -75,6 +75,9 @@ importers:
       electron:
         specifier: 44.0.0
         version: 44.0.0
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
       tsx:
         specifier: 4.20.5
         version: 4.20.5

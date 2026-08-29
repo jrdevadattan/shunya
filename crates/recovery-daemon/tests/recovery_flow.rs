@@ -142,6 +142,25 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
     assert!(limitation_codes.contains(&"TSK_METADATA_UNAVAILABLE"));
     assert!(limitation_codes.contains(&"PHOTOREC_UNAVAILABLE"));
     assert!(limitation_codes.contains(&"YARA_X_UNAVAILABLE"));
+    assert_eq!(status["partitions"]["sectorSize"], 512);
+    assert_eq!(
+        status["partitions"]["partitions"][0]["partitionId"],
+        "partition-1"
+    );
+    assert_eq!(status["partitions"]["partitions"][0]["startSector"], "1");
+    assert_eq!(status["partitions"]["partitions"][0]["sectorCount"], "4095");
+    assert_eq!(
+        status["partitions"]["partitions"][0]["startOffsetBytes"],
+        "512"
+    );
+    assert_eq!(
+        status["partitions"]["partitions"][0]["lengthBytes"],
+        "2096640"
+    );
+    assert_eq!(
+        status["partitions"]["partitions"][0]["partitionType"],
+        "FAT32"
+    );
 
     let events = daemon.rpc("job.events", json!({ "jobId": job_id, "afterSequence": 0 }));
     let stages = events

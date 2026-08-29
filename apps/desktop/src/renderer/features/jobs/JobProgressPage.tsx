@@ -1,67 +1,53 @@
-import { StageTimeline, type TimelineStage } from '@recovery/ui';
-import { useEffect, useSyncExternalStore } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { activeJobStore } from './job-store.js';
+import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { activeJobId } from '../../application-state.js';
 
-const baseStages: TimelineStage[] = [
-  { id: 'preflight', label: 'Safety checks', status: 'completed' },
-  { id: 'partition_scan', label: 'Partition discovery', status: 'completed' },
-  { id: 'metadata_scan', label: 'Metadata recovery', status: 'paused' },
-  { id: 'carving', label: 'Signature recovery', status: 'pending' },
-  { id: 'validating', label: 'Validate recovered files', status: 'pending' },
-];
+const stageLabels: Record<string, string> = {
+  draft: 'Recovery job created', preflight: 'Checking source and destination', acquiring: 'Creating a safe disk image',
+  verifying_image: 'Verifying the image', partition_scan: 'Partition discovery', metadata_scan: 'Looking for deleted file records',
+  carving: 'Searching remaining disk space', validating: 'Checking recovered files', threat_scan: 'Checking for potentially unsafe content',
+  indexing: 'Preparing results', review_ready: 'Results ready', completed: 'Recovery completed', paused: 'Recovery paused',
+  needs_attention: 'Recovery needs attention', cancelling: 'Cancelling recovery', cancelled: 'Recovery cancelled', failed: 'Recovery failed',
+};
 
 export function JobProgressPage() {
-  const [search] = useSearchParams();
-  const snapshot = useSyncExternalStore(activeJobStore.subscribe, activeJobStore.getSnapshot);
+  const { caseId = '' } = useParams();
+  const jobId = activeJobId(caseId);
+  const [status, setStatus] = useState<JobStatus>();
+  const [events, setEvents] = useState<JobEvent[]>([]);
+  const [error, setError] = useState<string>();
+  const load = useCallback(async () => {
+    if (!jobId) { setError('No recovery job has been created for this case.'); return; }
+    try {
+      const [nextStatus, nextEvents] = await Promise.all([window.recoveryApi.getJobStatus(jobId), window.recoveryApi.listJobEvents(jobId, 0)]);
+      setStatus(JobStatusSchema.parse(nextStatus));
+      setEvents(JobEventSchema.array().parse(nextEvents));
+      setError(undefined);
+    } catch (cause) { setError(message(cause)); }
+  }, [jobId]);
+  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 1000); return () => window.clearInterval(timer); }, [load]);
 
-  useEffect(() => {
-    if (!snapshot && search.get('fixture') === 'resume') {
-      const resumed = sessionStorage.getItem('recovery-fixture-stage') === 'metadata_scan';
-      activeJobStore.replay({
-        jobId: 'restart-fixture',
-        stage: resumed ? 'metadata_scan' : 'paused',
-        filesFound: 128,
-        bytesProcessed: '4294967296',
-        throughputBytesPerSecond: resumed ? '83886080' : '0',
-        etaRange: resumed ? '12–16 minutes' : undefined,
-        errors: 0,
-        pausedRecoverable: !resumed,
-      }, []);
-    }
-  }, [search, snapshot]);
-
-  if (!snapshot) return <section><h1>Recovery jobs</h1><p>No recovery job has been created for this case.</p></section>;
-  const running = snapshot.stage === 'metadata_scan';
-  const stages = baseStages.map((stage) => stage.id === 'metadata_scan' ? { ...stage, status: running ? 'running' as const : 'paused' as const } : stage);
-
-  function resume() {
-    sessionStorage.setItem('recovery-fixture-stage', 'metadata_scan');
-    activeJobStore.update({ stage: 'metadata_scan', pausedRecoverable: false, throughputBytesPerSecond: '83886080', etaRange: '12–16 minutes' });
+  async function command(operation: (id: string) => Promise<unknown>) {
+    if (!jobId) return;
+    setError(undefined);
+    try { await operation(jobId); await load(); } catch (cause) { setError(message(cause)); }
   }
 
+  if (!jobId) return <section><h1>Recovery jobs</h1><p role="alert">No recovery job has been created for this case.</p></section>;
+  if (!status && !error) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
   return <section className="job-progress">
-    <header><p className="eyebrow">Recovery job</p><h1>{running ? 'Metadata recovery running' : 'Recovery paused after restart'}</h1><p>{running ? 'The recovery continues in the background when you change pages.' : 'Completed stages are preserved. Resume when you are ready.'}</p></header>
-    <StageTimeline stages={stages} />
-    <dl className="metric-grid">
-      <div><dt>Data processed</dt><dd>{formatBytes(snapshot.bytesProcessed)}</dd></div>
-      <div><dt>Throughput</dt><dd>{snapshot.throughputBytesPerSecond === '0' ? 'Paused' : `${formatBytes(snapshot.throughputBytesPerSecond ?? '0')}/s`}</dd></div>
-      <div><dt>Estimated time</dt><dd>{snapshot.etaRange ?? 'Waiting to resume'}</dd></div>
-      <div><dt>Files found</dt><dd>{snapshot.filesFound.toLocaleString()}</dd></div>
-      <div><dt>Read errors</dt><dd>{snapshot.errors ?? 0}</dd></div>
-    </dl>
+    <header><p className="eyebrow">Recovery job</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p>Progress is read from the persisted daemon job state.</p></header>
+    {error ? <p className="form-error" role="alert">{error}</p> : null}
+    {status ? <dl className="metric-grid"><div><dt>Current stage</dt><dd>{status.stage.replaceAll('_', ' ')}</dd></div><div><dt>Source</dt><dd>{status.sourceId}</dd></div><div><dt>Last update</dt><dd>{status.updatedAt}</dd></div><div><dt>Partitions recorded</dt><dd>{status.partitions?.partitions.length ?? 'Not reported'}</dd></div></dl> : null}
+    {status?.limitations.length ? <aside className="report-limitations"><h2>Limitations</h2><ul>{status.limitations.map((limitation) => <li key={limitation.code}><strong>{limitation.code}</strong>: {limitation.explanation}</li>)}</ul></aside> : null}
     <div className="form-actions">
-      {snapshot.pausedRecoverable ? <button className="button button--primary" type="button" onClick={resume}>Resume recovery</button> : <button className="button button--secondary" type="button" onClick={() => activeJobStore.update({ stage: 'paused', pausedRecoverable: true, throughputBytesPerSecond: '0' })}>Pause</button>}
-      <button className="button button--secondary" type="button">Cancel</button>
+      {status?.stage === 'paused' || status?.stage === 'needs_attention' ? <button className="button button--primary" type="button" onClick={() => void command(window.recoveryApi.resumeJob)}>Resume recovery</button> : null}
+      {status && !['completed', 'cancelled', 'failed', 'paused', 'needs_attention'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.pauseJob)}>Pause</button> : null}
+      {status && !['completed', 'cancelled', 'failed'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.cancelJob)}>Cancel scan</button> : null}
     </div>
-    <details><summary>Technical log</summary><pre>checkpoint metadata_scan · sequence {snapshot.lastSequence ?? 0}</pre></details>
+    <details open><summary>Technical log</summary><ol>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code> {event.message ?? stageLabels[event.stage] ?? event.stage}</li>)}</ol></details>
   </section>;
 }
 
-function formatBytes(value: string): string {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes)) return value;
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-  return `${bytes.toLocaleString()} bytes`;
-}
+function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Recovery status could not be loaded.'; }

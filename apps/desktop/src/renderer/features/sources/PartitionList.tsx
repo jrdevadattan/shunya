@@ -1,7 +1,29 @@
+import { JobStatusSchema, type JobStatus } from '@recovery/contracts';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { activeJobId } from '../../application-state.js';
+
 export function PartitionList() {
-  const partitions = [
-    { name: 'EFI system partition', filesystem: 'FAT32', start: '1,048,576', length: '260 MiB' },
-    { name: 'Primary data partition', filesystem: 'NTFS', start: '273,678,336', length: '476 GiB' },
-  ];
-  return <section><header><p className="eyebrow">Read-only discovery</p><h1>Partitions found</h1><p>Partition candidates are stored in the case. No partition table is written to the source.</p></header><table><thead><tr><th>Name</th><th>Filesystem</th><th>Start offset (bytes)</th><th>Length</th></tr></thead><tbody>{partitions.map((partition) => <tr key={partition.name}><td>{partition.name}</td><td>{partition.filesystem}</td><td>{partition.start}</td><td>{partition.length}</td></tr>)}</tbody></table></section>;
+  const { caseId = '' } = useParams();
+  const [status, setStatus] = useState<JobStatus>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    const jobId = activeJobId(caseId);
+    if (!jobId) { setError('No recovery job is active for this case.'); return; }
+    let stopped = false;
+    async function load() {
+      try {
+        const next = JobStatusSchema.parse(await window.recoveryApi.getJobStatus(jobId!));
+        if (stopped) return;
+        setStatus(next); setError(undefined);
+        if (!next.partitions && !['completed', 'cancelled', 'failed', 'needs_attention'].includes(next.stage)) window.setTimeout(() => void load(), 250);
+      } catch (cause) { if (!stopped) setError(message(cause)); }
+    }
+    void load();
+    return () => { stopped = true; };
+  }, [caseId]);
+  const result = status?.partitions;
+  return <section><header><p className="eyebrow">Read-only discovery</p><h1>Partitions found</h1><p>Partition candidates are stored in the case. No partition table is written to the source.</p></header>{error ? <p role="alert" className="form-error">{error}</p> : null}{!status && !error ? <p role="status">Loading partition results…</p> : null}{status && !result ? <p>Partition discovery has not completed.</p> : null}{result ? <><table><thead><tr><th>Name</th><th>Filesystem</th><th>Start offset (bytes)</th><th>Length (bytes)</th></tr></thead><tbody>{result.partitions.map((partition) => <tr key={partition.partitionId}><td>{partition.label ?? partition.partitionId}</td><td>{partition.filesystem ?? partition.partitionType}</td><td>{partition.startOffsetBytes}</td><td>{partition.lengthBytes}</td></tr>)}</tbody></table>{result.candidates.map((candidate) => <p key={`${candidate.startOffsetBytes}:${candidate.source}`}>Candidate {candidate.filesystem ?? 'unknown filesystem'} at {candidate.startOffsetBytes} bytes · {candidate.confidence}</p>)}</> : null}</section>;
 }
+
+function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Partition results could not be loaded.'; }
