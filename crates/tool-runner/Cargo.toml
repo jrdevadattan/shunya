@@ -8,6 +8,10 @@ license.workspace = true
 name = "tool-runner-fixture"
 path = "src/bin/tool_runner_fixture.rs"
 
+[[bin]]
+name = "tool-manifest-generator"
+path = "src/bin/tool_manifest_generator.rs"
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

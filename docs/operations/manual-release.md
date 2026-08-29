@@ -6,6 +6,8 @@ SIH Recovery Platform releases do not use CI/CD. Every artifact must be built fr
 
 Install Node.js 24, Corepack/pnpm 10.15, Rust 1.98, Git, GitHub CLI, and the native compiler toolchain. On every build host, check out the exact release commit and run:
 
+If the release includes external forensic tools, complete `docs/operations/tool-manifest-generation.md` on each native build host first. An empty lock is valid and means those capabilities remain unavailable; never substitute tools found on `PATH`.
+
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile

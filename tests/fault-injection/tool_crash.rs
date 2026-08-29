@@ -25,10 +25,12 @@ async fn tool_crash_and_malformed_output_are_contained_and_logged() {
                 id: "fault-tool".into(),
                 version: "1".into(),
                 license: "test-only".into(),
+                origin: "test-fixture".into(),
                 platform: current_platform().into(),
                 relative_path: PathBuf::from(executable.file_name().unwrap()),
                 sha256: hash,
                 network_allowed: false,
+                redistribution_allowed: true,
             }],
         },
     )

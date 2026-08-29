@@ -1,0 +1,78 @@
+# Task 3 report: external-tool discovery and release capability manifests
+
+## Status
+
+Implemented and verified. The production lock remains empty, so the daemon continues to report Sleuth Kit, PhotoRec, YARA-X, and Volatility as unavailable. No third-party binary was downloaded, staged, or committed.
+
+## Delivered behavior
+
+- Native discovery accepts only explicit paths beneath a supplied tool root; it never searches `PATH`.
+- Candidates are checked for non-empty identity/version/license/origin, lowercase SHA-256, platform match, safe relative path, regular non-symlink file, network-disabled declaration, and reviewed redistribution approval.
+- The file is SHA-256 verified before its version probe. Version capture uses direct process spawning without a shell, an empty environment, closed stdin, a timeout, kill-on-drop, and 64 KiB bounds for each output stream.
+- Discovery emits typed statuses including `available`, `missing`, `platform_mismatch`, `hash_mismatch`, `version_mismatch`, `network_forbidden`, `redistribution_forbidden`, `invalid_metadata`, `unsafe_path`, `symlink_forbidden`, and `probe_failed`.
+- Only `available` candidates enter the generated version-1 lock. The capability report retains unavailable candidates and observed hash/version fields. The generator writes both files and exits 2 when any candidate is unavailable.
+- Runtime registry loading independently refuses network-enabled or redistribution-unapproved lock entries and re-hashes an executable immediately before `ToolRunner` directly spawns it.
+- Packaging validates every lock entry, including entries for other platforms, before selecting current-platform payloads.
+- The example catalog covers TestDisk, PhotoRec, Sleuth Kit (`mmls`, `fls`, `icat`), libewf (`ewfinfo`, `ewfverify`, `ewfexport`, `ewfacquire`), YARA-X, and Volatility 3. Redistribution defaults to false and hash/version/platform values are deliberate placeholders.
+
+## TDD evidence
+
+Observed RED:
+
+1. `cargo test -p tool-runner --test discovery` failed to compile because `DiscoveryStatus`, `NativeToolCandidate`, `ToolDiscoveryRequest`, `ToolDiscoveryReport`, and `discover_tools` did not exist.
+2. `cargo test -p tool-runner --test manifest_generator` failed because `CARGO_BIN_EXE_tool-manifest-generator` did not exist.
+3. The focused missing-license test failed with `left: Available`, `right: InvalidMetadata` before the license validation was added.
+
+Observed GREEN:
+
+- Discovery tests cover verified version/hash/license/origin/platform capture, missing files, platform mismatch, hash mismatch without probing, version mismatch, forbidden network declarations before file access, unapproved redistribution, and missing license metadata.
+- Generator tests cover successful lock/report output, typed missing output with exit 2, and a real end-to-end native fixture path from catalog generation through registry reload, pre-execution re-hash, and direct execution.
+- Registry regressions cover tamper rejection, network-enabled lock rejection, and redistribution-unapproved lock rejection. Existing no-shell, cancellation, and fault-containment tests remain green.
+
+## Verification
+
+- `cargo test -p tool-runner` — pass.
+- `cargo test -p fault-injection-tests --test tool_crash` — pass.
+- `cargo clippy -p tool-runner --all-targets -- -D warnings` — pass.
+- `cargo test --workspace --no-run` — all workspace test targets compile.
+- `corepack pnpm --filter @recovery/desktop typecheck` — pass.
+- Platform package test selection (`package-integrity`, `packaging-config`, `release-assembly`) — 5 pass, 0 fail.
+- `cargo fmt --all -- --check` and `git diff --check` — pass in final verification.
+
+## Primary sources checked 2026-08-29
+
+- The Sleuth Kit repository, license notes, and releases: https://github.com/sleuthkit/sleuthkit and https://github.com/sleuthkit/sleuthkit/releases
+- TestDisk/PhotoRec official download and TestDisk license page: https://www.cgsecurity.org/wiki/TestDisk_Download and https://www.cgsecurity.org/wiki/TestDisk
+- libewf repository and package specification: https://github.com/libyal/libewf and https://github.com/libyal/libewf/blob/main/libewf.spec.in
+- YARA-X repository and releases: https://github.com/VirusTotal/yara-x and https://github.com/VirusTotal/yara-x/releases
+- Volatility 3 repository, releases, and custom license: https://github.com/volatilityfoundation/volatility3 , https://github.com/volatilityfoundation/volatility3/releases , and https://www.volatilityfoundation.org/license/vsl-v1.0
+
+## Files changed
+
+- `crates/tool-runner/src/discovery.rs`
+- `crates/tool-runner/src/bin/tool_manifest_generator.rs`
+- `crates/tool-runner/src/bin/tool_runner_fixture.rs`
+- `crates/tool-runner/src/manifest.rs`
+- `crates/tool-runner/src/lib.rs`
+- `crates/tool-runner/Cargo.toml`
+- `crates/tool-runner/tests/discovery.rs`
+- `crates/tool-runner/tests/manifest_generator.rs`
+- `crates/tool-runner/tests/hash_verification.rs`
+- `crates/tool-runner/tests/support/mod.rs`
+- `tests/fault-injection/tool_crash.rs`
+- `tools/manifests/tools.schema.json`
+- `tools/manifests/tool-candidates.example.json`
+- `packaging/scripts/stage-tools.ts`
+- `docs/operations/tool-manifest-generation.md`
+- `docs/operations/manual-release.md`
+- `docs/operations/release-checklist.md`
+- `THIRD_PARTY_NOTICES.md`
+
+## Self-review and concerns
+
+- Sleuth Kit uses component-specific mixed licensing, so the example intentionally requires per-file license review instead of asserting one blanket SPDX identifier.
+- Volatility 3 uses the custom Volatility Software License. Its example remains redistribution-unapproved until legal review covers the exact artifact and dependencies.
+- libewf's tool package declares LGPL-3.0-or-later, while the repository contains components under other terms; copied runtime libraries still require individual review.
+- The generator verifies local artifact identity and recorded provenance but cannot prove the legal review occurred; `redistributionAllowed` is an explicit human approval gate, and packaging fails closed when it is absent or false.
+- The daemon does not consume the generated capability report in this change and no real forensic tool execution is claimed. Its unavailable limitations remain accurate. Generated locks are compatible with the existing verified `ToolRegistry`/`ToolRunner` execution boundary, proven only with the end-to-end fixture.
+- OS-level network sandboxing remains an external worker/platform responsibility. This change rejects every entry that declares network access and does not weaken the existing air-gapped execution policy.

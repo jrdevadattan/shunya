@@ -19,10 +19,12 @@ pub struct ToolManifestEntry {
     pub id: String,
     pub version: String,
     pub license: String,
+    pub origin: String,
     pub platform: String,
     pub relative_path: PathBuf,
     pub sha256: String,
     pub network_allowed: bool,
+    pub redistribution_allowed: bool,
 }
 
 pub struct ToolRegistry {
@@ -45,6 +47,27 @@ impl ToolRegistry {
         }
         let mut entries = BTreeMap::new();
         for entry in manifest.tools {
+            if entry.id.trim().is_empty()
+                || entry.version.trim().is_empty()
+                || entry.license.trim().is_empty()
+                || entry.origin.trim().is_empty()
+            {
+                return Err(ToolRunnerError::InvalidManifest(
+                    "tool identity, version, license, and origin are required".into(),
+                ));
+            }
+            if entry.network_allowed {
+                return Err(ToolRunnerError::InvalidManifest(format!(
+                    "network-enabled tool {} is forbidden",
+                    entry.id
+                )));
+            }
+            if !entry.redistribution_allowed {
+                return Err(ToolRunnerError::InvalidManifest(format!(
+                    "tool {} is not approved for redistribution",
+                    entry.id
+                )));
+            }
             if entry.platform != current_platform() {
                 continue;
             }

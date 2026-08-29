@@ -9,16 +9,18 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "version", "license", "platform", "relativePath", "sha256", "networkAllowed"],
+        "required": ["id", "version", "license", "origin", "platform", "relativePath", "sha256", "networkAllowed", "redistributionAllowed"],
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "version": { "type": "string", "minLength": 1 },
           "license": { "type": "string", "minLength": 1 },
+          "origin": { "type": "string", "minLength": 1 },
           "platform": { "enum": ["windows-x64", "linux-x64", "linux-arm64", "macos-x64", "macos-arm64"] },
           "relativePath": { "type": "string", "minLength": 1 },
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-          "networkAllowed": { "type": "boolean" }
+          "networkAllowed": { "const": false },
+          "redistributionAllowed": { "const": true }
         }
       }
     }

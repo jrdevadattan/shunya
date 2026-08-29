@@ -24,10 +24,12 @@ pub fn fixture_registry() -> FixtureRegistry {
                 id: "fixture".into(),
                 version: "test".into(),
                 license: "test-only".into(),
+                origin: "test-fixture".into(),
                 platform: tool_runner::current_platform().into(),
                 relative_path: executable.file_name().unwrap().into(),
                 sha256: hash.iter().map(|byte| format!("{byte:02x}")).collect(),
                 network_allowed: false,
+                redistribution_allowed: true,
             }],
         },
     )

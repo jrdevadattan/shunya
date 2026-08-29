@@ -1,7 +1,12 @@
+mod discovery;
 mod logs;
 mod manifest;
 mod process;
 
+pub use discovery::{
+    DiscoveryStatus, NativeToolCandidate, ToolCandidateCatalog, ToolCapability,
+    ToolDiscoveryReport, ToolDiscoveryRequest, discover_tools,
+};
 pub use manifest::{ToolManifest, ToolManifestEntry, ToolRegistry, current_platform};
 pub use process::ToolRunner;
 
