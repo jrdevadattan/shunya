@@ -6,6 +6,7 @@ coverage/
 playwright-report/
 test-results/
 .pnpm-store/
+.vite/
 .worktrees/
 *.log
 .DS_Store

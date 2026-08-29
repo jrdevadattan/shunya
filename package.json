@@ -5,6 +5,12 @@
   "engines": {
     "node": ">=24 <25"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  },
+  "devDependencies": {
+    "pnpm": "10.15.0"
+  },
   "scripts": {
     "lint": "corepack pnpm -r lint && cargo clippy --workspace --all-targets -- -D warnings",
     "typecheck": "corepack pnpm -r typecheck",
