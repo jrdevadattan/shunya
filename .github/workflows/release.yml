@@ -20,10 +20,13 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile
       - run: cargo build --workspace --release --locked
       - name: Prepare optional Windows signing certificate
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env: { CERTIFICATE_BASE64: '${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}' }
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64)) {
+            Write-Host 'Windows signing certificate is not configured; producing an unsigned artifact.'
+            exit 0
+          }
           $certificate = Join-Path $env:RUNNER_TEMP 'recovery-signing.pfx'
           [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
           "WINDOWS_CERTIFICATE_FILE=$certificate" | Out-File -FilePath $env:GITHUB_ENV -Append
