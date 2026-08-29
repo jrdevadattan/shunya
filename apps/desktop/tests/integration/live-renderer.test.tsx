@@ -293,6 +293,9 @@ describe('live renderer pages', () => {
     await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
     expect(await findText('Recovery completed')).toBeTruthy();
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
+    expect(container?.querySelector('[role="progressbar"][aria-label="Recovery progress"]')).toBeTruthy();
+    expect(container?.querySelector('ol[aria-label="Recovery progress"]')).toBeTruthy();
+    expect(container?.querySelector('[aria-label="Recovery event log"]')).toBeTruthy();
   });
 
   it('does not overlap job polls while a prior status request is unresolved', async () => {

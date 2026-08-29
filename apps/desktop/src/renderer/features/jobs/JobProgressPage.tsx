@@ -1,4 +1,6 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
+import { CapabilityBanner, MetricCard, StageTimeline, SurfaceCard, type TimelineStage } from '@recovery/ui';
+import { Activity, Clock3, Database, Layers3 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { activeJobId } from '../../application-state.js';
@@ -11,6 +13,15 @@ const stageLabels: Record<string, string> = {
   needs_attention: 'Recovery needs attention', cancelling: 'Cancelling recovery', cancelled: 'Recovery cancelled', failed: 'Recovery failed',
 };
 const terminalStages = new Set<JobStatus['stage']>(['completed', 'cancelled', 'failed']);
+const progressByStage: Record<JobStatus['stage'], number> = {
+  draft: 2, preflight: 8, waiting_for_destination: 12, acquiring: 22, verifying_image: 32, partition_scan: 43, metadata_scan: 55,
+  carving: 68, validating: 78, threat_scan: 84, indexing: 92, review_ready: 98, completed: 100,
+  exporting: 98, reporting: 99, paused: 50, needs_attention: 50, cancelling: 50, cancelled: 50, failed: 50,
+};
+const stageOrder: JobStatus['stage'][] = [
+  'draft', 'preflight', 'waiting_for_destination', 'acquiring', 'verifying_image', 'partition_scan', 'metadata_scan', 'carving',
+  'validating', 'threat_scan', 'indexing', 'review_ready', 'exporting', 'reporting', 'completed',
+];
 
 export function JobProgressPage() {
   const { caseId = '' } = useParams();
@@ -74,18 +85,63 @@ export function JobProgressPage() {
   if (!jobId) return <section><h1>Recovery jobs</h1><p role="alert">No recovery job has been created for this case.</p></section>;
   if (!status && !pollError) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
   const error = commandError ?? pollError;
+  const progress = status ? progressByStage[status.stage] : 0;
   return <section className="job-progress">
-    <header><p className="eyebrow">Recovery job</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p>Progress is read from the persisted daemon job state.</p></header>
+    <header className="page-heading"><div><p className="eyebrow">Recovery job</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p className="page-heading__description">Live progress from the persisted recovery daemon. This view stops polling when the job reaches a terminal state.</p></div></header>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    {status ? <dl className="metric-grid"><div><dt>Current stage</dt><dd>{status.stage.replaceAll('_', ' ')}</dd></div><div><dt>Source</dt><dd>{status.sourceId}</dd></div><div><dt>Last update</dt><dd>{status.updatedAt}</dd></div><div><dt>Partitions recorded</dt><dd>{status.partitions?.partitions.length ?? 'Not reported'}</dd></div></dl> : null}
-    {status?.limitations.length ? <aside className="report-limitations"><h2>Limitations</h2><ul>{status.limitations.map((limitation) => <li key={limitation.code}><strong>{limitation.code}</strong>: {limitation.explanation}</li>)}</ul></aside> : null}
-    <div className="form-actions">
-      {status?.stage === 'paused' || status?.stage === 'needs_attention' ? <button className="button button--primary" type="button" onClick={() => void command(window.recoveryApi.resumeJob)}>Resume recovery</button> : null}
-      {status && !['completed', 'cancelled', 'failed', 'paused', 'needs_attention'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.pauseJob)}>Pause</button> : null}
-      {status && !['completed', 'cancelled', 'failed'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.cancelJob)}>Cancel scan</button> : null}
-    </div>
-    <details open><summary>Technical log</summary><ol>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code> {event.message ?? stageLabels[event.stage] ?? event.stage}</li>)}</ol></details>
+    {status ? <>
+      <div className="metric-grid metric-grid--jobs">
+        <MetricCard label="Workflow progress" value={`${progress}%`} detail="Stage-based estimate" icon={Activity} tone={status.stage === 'failed' ? 'danger' : status.stage === 'completed' ? 'success' : 'neutral'} />
+        <MetricCard label="Current stage" value={status.stage.replaceAll('_', ' ')} detail="Daemon-reported state" icon={Layers3} />
+        <MetricCard label="Partitions" value={status.partitions?.partitions.length ?? '—'} detail={status.partitions ? 'Recorded by the daemon' : 'Not reported yet'} icon={Database} />
+        <MetricCard label="Last update" value={formatTime(status.updatedAt)} detail={status.updatedAt} icon={Clock3} />
+      </div>
+      <div className="job-progress__bar" role="progressbar" aria-label="Recovery progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <div className="job-progress__workspace">
+        <SurfaceCard title="Recovery stages" description="Completed, active, and upcoming daemon stages."><StageTimeline stages={timelineFor(status.stage)} /></SurfaceCard>
+        <SurfaceCard title="Job controls" description={`Source ${status.sourceId}`}>
+          <div className="job-progress__actions">
+            {status.stage === 'paused' || status.stage === 'needs_attention' ? <button className="button button--primary" type="button" onClick={() => void command(window.recoveryApi.resumeJob)}>Resume recovery</button> : null}
+            {!['completed', 'cancelled', 'failed', 'paused', 'needs_attention'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.pauseJob)}>Pause</button> : null}
+            {!['completed', 'cancelled', 'failed'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.cancelJob)}>Cancel scan</button> : null}
+            {terminalStages.has(status.stage) ? <p className="empty-state">This job is in a terminal state. No further controls are available.</p> : null}
+          </div>
+        </SurfaceCard>
+      </div>
+      {status.limitations.length ? <div className="job-progress__limitations">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={limitation.code} explanation={limitation.explanation} />)}</div> : null}
+    </> : null}
+    <SurfaceCard title="Recovery event log" description="Append-only events returned by the recovery daemon." className="job-progress__log">
+      <ol aria-label="Recovery event log">{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
+      {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
+    </SurfaceCard>
   </section>;
+}
+
+function timelineFor(stage: JobStatus['stage']): TimelineStage[] {
+  const currentIndex = Math.max(0, stageOrder.indexOf(stage));
+  const terminal = stage === 'completed';
+  const groups = [
+    { id: 'prepare', label: 'Prepare and preflight', index: 1 },
+    { id: 'acquire', label: 'Acquire and verify image', index: 3 },
+    { id: 'discover', label: 'Discover partitions and metadata', index: 5 },
+    { id: 'recover', label: 'Recover and validate files', index: 8 },
+    { id: 'review', label: 'Index and prepare results', index: 10 },
+  ];
+  return groups.map((group, index) => ({
+    id: group.id,
+    label: group.label,
+    status: terminal || currentIndex > group.index ? 'completed'
+      : currentIndex <= group.index && (index === 0 || currentIndex > groups[index - 1]!.index)
+        ? stage === 'failed' ? 'failed' : stage === 'paused' || stage === 'needs_attention' ? 'paused' : 'running'
+        : 'pending',
+  }));
+}
+
+function formatTime(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function mergeEvents(current: JobEvent[], incoming: JobEvent[]): JobEvent[] {
