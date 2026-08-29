@@ -1,0 +1,3 @@
+export function ReadErrorMap({ rescued, unreadable, pending }: { rescued: number; unreadable: number; pending: number }) {
+  return <figure className="read-error-map"><figcaption>Device read map</figcaption><div aria-label={`${rescued}% rescued, ${unreadable}% unreadable, ${pending}% pending`} className="read-error-map__bar"><span className="is-rescued" style={{ width: `${rescued}%` }} /><span className="is-unreadable" style={{ width: `${unreadable}%` }} /><span className="is-pending" style={{ width: `${pending}%` }} /></div><ul><li>{rescued}% rescued</li><li>{unreadable}% currently unreadable</li><li>{pending}% pending</li></ul></figure>;
+}

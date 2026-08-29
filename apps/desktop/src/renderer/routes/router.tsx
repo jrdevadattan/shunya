@@ -13,6 +13,7 @@ import { ResultsPage } from '../features/results/ResultsPage.js';
 import { ExportWizard } from '../features/export/ExportWizard.js';
 import { ReportsPage } from '../features/reports/ReportsPage.js';
 import { AcquisitionOptions } from '../features/recovery/AcquisitionOptions.js';
+import { DamagedDeviceWizard } from '../features/recovery/DamagedDeviceWizard.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -28,6 +29,7 @@ export const router = createHashRouter([
       { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
       { path: 'recovery/destination', element: <DestinationPage /> },
       { path: 'recovery/acquisition', element: <AcquisitionOptions /> },
+      { path: 'recovery/damaged', element: <DamagedDeviceWizard /> },
       { path: 'recovery/goal', element: <GoalPage /> },
       { path: 'recovery/scan-options', element: <ScanOptionsPage /> },
       { path: 'recovery/partitions', element: <PartitionList /> },

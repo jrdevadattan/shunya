@@ -50,4 +50,11 @@
 .hash-value { display: block; max-width: 100%; overflow-wrap: anywhere; color: var(--text-secondary); }
 .report-limitations li { margin-block: var(--space-2); }
 .report-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
+.read-error-map { margin: var(--space-4) 0; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.read-error-map__bar { display: flex; height: 22px; margin-block: var(--space-3); overflow: hidden; border-radius: 6px; background: var(--surface-muted); }
+.read-error-map__bar span { display: block; }
+.read-error-map .is-rescued { background: #16a34a; }
+.read-error-map .is-unreadable { background: #dc2626; }
+.read-error-map .is-pending { background: #94a3b8; }
+.read-error-map ul { display: flex; gap: var(--space-5); color: var(--text-secondary); }
 @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }
