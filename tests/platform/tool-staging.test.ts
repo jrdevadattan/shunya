@@ -85,6 +85,50 @@ test('rejects a malformed off-platform hash before platform selection', async ()
   }
 });
 
+test('rejects omitted networkAllowed on a current-platform entry', async () => {
+  const malformed = entry({
+    relativePath: 'vendor/windows-x64/tool.exe',
+    sha256: '0'.repeat(64),
+    platform: 'windows-x64',
+  }) as Record<string, unknown>;
+  delete malformed.networkAllowed;
+
+  await assertMalformedEntryRejected(malformed, 'windows-x64', /networkAllowed must be false/);
+});
+
+test('rejects omitted networkAllowed on an off-platform entry before filtering', async () => {
+  const malformed = entry({
+    relativePath: 'vendor/linux-x64/tool',
+    sha256: '0'.repeat(64),
+    platform: 'linux-x64',
+  }) as Record<string, unknown>;
+  delete malformed.networkAllowed;
+
+  await assertMalformedEntryRejected(malformed, 'windows-x64', /networkAllowed must be false/);
+});
+
+test('rejects non-string and blank metadata plus unsupported platforms at runtime', async () => {
+  const base = entry({
+    relativePath: 'vendor/linux-x64/tool',
+    sha256: '0'.repeat(64),
+    platform: 'linux-x64',
+  });
+  const cases: Array<{ name: string; malformed: unknown; expected: RegExp }> = [
+    { name: 'blank identity', malformed: { ...base, id: '   ' }, expected: /id must be a nonblank string/ },
+    { name: 'numeric version', malformed: { ...base, version: 123 }, expected: /version must be a nonblank string/ },
+    { name: 'blank license', malformed: { ...base, license: '\t' }, expected: /license must be a nonblank string/ },
+    { name: 'object origin', malformed: { ...base, origin: {} }, expected: /origin must be a nonblank string/ },
+    { name: 'unsupported platform', malformed: { ...base, platform: 'solaris-x64' }, expected: /unsupported tool platform/ },
+    { name: 'string network flag', malformed: { ...base, networkAllowed: 'false' }, expected: /networkAllowed must be false/ },
+    { name: 'string redistribution flag', malformed: { ...base, redistributionAllowed: 'true' }, expected: /redistributionAllowed must be true/ },
+    { name: 'numeric path', malformed: { ...base, relativePath: 7 }, expected: /relativePath must be a nonblank string/ },
+  ];
+
+  for (const scenario of cases) {
+    await assertMalformedEntryRejected(scenario.malformed, 'windows-x64', scenario.expected, scenario.name);
+  }
+});
+
 function entry(overrides: { relativePath: string; sha256: string; platform: string }) {
   return {
     id: 'fixture',
@@ -99,4 +143,29 @@ function entry(overrides: { relativePath: string; sha256: string; platform: stri
 
 function digest(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function assertMalformedEntryRejected(
+  malformed: unknown,
+  platform: string,
+  expected: RegExp,
+  label = 'malformed entry',
+): Promise<void> {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'recovery-tool-stage-malformed-'));
+  try {
+    const lockPath = path.join(repositoryRoot, 'tools.lock.json');
+    await writeFile(lockPath, JSON.stringify({ manifestVersion: 1, tools: [malformed] }));
+    await assert.rejects(
+      stageExternalTools({
+        repositoryRoot,
+        outputRoot: path.join(repositoryRoot, 'output'),
+        lockPath,
+        platform,
+      }),
+      expected,
+      label,
+    );
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
 }

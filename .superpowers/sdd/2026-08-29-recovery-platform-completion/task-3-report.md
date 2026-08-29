@@ -88,3 +88,13 @@ Commit follow-up addresses every review finding with observed RED/GREEN evidence
 - **Package stageability/off-platform validation:** RED could not import a staging boundary because staging existed only inside the packaging main program. `stageExternalTools` now behaviorally stages a non-empty verified lock, canonicalizes current-platform sources, and validates metadata, digest syntax, approval flags, duplicate IDs, and safe paths for every platform before selection. Tests prove both non-empty staging and off-platform malformed path/hash refusal. Only current-platform payload bytes can be re-hashed because other platform files are not expected on a native build host.
 
 Round verification commands and results are recorded in the final task handoff. No third-party binary was added, and the daemon capability behavior remains unchanged and truthful.
+
+## Review fix round 2
+
+The scoped runtime-validation re-review was handled with another RED/GREEN cycle:
+
+- **Parsed lock entry types:** RED showed omitted `networkAllowed` on both current- and off-platform entries falling through to an unrelated missing-directory error; blank/non-string fields were likewise accepted until filesystem access. `stageExternalTools` now parses `JSON.parse` output as `unknown` and validates every entry as an object with only the schema fields, nonblank string identity/version/license/origin/path, the allowed platform enum, a 64-character lowercase hexadecimal SHA-256, `networkAllowed === false`, and `redistributionAllowed === true`. Duplicate identity is scoped to `(id, platform)`, so one tool can have native entries for multiple platforms.
+- **Portable paths and pre-filtering:** path safety now recognizes both Windows and POSIX absolute/traversal forms regardless of the build host. Every entry is parsed and path-normalized before platform selection; payload existence, canonical containment, and content hashing remain current-platform checks because other native payloads are not present on a single-platform build host.
+- **Rust off-platform invariants:** RED showed invalid SHA, unsafe path, unsupported platform, and duplicate `(id, platform)` entries all being silently skipped when they targeted another host. `ToolRegistry::from_manifest` now validates required fields, approval flags, platform, SHA, non-empty safe path, and `(id, platform)` uniqueness for the entire manifest before filtering. A regression confirms the same ID remains valid across different platforms.
+
+Focused GREEN evidence: six package-staging tests and eight registry hash/manifest tests pass. Final package, Rust, typecheck, clippy, formatting, and diff results are reported in the task handoff.

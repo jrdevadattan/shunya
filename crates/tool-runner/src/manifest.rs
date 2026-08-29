@@ -1,7 +1,7 @@
 use crate::ToolRunnerError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -46,6 +46,7 @@ impl ToolRegistry {
             ));
         }
         let mut entries = BTreeMap::new();
+        let mut manifest_keys = BTreeSet::new();
         for entry in manifest.tools {
             if entry.id.trim().is_empty()
                 || entry.version.trim().is_empty()
@@ -68,8 +69,11 @@ impl ToolRegistry {
                     entry.id
                 )));
             }
-            if entry.platform != current_platform() {
-                continue;
+            if !supported_platform(&entry.platform) {
+                return Err(ToolRunnerError::InvalidManifest(format!(
+                    "unsupported platform for {}: {}",
+                    entry.id, entry.platform
+                )));
             }
             if entry.sha256.len() != 64
                 || !entry
@@ -82,7 +86,8 @@ impl ToolRegistry {
                     entry.id
                 )));
             }
-            if entry.relative_path.is_absolute()
+            if entry.relative_path.as_os_str().is_empty()
+                || entry.relative_path.is_absolute()
                 || entry.relative_path.components().any(|component| {
                     matches!(
                         component,
@@ -94,6 +99,14 @@ impl ToolRegistry {
                     "unsafe path for {}",
                     entry.id
                 )));
+            }
+            if !manifest_keys.insert((entry.id.clone(), entry.platform.clone())) {
+                return Err(ToolRunnerError::InvalidManifest(
+                    "duplicate tool ID and platform".into(),
+                ));
+            }
+            if entry.platform != current_platform() {
+                continue;
             }
             if entries.insert(entry.id.clone(), entry).is_some() {
                 return Err(ToolRunnerError::InvalidManifest("duplicate tool ID".into()));
@@ -130,6 +143,13 @@ impl ToolRegistry {
     pub fn entry(&self, id: &str) -> Option<&ToolManifestEntry> {
         self.entries.get(id)
     }
+}
+
+fn supported_platform(platform: &str) -> bool {
+    matches!(
+        platform,
+        "windows-x64" | "linux-x64" | "linux-arm64" | "macos-x64" | "macos-arm64"
+    )
 }
 
 pub fn current_platform() -> &'static str {
