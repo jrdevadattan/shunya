@@ -19,7 +19,7 @@ function testHarnessElectronPath(): string {
   return path.join(electronRoot, 'electron');
 }
 
-export function launchPackagedApp() {
+export async function launchPackagedApp() {
   const packagedExecutable = packagedExecutablePath();
   if (!existsSync(packagedExecutable)) throw new Error(`packaged application is missing: ${packagedExecutable}`);
   const packageRoot = path.dirname(packagedExecutable);
@@ -35,9 +35,18 @@ export function launchPackagedApp() {
   const inheritedEnvironment = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   );
-  return electron.launch({
+  const electronApp = await electron.launch({
     executablePath: testHarnessElectronPath(),
     args: [appAsar],
     env: { ...inheritedEnvironment, ...daemonEnvironment, NODE_ENV: 'production', RECOVERY_RELEASE_BUILD: '1' },
   });
+  try {
+    const page = await electronApp.firstWindow();
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('#root').waitFor({ state: 'attached' });
+    return electronApp;
+  } catch (error) {
+    await electronApp.close();
+    throw error;
+  }
 }
