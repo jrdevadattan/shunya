@@ -31,4 +31,23 @@
 .artifact-table__header { background: var(--surface-muted); font-weight: 700; }
 .artifact-row { border: 0; border-top: 1px solid var(--border-subtle); background: var(--surface-panel); color: inherit; cursor: pointer; }
 .artifact-row.is-selected { box-shadow: inset 3px 0 var(--accent-primary); background: var(--surface-muted); }
+.workflow-page { max-width: 980px; margin: 0 auto; }
+.workflow-page > header { margin-bottom: var(--space-5); }
+.workflow-page > header p:last-child { max-width: 720px; color: var(--text-secondary); }
+.workflow-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); padding: 0; list-style: none; }
+.workflow-steps li { display: grid; gap: var(--space-2); min-height: 86px; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface-panel); }
+.workflow-steps li.is-ready { border-left: 3px solid var(--accent-primary); }
+.workflow-steps span, .safety-callout p { color: var(--text-secondary); }
+.safety-callout, .completion-card { margin: var(--space-4) 0; padding: var(--space-4); border-radius: var(--radius-sm); background: var(--surface-muted); }
+.completion-card { border: 1px solid var(--accent-primary); }
+.report-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: var(--space-4); }
+.report-summary, .report-limitations { padding: var(--space-5); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface-panel); }
+.report-summary dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); }
+.report-summary dl div { display: grid; gap: var(--space-1); }
+.report-summary dt { color: var(--text-secondary); font-size: 12px; }
+.report-summary dd { margin: 0; font-weight: 650; }
+.verified-badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; }
+.hash-value { display: block; max-width: 100%; overflow-wrap: anywhere; color: var(--text-secondary); }
+.report-limitations li { margin-block: var(--space-2); }
+.report-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-4); }
 @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }
