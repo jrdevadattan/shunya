@@ -569,16 +569,16 @@ impl DaemonState {
             });
         }
         let destination = params.destination_path.clone();
-        let source_physical_id = physical_device_identity(&source.canonical_path)
+        let source_device = physical_device_evidence(&source.canonical_path)
             .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
-        let destination_physical_id = physical_device_identity(&destination)
+        let destination_device = physical_device_evidence(&destination)
             .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
         let (source_physical_id, destination_physical_id) = validate_export_destination(
             &source.canonical_path,
             &root,
             &destination,
-            &source_physical_id,
-            &destination_physical_id,
+            &source_device,
+            &destination_device,
         )?;
         let exported = run_export(ExportRequest {
             export_root: destination.clone(),
@@ -1545,12 +1545,26 @@ fn is_active_or_unsupported(artifact: &RecoveryArtifact) -> bool {
     active_extension || !passive_preview_input
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PhysicalBacking {
+    ProvenPhysical,
+    Virtual,
+    Composite,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PhysicalDeviceEvidence {
+    stable_id: String,
+    backing: PhysicalBacking,
+}
+
 fn validate_export_destination(
     source: &Path,
     case_root: &Path,
     destination: &Path,
-    source_physical_id: &str,
-    destination_physical_id: &str,
+    source_device: &PhysicalDeviceEvidence,
+    destination_device: &PhysicalDeviceEvidence,
 ) -> Result<(String, String), (&'static str, String)> {
     let source = normalized_target(source)
         .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
@@ -1562,17 +1576,29 @@ fn validate_export_destination(
         return Err((
             "EXPORT_DESTINATION_OVERLAP",
             "The export destination must not contain or overwrite the source image or case workspace"
+            .into(),
+        ));
+    }
+    if source_device.backing != PhysicalBacking::ProvenPhysical
+        || destination_device.backing != PhysicalBacking::ProvenPhysical
+    {
+        return Err((
+            "EXPORT_DESTINATION_UNVERIFIED",
+            "The daemon cannot prove that source and destination have distinct non-virtual physical backing"
                 .into(),
         ));
     }
-    if source_physical_id == destination_physical_id {
+    if source_device.stable_id == destination_device.stable_id {
         return Err((
             "EXPORT_DESTINATION_NOT_SEPARATE",
             "The daemon resolved the source image and destination to the same physical device"
                 .into(),
         ));
     }
-    Ok((source_physical_id.into(), destination_physical_id.into()))
+    Ok((
+        source_device.stable_id.clone(),
+        destination_device.stable_id.clone(),
+    ))
 }
 
 fn paths_overlap(left: &Path, right: &Path) -> bool {
@@ -1604,9 +1630,9 @@ fn normalized_target(path: &Path) -> std::io::Result<PathBuf> {
     Ok(normalized)
 }
 
-fn physical_device_identity(path: &Path) -> std::io::Result<String> {
+fn physical_device_evidence(path: &Path) -> std::io::Result<PhysicalDeviceEvidence> {
     let existing = existing_ancestor(path)?;
-    physical_device_identity_for_existing(&existing)
+    physical_device_evidence_for_existing(&existing)
 }
 
 fn existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
@@ -1623,7 +1649,7 @@ fn existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 #[cfg(windows)]
-fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String> {
+fn physical_device_evidence_for_existing(path: &Path) -> std::io::Result<PhysicalDeviceEvidence> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use std::path::{Component, Prefix};
@@ -1634,7 +1660,9 @@ fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String>
     };
     use windows_sys::Win32::System::IO::DeviceIoControl;
     use windows_sys::Win32::System::Ioctl::{
-        IOCTL_STORAGE_GET_DEVICE_NUMBER, STORAGE_DEVICE_NUMBER,
+        IOCTL_STORAGE_GET_DEVICE_NUMBER_EX, IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery,
+        STORAGE_DEVICE_DESCRIPTOR, STORAGE_DEVICE_NUMBER_EX, STORAGE_PROPERTY_QUERY,
+        StorageDeviceProperty,
     };
 
     let letter = match path.components().next() {
@@ -1671,34 +1699,123 @@ fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String>
     if handle == INVALID_HANDLE_VALUE {
         return Err(std::io::Error::last_os_error());
     }
-    let mut device = STORAGE_DEVICE_NUMBER::default();
-    let mut returned = 0_u32;
-    let success = unsafe {
-        DeviceIoControl(
-            handle,
-            IOCTL_STORAGE_GET_DEVICE_NUMBER,
-            null(),
-            0,
-            (&mut device as *mut STORAGE_DEVICE_NUMBER).cast(),
-            std::mem::size_of::<STORAGE_DEVICE_NUMBER>() as u32,
-            &mut returned,
-            null_mut(),
-        )
-    };
+    let result = (|| {
+        let mut device = STORAGE_DEVICE_NUMBER_EX::default();
+        let mut returned = 0_u32;
+        let success = unsafe {
+            DeviceIoControl(
+                handle,
+                IOCTL_STORAGE_GET_DEVICE_NUMBER_EX,
+                null(),
+                0,
+                (&mut device as *mut STORAGE_DEVICE_NUMBER_EX).cast(),
+                std::mem::size_of::<STORAGE_DEVICE_NUMBER_EX>() as u32,
+                &mut returned,
+                null_mut(),
+            )
+        };
+        if success == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        let query = STORAGE_PROPERTY_QUERY {
+            PropertyId: StorageDeviceProperty,
+            QueryType: PropertyStandardQuery,
+            AdditionalParameters: [0],
+        };
+        let mut descriptor_buffer = [0_usize; 128];
+        let success = unsafe {
+            DeviceIoControl(
+                handle,
+                IOCTL_STORAGE_QUERY_PROPERTY,
+                (&query as *const STORAGE_PROPERTY_QUERY).cast(),
+                std::mem::size_of::<STORAGE_PROPERTY_QUERY>() as u32,
+                descriptor_buffer.as_mut_ptr().cast(),
+                std::mem::size_of_val(&descriptor_buffer) as u32,
+                &mut returned,
+                null_mut(),
+            )
+        };
+        if success == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if returned < std::mem::size_of::<STORAGE_DEVICE_DESCRIPTOR>() as u32 {
+            return Err(std::io::Error::other(
+                "Windows storage descriptor was truncated",
+            ));
+        }
+        let descriptor = unsafe {
+            &*descriptor_buffer
+                .as_ptr()
+                .cast::<STORAGE_DEVICE_DESCRIPTOR>()
+        };
+        let guid = device.DeviceGuid;
+        let guid_is_zero = guid.data1 == 0
+            && guid.data2 == 0
+            && guid.data3 == 0
+            && guid.data4.iter().all(|byte| *byte == 0);
+        let mut backing = classify_windows_storage_evidence(descriptor.BusType, device.Flags);
+        if guid_is_zero {
+            backing = PhysicalBacking::Unknown;
+        }
+        Ok(PhysicalDeviceEvidence {
+            stable_id: format!(
+                "windows-storage-device:{:08x}{:04x}{:04x}{}",
+                guid.data1,
+                guid.data2,
+                guid.data3,
+                guid.data4
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+            ),
+            backing,
+        })
+    })();
     unsafe {
         CloseHandle(handle);
     }
-    if success == 0 {
-        return Err(std::io::Error::last_os_error());
+    result
+}
+
+#[cfg(windows)]
+fn classify_windows_storage_evidence(
+    bus_type: windows_sys::Win32::Storage::FileSystem::STORAGE_BUS_TYPE,
+    device_flags: u32,
+) -> PhysicalBacking {
+    use windows_sys::Win32::Storage::FileSystem::{
+        BusType1394 as BUS_TYPE_1394, BusTypeAta as BUS_TYPE_ATA,
+        BusTypeFileBackedVirtual as BUS_TYPE_FILE_BACKED_VIRTUAL, BusTypeMmc as BUS_TYPE_MMC,
+        BusTypeNvme as BUS_TYPE_NVME, BusTypeRAID as BUS_TYPE_RAID, BusTypeSCM as BUS_TYPE_SCM,
+        BusTypeSata as BUS_TYPE_SATA, BusTypeSd as BUS_TYPE_SD, BusTypeSpaces as BUS_TYPE_SPACES,
+        BusTypeUfs as BUS_TYPE_UFS, BusTypeUsb as BUS_TYPE_USB, BusTypeVirtual as BUS_TYPE_VIRTUAL,
+    };
+    use windows_sys::Win32::System::Ioctl::{
+        STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_CONFLICT,
+        STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_NOHWID,
+    };
+
+    if device_flags
+        & (STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_CONFLICT
+            | STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_NOHWID)
+        != 0
+    {
+        return PhysicalBacking::Unknown;
     }
-    Ok(format!(
-        "windows-storage-device:{}:{}",
-        device.DeviceType, device.DeviceNumber
-    ))
+
+    match bus_type {
+        BUS_TYPE_ATA | BUS_TYPE_SATA | BUS_TYPE_NVME | BUS_TYPE_USB | BUS_TYPE_SD
+        | BUS_TYPE_MMC | BUS_TYPE_1394 | BUS_TYPE_UFS | BUS_TYPE_SCM => {
+            PhysicalBacking::ProvenPhysical
+        }
+        BUS_TYPE_VIRTUAL | BUS_TYPE_FILE_BACKED_VIRTUAL => PhysicalBacking::Virtual,
+        BUS_TYPE_SPACES | BUS_TYPE_RAID => PhysicalBacking::Composite,
+        _ => PhysicalBacking::Unknown,
+    }
 }
 
 #[cfg(target_os = "linux")]
-fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String> {
+fn physical_device_evidence_for_existing(path: &Path) -> std::io::Result<PhysicalDeviceEvidence> {
     use std::os::unix::fs::MetadataExt;
 
     let device = fs::metadata(path)?.dev();
@@ -1719,11 +1836,14 @@ fn physical_device_identity_for_existing(path: &Path) -> std::io::Result<String>
             "virtual block-device backing is not physically provable",
         ));
     }
-    Ok(format!("linux-block-device:{block}"))
+    Ok(PhysicalDeviceEvidence {
+        stable_id: format!("linux-block-device:{block}"),
+        backing: PhysicalBacking::ProvenPhysical,
+    })
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
-fn physical_device_identity_for_existing(_path: &Path) -> std::io::Result<String> {
+fn physical_device_evidence_for_existing(_path: &Path) -> std::io::Result<PhysicalDeviceEvidence> {
     Err(std::io::Error::other(
         "physical-device identity is not supported on this platform",
     ))
@@ -1777,12 +1897,20 @@ mod tests {
 
     #[test]
     fn export_policy_accepts_separate_daemon_derived_physical_devices() {
+        let source_device = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:0".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
+        let destination_device = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:1".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
         let result = validate_export_destination(
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/safe-export"),
-            "physical-disk:0",
-            "physical-disk:1",
+            &source_device,
+            &destination_device,
         );
 
         assert_eq!(
@@ -1793,12 +1921,24 @@ mod tests {
 
     #[test]
     fn export_policy_refuses_same_device_and_case_or_source_overlap() {
+        let source_device = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:0".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
+        let same_device = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:0".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
+        let separate_device = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:1".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
         let same_device = validate_export_destination(
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/safe-export"),
-            "physical-disk:0",
-            "physical-disk:0",
+            &source_device,
+            &same_device,
         )
         .unwrap_err();
         assert_eq!(same_device.0, "EXPORT_DESTINATION_NOT_SEPARATE");
@@ -1807,8 +1947,8 @@ mod tests {
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/case/exports"),
-            "physical-disk:0",
-            "physical-disk:1",
+            &source_device,
+            &separate_device,
         )
         .unwrap_err();
         assert_eq!(case_overlap.0, "EXPORT_DESTINATION_OVERLAP");
@@ -1817,10 +1957,86 @@ mod tests {
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/evidence"),
-            "physical-disk:0",
-            "physical-disk:1",
+            &source_device,
+            &separate_device,
         )
         .unwrap_err();
         assert_eq!(source_overlap.0, "EXPORT_DESTINATION_OVERLAP");
+    }
+
+    #[test]
+    fn export_policy_refuses_virtual_composite_and_unknown_backing() {
+        let physical = PhysicalDeviceEvidence {
+            stable_id: "physical-disk:0".into(),
+            backing: PhysicalBacking::ProvenPhysical,
+        };
+        for backing in [
+            PhysicalBacking::Virtual,
+            PhysicalBacking::Composite,
+            PhysicalBacking::Unknown,
+        ] {
+            let unproven = PhysicalDeviceEvidence {
+                stable_id: format!("unproven-{backing:?}"),
+                backing,
+            };
+            for (source, destination) in [(&physical, &unproven), (&unproven, &physical)] {
+                let error = validate_export_destination(
+                    Path::new("/evidence/source.raw"),
+                    Path::new("/case"),
+                    Path::new("/safe-export"),
+                    source,
+                    destination,
+                )
+                .unwrap_err();
+                assert_eq!(error.0, "EXPORT_DESTINATION_UNVERIFIED");
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_bus_classifier_denies_virtual_composite_and_unknown_storage() {
+        use windows_sys::Win32::Storage::FileSystem::{
+            BusTypeFileBackedVirtual, BusTypeNvme, BusTypeRAID, BusTypeSas, BusTypeSpaces,
+            BusTypeUnknown, BusTypeVirtual,
+        };
+        use windows_sys::Win32::System::Ioctl::{
+            STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_CONFLICT,
+            STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_NOHWID,
+        };
+
+        assert_eq!(
+            classify_windows_storage_evidence(BusTypeNvme, 0),
+            PhysicalBacking::ProvenPhysical
+        );
+        for bus_type in [BusTypeVirtual, BusTypeFileBackedVirtual] {
+            assert_eq!(
+                classify_windows_storage_evidence(bus_type, 0),
+                PhysicalBacking::Virtual
+            );
+        }
+        for bus_type in [BusTypeSpaces, BusTypeRAID] {
+            assert_eq!(
+                classify_windows_storage_evidence(bus_type, 0),
+                PhysicalBacking::Composite
+            );
+        }
+        assert_eq!(
+            classify_windows_storage_evidence(BusTypeUnknown, 0),
+            PhysicalBacking::Unknown
+        );
+        assert_eq!(
+            classify_windows_storage_evidence(BusTypeSas, 0),
+            PhysicalBacking::Unknown
+        );
+        for flags in [
+            STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_NOHWID,
+            STORAGE_DEVICE_FLAGS_RANDOM_DEVICEGUID_REASON_CONFLICT,
+        ] {
+            assert_eq!(
+                classify_windows_storage_evidence(BusTypeNvme, flags),
+                PhysicalBacking::Unknown
+            );
+        }
     }
 }
