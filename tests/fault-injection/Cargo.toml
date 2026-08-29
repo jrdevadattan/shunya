@@ -1,0 +1,28 @@
+[package]
+name = "fault-injection-tests"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+acquisition = { path = "../../crates/acquisition" }
+async-trait.workspace = true
+case-store = { path = "../../crates/case-store" }
+sha2.workspace = true
+tempfile = "3"
+tokio.workspace = true
+tokio-util.workspace = true
+tool-runner = { path = "../../crates/tool-runner" }
+
+[[test]]
+name = "source_disconnect"
+path = "source_disconnect.rs"
+[[test]]
+name = "destination_full"
+path = "destination_full.rs"
+[[test]]
+name = "tool_crash"
+path = "tool_crash.rs"
+[[test]]
+name = "corrupt_case"
+path = "corrupt_case.rs"

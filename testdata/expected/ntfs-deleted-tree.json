@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "ntfs-deleted-tree",
+  "nondeterministicFields": ["filesystemSerial", "createdTimestamp"],
+  "artifacts": [{
+    "artifactId": "intact_pdf",
+    "originalPath": "/Finance/2025/report.pdf",
+    "sha256": "b05439bcd1ec4e0ec9d3fef8b4c8854b08fb32e3d7a14562448338580875939e",
+    "expectedMethods": ["metadata"],
+    "expectedState": "complete_validated"
+  }]
+}

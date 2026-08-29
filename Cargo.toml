@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "tests/fault-injection", "tests/security"]
 
 [workspace.package]
 edition = "2024"
