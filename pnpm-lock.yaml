@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
       pnpm:
         specifier: 10.15.0
         version: 10.15.0
@@ -2733,8 +2736,8 @@ packages:
     resolution: {integrity: sha512-z+Uw/vLuy6gQe8cfaFWD7p0wVv8fJl3mbzXh33RS+0oW2wvUqiRXiQ69gLWSLpgB5/6sU+r6BlQR0MBILadqTQ==}
     deprecated: This package is deprecated. Use the optional chaining (?.) operator instead.
 
-  lodash@4.18.1:
-    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
+  lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
   log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
@@ -6129,7 +6132,7 @@ snapshots:
       debug: 4.4.3
       fs-extra: 9.1.0
       glob: 7.2.3
-      lodash: 4.18.1
+      lodash: 4.17.21
       parse-author: 2.0.0
       semver: 7.8.5
       tmp-promise: 3.0.3
@@ -6146,7 +6149,7 @@ snapshots:
       electron-installer-common: 0.10.4
       fs-extra: 9.1.0
       get-folder-size: 2.0.1
-      lodash: 4.18.1
+      lodash: 4.17.21
       word-wrap: 1.2.5
       yargs: 16.2.2
     transitivePeerDependencies:
@@ -6171,7 +6174,7 @@ snapshots:
       '@electron/asar': 3.4.1
       debug: 4.4.3
       fs-extra: 7.0.1
-      lodash: 4.18.1
+      lodash: 4.17.21
       semver: 7.8.5
       temp: 0.9.4
     optionalDependencies:
@@ -6824,8 +6827,7 @@ snapshots:
 
   lodash.get@4.4.2: {}
 
-  lodash@4.18.1:
-    optional: true
+  lodash@4.17.21: {}
 
   log-symbols@4.1.0:
     dependencies:
