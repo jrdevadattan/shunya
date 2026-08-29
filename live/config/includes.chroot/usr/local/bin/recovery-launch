@@ -6,7 +6,7 @@ export RECOVERY_SESSION_DIR="$(mktemp -d /tmp/recovery-session.XXXXXX)"
 swapoff -a 2>/dev/null || true
 nmcli networking off 2>/dev/null || true
 
-APP=/usr/bin/recovery-platform
+APP=/usr/bin/sih-recovery-platform
 MANIFEST=/opt/recovery/release-manifest.sha256
 if [ ! -x "$APP" ] || [ ! -f "$MANIFEST" ]; then
   zenity --error --text="Recovery Mode could not verify the application manifest. See /var/log/recovery-launch.log." 2>/dev/null || true
