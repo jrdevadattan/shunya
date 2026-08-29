@@ -1,0 +1,12 @@
+node_modules/
+target/
+dist/
+out/
+coverage/
+playwright-report/
+test-results/
+.pnpm-store/
+.worktrees/
+*.log
+.DS_Store
+Thumbs.db

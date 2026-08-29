@@ -1,0 +1,1 @@
+//! Shared recovery-domain contracts.
