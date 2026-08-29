@@ -6,10 +6,10 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "lint": "pnpm -r lint && cargo clippy --workspace --all-targets -- -D warnings",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test && cargo nextest run --workspace --no-tests pass",
-    "test:e2e": "pnpm --filter @recovery/desktop test:e2e",
-    "build": "pnpm -r build && cargo build --workspace --release"
+    "lint": "corepack pnpm -r lint && cargo clippy --workspace --all-targets -- -D warnings",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test && cargo nextest run --workspace --no-tests pass",
+    "test:e2e": "corepack pnpm --filter @recovery/desktop test:e2e",
+    "build": "corepack pnpm -r build && cargo build --workspace --release"
   }
 }

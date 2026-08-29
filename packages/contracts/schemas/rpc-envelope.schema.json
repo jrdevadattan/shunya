@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recovery.local/schemas/rpc-envelope.schema.json",
+  "title": "Recovery RPC envelope",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["id", "method", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["response", "error"] },
+        "id": { "type": "string", "format": "uuid" },
+        "result": true,
+        "error": { "type": "object" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["kind", "topic", "payload"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "event" },
+        "topic": { "type": "string", "minLength": 1 },
+        "payload": true
+      }
+    }
+  ]
+}
