@@ -304,6 +304,20 @@ async fn duplicate_ids_are_invalid_before_any_probe() {
     assert!(report.manifest.tools.is_empty());
 }
 
+#[tokio::test]
+async fn portable_dot_component_is_rejected_before_discovery_access() {
+    let fixture = DiscoveryFixture::new();
+    let mut candidate = fixture.candidate();
+    candidate.relative_path = PathBuf::from("fixture/./tool-runner-fixture");
+
+    let report = fixture.discover(candidate).await;
+
+    assert_eq!(report.capabilities[0].status, DiscoveryStatus::UnsafePath);
+    assert!(report.capabilities[0].actual_sha256.is_none());
+    assert!(report.capabilities[0].detected_version.is_none());
+    assert!(report.manifest.tools.is_empty());
+}
+
 fn sha256(path: &Path) -> String {
     Sha256::digest(std::fs::read(path).unwrap())
         .iter()

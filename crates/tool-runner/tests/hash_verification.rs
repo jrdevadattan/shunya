@@ -97,6 +97,34 @@ fn registry_allows_same_id_for_different_platforms() {
     assert!(result.is_ok());
 }
 
+#[test]
+fn registry_rejects_portably_unsafe_off_platform_forms() {
+    for path in [
+        "vendor/./tool",
+        "vendor//tool",
+        "vendor/tool/",
+        "C:/Windows/tool.exe",
+        r"vendor\..\escape.exe",
+        r"\\server\share\tool.exe",
+        r"\\?\C:\tool.exe",
+        "vendor/tool:stream",
+        "vendor/NUL.exe",
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut entry = valid_entry("fixture", off_platform());
+        entry.relative_path = path.into();
+
+        let error = ToolRegistry::from_manifest(root.path(), manifest(vec![entry]))
+            .err()
+            .unwrap_or_else(|| panic!("off-platform path should be unsafe: {path:?}"));
+
+        assert!(
+            error.to_string().contains("unsafe path"),
+            "{path:?}: {error}"
+        );
+    }
+}
+
 fn manifest_entry(network_allowed: bool, redistribution_allowed: bool) -> ToolManifest {
     let mut entry = valid_entry("fixture", current_platform());
     entry.network_allowed = network_allowed;

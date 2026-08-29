@@ -129,6 +129,32 @@ test('rejects non-string and blank metadata plus unsupported platforms at runtim
   }
 });
 
+test('rejects portable path hazards before platform filtering', async () => {
+  const base = entry({
+    relativePath: 'vendor/linux-x64/tool',
+    sha256: '0'.repeat(64),
+    platform: 'linux-x64',
+  });
+  for (const relativePath of [
+    'vendor/./tool',
+    'vendor//tool',
+    'vendor/tool/',
+    'C:/Windows/tool.exe',
+    String.raw`vendor\..\escape.exe`,
+    String.raw`\\server\share\tool.exe`,
+    String.raw`\\?\C:\tool.exe`,
+    'vendor/tool:stream',
+    'vendor/NUL.exe',
+  ]) {
+    await assertMalformedEntryRejected(
+      { ...base, relativePath },
+      'windows-x64',
+      /unsafe tool path/,
+      relativePath,
+    );
+  }
+});
+
 function entry(overrides: { relativePath: string; sha256: string; platform: string }) {
   return {
     id: 'fixture',

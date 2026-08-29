@@ -98,3 +98,14 @@ The scoped runtime-validation re-review was handled with another RED/GREEN cycle
 - **Rust off-platform invariants:** RED showed invalid SHA, unsafe path, unsupported platform, and duplicate `(id, platform)` entries all being silently skipped when they targeted another host. `ToolRegistry::from_manifest` now validates required fields, approval flags, platform, SHA, non-empty safe path, and `(id, platform)` uniqueness for the entire manifest before filtering. A regression confirms the same ID remains valid across different platforms.
 
 Focused GREEN evidence: six package-staging tests and eight registry hash/manifest tests pass. Final package, Rust, typecheck, clippy, formatting, and diff results are reported in the task handoff.
+
+## Review fix round 3
+
+Portable path safety is now independent of the build host:
+
+- RED showed no shared Rust predicate, discovery resolving `fixture/./tool-runner-fixture` as available, the registry accepting that form on an off-platform entry, and staging normalizing it instead of rejecting it.
+- `is_portable_tool_relative_path` is the single Rust predicate used by both discovery and `ToolRegistry`. It accepts UTF-8 forward-slash relative components and rejects empty paths/components, `.`/`..`, POSIX roots, every backslash form (therefore Windows drive, UNC, and device paths), Windows drive/ADS colons, control or Windows-forbidden characters, trailing dot/space components, and Windows reserved device names.
+- TypeScript staging mirrors the same portable grammar before host-native normalization. This makes the checked-in manifest representation stage-compatible on Windows and POSIX while retaining canonical-root containment for current-platform payload access.
+- Cross-platform raw-string regressions cover Unix-host exposure to Windows drive/UNC/device/traversal forms and Windows-host exposure to POSIX roots/traversal, plus ambiguous dot, repeated/trailing separator, ADS, and reserved-name forms. Existing generator-to-registry execution and non-empty package staging tests prove safe generated paths remain loadable and stageable.
+
+Focused GREEN evidence: two portable-predicate tests, the discovery dot-component regression, the off-platform registry path table, and seven staging tests pass. Final regression totals are recorded in the task handoff.

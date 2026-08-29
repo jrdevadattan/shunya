@@ -1,8 +1,8 @@
-use crate::{ToolManifest, ToolManifestEntry};
+use crate::{ToolManifest, ToolManifestEntry, is_portable_tool_relative_path};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -115,7 +115,11 @@ pub async fn discover_tools(root: &Path, request: ToolDiscoveryRequest) -> ToolD
             capability.status = DiscoveryStatus::PlatformMismatch;
         } else if !valid_metadata(&candidate) {
             capability.status = DiscoveryStatus::InvalidMetadata;
-        } else if !safe_relative(&candidate.relative_path) {
+        } else if !candidate
+            .relative_path
+            .to_str()
+            .is_some_and(is_portable_tool_relative_path)
+        {
             capability.status = DiscoveryStatus::UnsafePath;
         } else {
             let executable = root.join(&candidate.relative_path);
@@ -225,17 +229,6 @@ fn valid_metadata(candidate: &NativeToolCandidate) -> bool {
             .expected_sha256
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-fn safe_relative(path: &Path) -> bool {
-    !path.as_os_str().is_empty()
-        && !path.is_absolute()
-        && !path.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
 }
 
 fn hex_digest(bytes: &[u8]) -> String {

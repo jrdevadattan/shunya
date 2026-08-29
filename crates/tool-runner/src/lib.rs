@@ -7,7 +7,9 @@ pub use discovery::{
     DiscoveryStatus, NativeToolCandidate, ToolCandidateCatalog, ToolCapability,
     ToolDiscoveryReport, ToolDiscoveryRequest, discover_tools,
 };
-pub use manifest::{ToolManifest, ToolManifestEntry, ToolRegistry, current_platform};
+pub use manifest::{
+    ToolManifest, ToolManifestEntry, ToolRegistry, current_platform, is_portable_tool_relative_path,
+};
 pub use process::ToolRunner;
 
 use std::path::PathBuf;

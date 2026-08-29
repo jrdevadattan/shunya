@@ -133,19 +133,22 @@ function digest(bytes: Buffer): string {
 }
 
 function safeRelative(value: string): string {
-  const portable = value.replaceAll('\\', '/');
-  const normalized = path.normalize(value);
-  if (
-    path.win32.isAbsolute(value)
-    || path.posix.isAbsolute(portable)
-    || portable.split('/').includes('..')
-    || path.isAbsolute(normalized)
-    || normalized.startsWith(`..${path.sep}`)
-    || normalized === '..'
-  ) {
+  if (!isPortableToolRelativePath(value)) {
     throw new Error(`unsafe tool path: ${value}`);
   }
-  return normalized;
+  return path.normalize(value);
+}
+
+function isPortableToolRelativePath(value: string): boolean {
+  if (!value || value.startsWith('/') || value.includes('\\')) return false;
+  return value.split('/').every((component) => {
+    if (!component || component === '.' || component === '..' || component.endsWith('.') || component.endsWith(' ')) {
+      return false;
+    }
+    if (/[<>:"|?*\u0000-\u001f]/u.test(component)) return false;
+    const stem = component.split('.')[0]?.toUpperCase() ?? '';
+    return !/^(CON|PRN|AUX|NUL|CLOCK\$|COM[1-9]|LPT[1-9])$/u.test(stem);
+  });
 }
 
 function isContained(root: string, candidate: string): boolean {

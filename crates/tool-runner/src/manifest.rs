@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,14 +86,10 @@ impl ToolRegistry {
                     entry.id
                 )));
             }
-            if entry.relative_path.as_os_str().is_empty()
-                || entry.relative_path.is_absolute()
-                || entry.relative_path.components().any(|component| {
-                    matches!(
-                        component,
-                        Component::ParentDir | Component::RootDir | Component::Prefix(_)
-                    )
-                })
+            if !entry
+                .relative_path
+                .to_str()
+                .is_some_and(is_portable_tool_relative_path)
             {
                 return Err(ToolRunnerError::InvalidManifest(format!(
                     "unsafe path for {}",
@@ -150,6 +146,33 @@ fn supported_platform(platform: &str) -> bool {
         platform,
         "windows-x64" | "linux-x64" | "linux-arm64" | "macos-x64" | "macos-arm64"
     )
+}
+
+pub fn is_portable_tool_relative_path(value: &str) -> bool {
+    if value.is_empty() || value.starts_with('/') || value.contains('\\') {
+        return false;
+    }
+    value.split('/').all(|component| {
+        !component.is_empty()
+            && component != "."
+            && component != ".."
+            && !component.ends_with(['.', ' '])
+            && !component.chars().any(|character| {
+                character.is_control()
+                    || matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*')
+            })
+            && !windows_reserved_component(component)
+    })
+}
+
+fn windows_reserved_component(component: &str) -> bool {
+    let stem = component.split('.').next().unwrap_or_default();
+    let upper = stem.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(|suffix| suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9'))
 }
 
 pub fn current_platform() -> &'static str {
