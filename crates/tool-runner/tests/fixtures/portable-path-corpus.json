@@ -1,0 +1,23 @@
+{
+  "safe": [
+    "vendor/tool.exe",
+    "vendor/latin-é-tool.exe",
+    "vendor/工具.exe",
+    "vendor/COM⁴.exe",
+    "vendor/control-picture-␡.exe",
+    "vendor/non-breaking- -space.exe"
+  ],
+  "hazardous": [
+    "vendor/del--tool.exe",
+    "vendor/c1-low--tool.exe",
+    "vendor/c1-high--tool.exe",
+    "vendor/COM¹.exe",
+    "vendor/COM².exe",
+    "vendor/COM³.exe",
+    "vendor/LPT¹.exe",
+    "vendor/LPT².exe",
+    "vendor/LPT³.exe",
+    "vendor/CONIN$.exe",
+    "vendor/CONOUT$.exe"
+  ]
+}

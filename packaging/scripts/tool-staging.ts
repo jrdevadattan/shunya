@@ -145,9 +145,9 @@ function isPortableToolRelativePath(value: string): boolean {
     if (!component || component === '.' || component === '..' || component.endsWith('.') || component.endsWith(' ')) {
       return false;
     }
-    if (/[<>:"|?*\u0000-\u001f]/u.test(component)) return false;
+    if (/[<>:"|?*\u0000-\u001f\u007f-\u009f]/u.test(component)) return false;
     const stem = component.split('.')[0]?.toUpperCase() ?? '';
-    return !/^(CON|PRN|AUX|NUL|CLOCK\$|COM[1-9]|LPT[1-9])$/u.test(stem);
+    return !/^(CON|PRN|AUX|NUL|CLOCK\$|CONIN\$|CONOUT\$|COM(?:[1-9]|[¹²³])|LPT(?:[1-9]|[¹²³]))$/u.test(stem);
   });
 }
 

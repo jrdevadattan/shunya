@@ -1,5 +1,11 @@
 use tool_runner::is_portable_tool_relative_path;
 
+#[derive(serde::Deserialize)]
+struct PortablePathCorpus {
+    safe: Vec<String>,
+    hazardous: Vec<String>,
+}
+
 #[test]
 fn portable_tool_paths_accept_only_cross_platform_relative_forms() {
     for path in [
@@ -44,4 +50,25 @@ fn portable_tool_paths_reject_windows_posix_and_ambiguous_forms_on_every_host() 
             "expected unsafe path: {path:?}"
         );
     }
+}
+
+#[test]
+fn shared_unicode_and_reserved_alias_corpus_matches_portable_predicate() {
+    let corpus = portable_path_corpus();
+    for path in corpus.safe {
+        assert!(
+            is_portable_tool_relative_path(&path),
+            "expected safe corpus path: {path:?}"
+        );
+    }
+    for path in corpus.hazardous {
+        assert!(
+            !is_portable_tool_relative_path(&path),
+            "expected hazardous corpus path: {path:?}"
+        );
+    }
+}
+
+fn portable_path_corpus() -> PortablePathCorpus {
+    serde_json::from_slice(include_bytes!("fixtures/portable-path-corpus.json")).unwrap()
 }

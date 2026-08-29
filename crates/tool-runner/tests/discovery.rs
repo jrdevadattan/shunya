@@ -6,6 +6,12 @@ use tool_runner::{
     DiscoveryStatus, NativeToolCandidate, ToolDiscoveryRequest, current_platform, discover_tools,
 };
 
+#[derive(serde::Deserialize)]
+struct PortablePathCorpus {
+    safe: Vec<String>,
+    hazardous: Vec<String>,
+}
+
 struct DiscoveryFixture {
     _root: TempDir,
     tools_root: PathBuf,
@@ -318,6 +324,64 @@ async fn portable_dot_component_is_rejected_before_discovery_access() {
     assert!(report.manifest.tools.is_empty());
 }
 
+#[tokio::test]
+async fn shared_hazardous_corpus_is_rejected_before_discovery_access() {
+    let fixture = DiscoveryFixture::new();
+    for path in portable_path_corpus().hazardous {
+        let mut candidate = fixture.candidate();
+        candidate.relative_path = PathBuf::from(&path);
+
+        let report = fixture.discover(candidate).await;
+
+        assert_eq!(
+            report.capabilities[0].status,
+            DiscoveryStatus::UnsafePath,
+            "{path:?}"
+        );
+        assert!(report.capabilities[0].actual_sha256.is_none(), "{path:?}");
+        assert!(
+            report.capabilities[0].detected_version.is_none(),
+            "{path:?}"
+        );
+        assert!(report.manifest.tools.is_empty(), "{path:?}");
+    }
+}
+
+#[tokio::test]
+async fn shared_safe_unicode_corpus_remains_discoverable_and_loadable() {
+    let fixture = DiscoveryFixture::new();
+    let source = PathBuf::from(env!("CARGO_BIN_EXE_tool-runner-fixture"));
+    let mut candidates = Vec::new();
+    for (index, path) in portable_path_corpus().safe.into_iter().enumerate() {
+        let destination = fixture.tools_root.join(&path);
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        std::fs::copy(&source, &destination).unwrap();
+        let mut candidate = fixture.candidate();
+        candidate.id = format!("safe-{index}");
+        candidate.relative_path = PathBuf::from(path);
+        candidate.expected_sha256 = sha256(&destination);
+        candidates.push(candidate);
+    }
+
+    let report = discover_tools(
+        &fixture.tools_root,
+        ToolDiscoveryRequest {
+            platform: current_platform().into(),
+            candidates,
+            probe_timeout: Duration::from_secs(2),
+        },
+    )
+    .await;
+
+    assert!(
+        report
+            .capabilities
+            .iter()
+            .all(|item| item.status == DiscoveryStatus::Available)
+    );
+    assert!(tool_runner::ToolRegistry::from_manifest(&fixture.tools_root, report.manifest).is_ok());
+}
+
 fn sha256(path: &Path) -> String {
     Sha256::digest(std::fs::read(path).unwrap())
         .iter()
@@ -328,6 +392,10 @@ fn sha256(path: &Path) -> String {
 #[cfg(unix)]
 fn create_directory_symlink(target: &Path, link: &Path) {
     std::os::unix::fs::symlink(target, link).unwrap();
+}
+
+fn portable_path_corpus() -> PortablePathCorpus {
+    serde_json::from_slice(include_bytes!("fixtures/portable-path-corpus.json")).unwrap()
 }
 
 #[cfg(windows)]

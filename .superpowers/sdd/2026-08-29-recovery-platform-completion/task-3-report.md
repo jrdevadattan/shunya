@@ -109,3 +109,34 @@ Portable path safety is now independent of the build host:
 - Cross-platform raw-string regressions cover Unix-host exposure to Windows drive/UNC/device/traversal forms and Windows-host exposure to POSIX roots/traversal, plus ambiguous dot, repeated/trailing separator, ADS, and reserved-name forms. Existing generator-to-registry execution and non-empty package staging tests prove safe generated paths remain loadable and stageable.
 
 Focused GREEN evidence: two portable-predicate tests, the discovery dot-component regression, the off-platform registry path table, and seven staging tests pass. Final regression totals are recorded in the task handoff.
+
+## Review fix round 4
+
+Rust discovery/registry validation and TypeScript packaging now apply the same explicit portable character and Windows-device rules:
+
+- The rejected control ranges are exactly U+0000–U+001F and U+007F–U+009F. This closes the previous TypeScript gap for DEL/C1 characters without relying on host- or runtime-specific Unicode control classifications.
+- Windows reserved stems now include `CONIN$`, `CONOUT$`, `COM1`–`COM9`, `LPT1`–`LPT9`, and the documented superscript aliases `COM¹`/`COM²`/`COM³` and `LPT¹`/`LPT²`/`LPT³`, in addition to the existing reserved names.
+- One checked-in JSON corpus drives the Rust predicate, discovery, off-platform registry, and TypeScript staging regressions. Its safe counterexamples include accented Latin, CJK, U+2421 control-picture, U+00A0 non-breaking-space, and non-reserved `COM⁴` filenames, proving the stricter rules do not collapse into an ASCII-only policy.
+
+Observed RED:
+
+- The Rust predicate accepted `COM¹`; discovery consequently returned `missing` instead of `unsafe_path`, and the registry accepted the same hazardous off-platform entry.
+- TypeScript staging accepted a path containing DEL U+007F.
+
+Focused GREEN:
+
+- The shared predicate corpus passes in Rust and TypeScript.
+- Discovery rejects every hazardous corpus path before file access, while every safe corpus path is discovered, written into a generated manifest, and accepted by `ToolRegistry`.
+- Registry rejects every hazardous corpus path even when the entry targets another platform and accepts every safe counterexample.
+- TypeScript stages every safe corpus path and rejects every hazardous entry before platform filtering.
+
+No production tool lock or third-party binary changed. The daemon capability behavior remains unchanged and truthful.
+
+Round 4 final verification:
+
+- `cargo test -p tool-runner` — 33 integration tests pass across discovery, registry, generator, portable paths, cancellation, and no-shell execution.
+- `cargo test -p fault-injection-tests --test tool_crash` — 1 pass.
+- `cargo clippy -p tool-runner --all-targets -- -D warnings` — pass.
+- `corepack pnpm test:package` — 16 pass, 0 fail.
+- Desktop typecheck and standalone strict staging-script/test typecheck — pass.
+- `cargo fmt --all -- --check` and `git diff --check` — pass.

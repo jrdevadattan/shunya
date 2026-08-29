@@ -3,6 +3,12 @@ mod support;
 use support::fixture_registry;
 use tool_runner::{ToolManifest, ToolManifestEntry, ToolRegistry, current_platform};
 
+#[derive(serde::Deserialize)]
+struct PortablePathCorpus {
+    safe: Vec<String>,
+    hazardous: Vec<String>,
+}
+
 #[test]
 fn verifies_fixture_hash_and_rejects_tampering() {
     let fixture = fixture_registry();
@@ -125,6 +131,29 @@ fn registry_rejects_portably_unsafe_off_platform_forms() {
     }
 }
 
+#[test]
+fn registry_applies_shared_unicode_and_reserved_alias_corpus_off_platform() {
+    let corpus = portable_path_corpus();
+    for (index, path) in corpus.safe.into_iter().enumerate() {
+        let root = tempfile::tempdir().unwrap();
+        let mut entry = valid_entry(&format!("safe-{index}"), off_platform());
+        entry.relative_path = path.into();
+        assert!(ToolRegistry::from_manifest(root.path(), manifest(vec![entry])).is_ok());
+    }
+    for path in corpus.hazardous {
+        let root = tempfile::tempdir().unwrap();
+        let mut entry = valid_entry("hazardous", off_platform());
+        entry.relative_path = path.clone().into();
+        let error = ToolRegistry::from_manifest(root.path(), manifest(vec![entry]))
+            .err()
+            .unwrap_or_else(|| panic!("hazardous off-platform path accepted: {path:?}"));
+        assert!(
+            error.to_string().contains("unsafe path"),
+            "{path:?}: {error}"
+        );
+    }
+}
+
 fn manifest_entry(network_allowed: bool, redistribution_allowed: bool) -> ToolManifest {
     let mut entry = valid_entry("fixture", current_platform());
     entry.network_allowed = network_allowed;
@@ -159,4 +188,8 @@ fn off_platform() -> &'static str {
     } else {
         "windows-x64"
     }
+}
+
+fn portable_path_corpus() -> PortablePathCorpus {
+    serde_json::from_slice(include_bytes!("fixtures/portable-path-corpus.json")).unwrap()
 }

@@ -158,7 +158,7 @@ pub fn is_portable_tool_relative_path(value: &str) -> bool {
             && component != ".."
             && !component.ends_with(['.', ' '])
             && !component.chars().any(|character| {
-                character.is_control()
+                is_portable_control(character)
                     || matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*')
             })
             && !windows_reserved_component(component)
@@ -168,11 +168,20 @@ pub fn is_portable_tool_relative_path(value: &str) -> bool {
 fn windows_reserved_component(component: &str) -> bool {
     let stem = component.split('.').next().unwrap_or_default();
     let upper = stem.to_ascii_uppercase();
-    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$")
-        || upper
-            .strip_prefix("COM")
-            .or_else(|| upper.strip_prefix("LPT"))
-            .is_some_and(|suffix| suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9'))
+    matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$"
+    ) || upper
+        .strip_prefix("COM")
+        .or_else(|| upper.strip_prefix("LPT"))
+        .is_some_and(|suffix| {
+            matches!(suffix, "¹" | "²" | "³")
+                || (suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9'))
+        })
+}
+
+fn is_portable_control(character: char) -> bool {
+    matches!(character as u32, 0x0000..=0x001f | 0x007f..=0x009f)
 }
 
 pub fn current_platform() -> &'static str {

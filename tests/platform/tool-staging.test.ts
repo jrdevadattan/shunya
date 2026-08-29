@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -155,6 +156,54 @@ test('rejects portable path hazards before platform filtering', async () => {
   }
 });
 
+test('stages every safe path from the shared Unicode corpus', async () => {
+  const corpus = await portablePathCorpus();
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), 'recovery-tool-stage-unicode-'));
+  try {
+    const tools = [];
+    for (const [index, relativePath] of corpus.safe.entries()) {
+      const bytes = Buffer.from(`safe-${index}`);
+      const source = path.join(repositoryRoot, 'tools', path.normalize(relativePath));
+      await mkdir(path.dirname(source), { recursive: true });
+      await writeFile(source, bytes);
+      tools.push({
+        ...entry({ relativePath, sha256: digest(bytes), platform: 'windows-x64' }),
+        id: `safe-${index}`,
+      });
+    }
+    const lockPath = path.join(repositoryRoot, 'tools.lock.json');
+    await writeFile(lockPath, JSON.stringify({ manifestVersion: 1, tools }));
+
+    const files = await stageExternalTools({
+      repositoryRoot,
+      outputRoot: path.join(repositoryRoot, 'output'),
+      lockPath,
+      platform: 'windows-x64',
+    });
+
+    assert.equal(files.length, corpus.safe.length);
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects every hazardous path from the shared Unicode corpus before filtering', async () => {
+  const corpus = await portablePathCorpus();
+  const base = entry({
+    relativePath: 'vendor/linux-x64/tool',
+    sha256: '0'.repeat(64),
+    platform: 'linux-x64',
+  });
+  for (const relativePath of corpus.hazardous) {
+    await assertMalformedEntryRejected(
+      { ...base, relativePath },
+      'windows-x64',
+      /unsafe tool path/,
+      JSON.stringify(relativePath),
+    );
+  }
+});
+
 function entry(overrides: { relativePath: string; sha256: string; platform: string }) {
   return {
     id: 'fixture',
@@ -194,4 +243,21 @@ async function assertMalformedEntryRejected(
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
+}
+
+async function portablePathCorpus(): Promise<{ safe: string[]; hazardous: string[] }> {
+  const repositoryRoot = findRepository(process.cwd());
+  return JSON.parse(
+    await readFile(path.join(repositoryRoot, 'crates/tool-runner/tests/fixtures/portable-path-corpus.json'), 'utf8'),
+  ) as { safe: string[]; hazardous: string[] };
+}
+
+function findRepository(start: string): string {
+  let candidate = path.resolve(start);
+  while (!existsSync(path.join(candidate, 'pnpm-workspace.yaml'))) {
+    const parent = path.dirname(candidate);
+    if (parent === candidate) throw new Error('repository root not found');
+    candidate = parent;
+  }
+  return candidate;
 }
