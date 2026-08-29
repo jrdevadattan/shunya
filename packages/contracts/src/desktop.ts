@@ -67,18 +67,29 @@ export const ReportDescriptorSchema = z.object({
   limitations: z.array(CapabilityLimitationSchema),
 });
 
-export interface CreateCaseInput {
-  title: string; operator: string; referenceNumber: string | null; organization: string | null;
-  workspacePath: string; notes: string | null; estimatedRequiredBytes?: number;
-}
-export interface AddImageSourceInput { path: string }
-export interface CreateRecoveryJobInput {
-  caseId: string; sourceId: string; goal: z.infer<typeof RecoveryGoalSchema>; preset: z.infer<typeof ScanPresetSchema>;
-}
+export const CreateCaseInputSchema = z.object({
+  title: z.string().min(3).max(120), operator: z.string().min(1), referenceNumber: z.string().nullable(), organization: z.string().nullable(),
+  workspacePath: z.string().min(1), notes: z.string().nullable(), estimatedRequiredBytes: z.number().int().nonnegative().optional(),
+});
+export const AddImageSourceInputSchema = z.object({ path: z.string().min(1) });
+export const CreateRecoveryJobInputSchema = z.object({
+  caseId: z.string().min(1), sourceId: z.string().min(1), goal: RecoveryGoalSchema, preset: ScanPresetSchema,
+});
+export const ExportArtifactsInputSchema = z.object({
+  artifactIds: z.array(z.string().min(1)).min(1), destinationPath: z.string().min(1), destinationPhysicalId: z.string().min(1), acknowledgeUnsafe: z.boolean(),
+});
+export const EmptyParamsSchema = z.object({}).strict();
+export const CaseOpenParamsSchema = z.object({ casePath: z.string().min(1) }).strict();
+export const SourceParamsSchema = z.object({ sourceId: z.string().min(1) }).strict();
+export const JobParamsSchema = z.object({ jobId: z.string().min(1) }).strict();
+export const JobEventsParamsSchema = JobParamsSchema.extend({ afterSequence: z.number().int().nonnegative() }).strict();
+export const ArtifactParamsSchema = z.object({ artifactId: z.string().min(1) }).strict();
+export const ReportParamsSchema = z.object({ caseId: z.string().min(1) }).strict();
+export type CreateCaseInput = z.infer<typeof CreateCaseInputSchema>;
+export type AddImageSourceInput = z.infer<typeof AddImageSourceInputSchema>;
+export type CreateRecoveryJobInput = z.infer<typeof CreateRecoveryJobInputSchema>;
 export type ArtifactQuery = z.infer<typeof ArtifactQuerySchema>;
-export interface ExportArtifactsInput {
-  artifactIds: string[]; destinationPath: string; destinationPhysicalId: string; acknowledgeUnsafe: boolean;
-}
+export type ExportArtifactsInput = z.infer<typeof ExportArtifactsInputSchema>;
 export type RuntimeInfo = z.infer<typeof RuntimeInfoSchema>;
 export type SourceAssessment = z.infer<typeof SourceAssessmentSchema>;
 export type CapabilityLimitation = z.infer<typeof CapabilityLimitationSchema>;
@@ -111,4 +122,41 @@ export interface RecoveryDesktopApi {
   exportArtifacts(input: ExportArtifactsInput): Promise<ExportJob>;
   generateReport(caseId: string): Promise<ReportDescriptor>;
   subscribeJobEvents(listener: (event: z.infer<typeof JobEventSchema>) => void): () => void;
+}
+
+export function parseDesktopRpcParams(method: string, params: unknown): Record<string, unknown> {
+  switch (method) {
+    case 'runtime.get': case 'source.list': return EmptyParamsSchema.parse(params);
+    case 'case.create': return CreateCaseInputSchema.parse(params);
+    case 'case.open': return CaseOpenParamsSchema.parse(params);
+    case 'source.add_image': return AddImageSourceInputSchema.parse(params);
+    case 'source.assess': return SourceParamsSchema.parse(params);
+    case 'job.create': return CreateRecoveryJobInputSchema.parse(params);
+    case 'job.start': case 'job.pause': case 'job.resume': case 'job.cancel': case 'job.status': return JobParamsSchema.parse(params);
+    case 'job.events': return JobEventsParamsSchema.parse(params);
+    case 'artifact.query': return ArtifactQuerySchema.parse(params);
+    case 'artifact.get': case 'artifact.preview': return ArtifactParamsSchema.parse(params);
+    case 'export.start': return ExportArtifactsInputSchema.parse(params);
+    case 'report.generate': return ReportParamsSchema.parse(params);
+    default: throw new Error(`Unsupported desktop RPC method: ${method}`);
+  }
+}
+
+export function parseDesktopRpcResult(method: string, result: unknown): unknown {
+  switch (method) {
+    case 'runtime.get': return RuntimeInfoSchema.parse(result);
+    case 'case.create': case 'case.open': return RecoveryCaseSchema.parse(result);
+    case 'source.list': return SourceDescriptorSchema.array().parse(result);
+    case 'source.add_image': return SourceDescriptorSchema.parse(result);
+    case 'source.assess': return SourceAssessmentSchema.parse(result);
+    case 'job.create': return RecoveryJobSchema.parse(result);
+    case 'job.start': case 'job.pause': case 'job.resume': case 'job.cancel': case 'job.status': return JobStatusSchema.parse(result);
+    case 'job.events': return JobEventSchema.array().parse(result);
+    case 'artifact.query': return ArtifactPageSchema.parse(result);
+    case 'artifact.get': return RecoveryArtifactSchema.parse(result);
+    case 'artifact.preview': return PreviewDescriptorSchema.parse(result);
+    case 'export.start': return ExportJobSchema.parse(result);
+    case 'report.generate': return ReportDescriptorSchema.parse(result);
+    default: throw new Error(`Unsupported desktop RPC method: ${method}`);
+  }
 }

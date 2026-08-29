@@ -1,5 +1,5 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { activeJobId } from '../../application-state.js';
 
@@ -10,32 +10,70 @@ const stageLabels: Record<string, string> = {
   indexing: 'Preparing results', review_ready: 'Results ready', completed: 'Recovery completed', paused: 'Recovery paused',
   needs_attention: 'Recovery needs attention', cancelling: 'Cancelling recovery', cancelled: 'Recovery cancelled', failed: 'Recovery failed',
 };
+const terminalStages = new Set<JobStatus['stage']>(['completed', 'cancelled', 'failed']);
 
 export function JobProgressPage() {
   const { caseId = '' } = useParams();
   const jobId = activeJobId(caseId);
   const [status, setStatus] = useState<JobStatus>();
   const [events, setEvents] = useState<JobEvent[]>([]);
-  const [error, setError] = useState<string>();
-  const load = useCallback(async () => {
-    if (!jobId) { setError('No recovery job has been created for this case.'); return; }
-    try {
-      const [nextStatus, nextEvents] = await Promise.all([window.recoveryApi.getJobStatus(jobId), window.recoveryApi.listJobEvents(jobId, 0)]);
-      setStatus(JobStatusSchema.parse(nextStatus));
-      setEvents(JobEventSchema.array().parse(nextEvents));
-      setError(undefined);
-    } catch (cause) { setError(message(cause)); }
-  }, [jobId]);
-  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 1000); return () => window.clearInterval(timer); }, [load]);
+  const [pollError, setPollError] = useState<string>();
+  const [commandError, setCommandError] = useState<string>();
+  const terminal = useRef(false);
+  const requestGeneration = useRef(0);
 
-  async function command(operation: (id: string) => Promise<unknown>) {
+  useEffect(() => {
     if (!jobId) return;
-    setError(undefined);
-    try { await operation(jobId); await load(); } catch (cause) { setError(message(cause)); }
+    const activeJobId = jobId;
+    let active = true;
+    let inFlight = false;
+    let timer: number | undefined;
+    let afterSequence = 0;
+    terminal.current = false;
+    async function poll() {
+      if (!active || inFlight || terminal.current) return;
+      inFlight = true;
+      const expectedGeneration = requestGeneration.current;
+      let scheduleNext = true;
+      try {
+        const [rawStatus, rawEvents] = await Promise.all([
+          window.recoveryApi.getJobStatus(activeJobId),
+          window.recoveryApi.listJobEvents(activeJobId, afterSequence),
+        ]);
+        const nextStatus = JobStatusSchema.parse(rawStatus);
+        const nextEvents = JobEventSchema.array().parse(rawEvents);
+        if (!active || requestGeneration.current !== expectedGeneration) return;
+        if (nextEvents.length) afterSequence = Math.max(afterSequence, ...nextEvents.map((event) => event.sequence));
+        setStatus(nextStatus);
+        setEvents((current) => mergeEvents(current, nextEvents));
+        setPollError(undefined);
+        terminal.current = terminalStages.has(nextStatus.stage);
+        scheduleNext = !terminal.current;
+      } catch (cause) {
+        if (active) setPollError(message(cause));
+      } finally {
+        inFlight = false;
+        if (active && scheduleNext && !terminal.current) timer = window.setTimeout(() => void poll(), 1000);
+      }
+    }
+    void poll();
+    return () => { active = false; terminal.current = true; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [jobId]);
+
+  async function command(operation: (id: string) => Promise<JobStatus>) {
+    if (!jobId) return;
+    requestGeneration.current += 1;
+    setCommandError(undefined);
+    try {
+      const nextStatus = JobStatusSchema.parse(await operation(jobId));
+      setStatus(nextStatus);
+      terminal.current = terminalStages.has(nextStatus.stage);
+    } catch (cause) { setCommandError(message(cause)); }
   }
 
   if (!jobId) return <section><h1>Recovery jobs</h1><p role="alert">No recovery job has been created for this case.</p></section>;
-  if (!status && !error) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
+  if (!status && !pollError) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
+  const error = commandError ?? pollError;
   return <section className="job-progress">
     <header><p className="eyebrow">Recovery job</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p>Progress is read from the persisted daemon job state.</p></header>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -48,6 +86,12 @@ export function JobProgressPage() {
     </div>
     <details open><summary>Technical log</summary><ol>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code> {event.message ?? stageLabels[event.stage] ?? event.stage}</li>)}</ol></details>
   </section>;
+}
+
+function mergeEvents(current: JobEvent[], incoming: JobEvent[]): JobEvent[] {
+  const byId = new Map(current.map((event) => [event.eventId, event]));
+  for (const event of incoming) byId.set(event.eventId, event);
+  return [...byId.values()].sort((left, right) => left.sequence - right.sequence);
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Recovery status could not be loaded.'; }

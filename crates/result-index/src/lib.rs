@@ -13,6 +13,7 @@ use std::path::Path;
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactRow {
     pub artifact_id: String,
+    pub display_name: String,
     pub original_name: Option<String>,
     pub original_path: Option<String>,
     pub mime_type: Option<String>,
@@ -35,6 +36,7 @@ impl ArtifactRow {
     ) -> Self {
         Self {
             artifact_id: id.into(),
+            display_name: name.into(),
             original_name: Some(name.into()),
             original_path: Some(path.into()),
             mime_type: None,
@@ -57,14 +59,27 @@ impl ArtifactIndex {
         connection.execute_batch(
             "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
              CREATE TABLE IF NOT EXISTS artifacts (
-               artifact_id TEXT PRIMARY KEY, original_name TEXT, original_path TEXT, mime_type TEXT,
+               artifact_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, original_name TEXT, original_path TEXT, mime_type TEXT,
                method TEXT NOT NULL, status TEXT NOT NULL, threat TEXT NOT NULL, size_bytes INTEGER NOT NULL,
                partition_id TEXT
              );
              CREATE INDEX IF NOT EXISTS artifacts_filters ON artifacts(method, status, threat, mime_type, partition_id, size_bytes, artifact_id);
-             CREATE VIRTUAL TABLE IF NOT EXISTS artifacts_fts USING fts5(artifact_id UNINDEXED, original_name, original_path, mime_type, tokenize='unicode61');
+             CREATE VIRTUAL TABLE IF NOT EXISTS artifacts_fts USING fts5(artifact_id UNINDEXED, display_name, original_name, original_path, mime_type, tokenize='unicode61');
              CREATE TABLE IF NOT EXISTS saved_filters (name TEXT PRIMARY KEY, query_json TEXT NOT NULL);",
         )?;
+        if !table_has_column(&connection, "artifacts", "display_name")? {
+            connection.execute(
+                "ALTER TABLE artifacts ADD COLUMN display_name TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !table_has_column(&connection, "artifacts_fts", "display_name")? {
+            connection.execute_batch(
+                "DROP TABLE IF EXISTS artifacts_fts;
+                 CREATE VIRTUAL TABLE artifacts_fts USING fts5(artifact_id UNINDEXED, display_name, original_name, original_path, mime_type, tokenize='unicode61');
+                 INSERT INTO artifacts_fts SELECT artifact_id,display_name,original_name,original_path,mime_type FROM artifacts;",
+            )?;
+        }
         Ok(Self { connection })
     }
 
@@ -72,9 +87,10 @@ impl ArtifactIndex {
         let transaction = self.connection.transaction()?;
         for row in rows {
             transaction.execute(
-                "INSERT OR REPLACE INTO artifacts VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+                "INSERT OR REPLACE INTO artifacts (artifact_id,display_name,original_name,original_path,mime_type,method,status,threat,size_bytes,partition_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                 params![
                     row.artifact_id,
+                    row.display_name,
                     row.original_name,
                     row.original_path,
                     row.mime_type,
@@ -90,9 +106,10 @@ impl ArtifactIndex {
                 [&row.artifact_id],
             )?;
             transaction.execute(
-                "INSERT INTO artifacts_fts VALUES (?1,?2,?3,?4)",
+                "INSERT INTO artifacts_fts VALUES (?1,?2,?3,?4,?5)",
                 params![
                     row.artifact_id,
+                    row.display_name,
                     row.original_name,
                     row.original_path,
                     row.mime_type
@@ -125,20 +142,21 @@ impl ArtifactIndex {
             format!(" WHERE {}", clauses.join(" AND "))
         };
         let sql = format!(
-            "SELECT a.artifact_id,a.original_name,a.original_path,a.mime_type,a.method,a.status,a.threat,a.size_bytes,a.partition_id FROM artifacts a{join}{where_clause} ORDER BY a.artifact_id LIMIT ?"
+            "SELECT a.artifact_id,a.display_name,a.original_name,a.original_path,a.mime_type,a.method,a.status,a.threat,a.size_bytes,a.partition_id FROM artifacts a{join}{where_clause} ORDER BY a.artifact_id LIMIT ?"
         );
         let mut statement = self.connection.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(parameters), |row| {
             Ok(ArtifactRow {
                 artifact_id: row.get(0)?,
-                original_name: row.get(1)?,
-                original_path: row.get(2)?,
-                mime_type: row.get(3)?,
-                method: row.get(4)?,
-                status: row.get(5)?,
-                threat: row.get(6)?,
-                size_bytes: row.get::<_, i64>(7)? as u64,
-                partition_id: row.get(8)?,
+                display_name: row.get(1)?,
+                original_name: row.get(2)?,
+                original_path: row.get(3)?,
+                mime_type: row.get(4)?,
+                method: row.get(5)?,
+                status: row.get(6)?,
+                threat: row.get(7)?,
+                size_bytes: row.get::<_, i64>(8)? as u64,
+                partition_id: row.get(9)?,
             })
         })?;
         let mut items = rows.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -184,15 +202,30 @@ impl ArtifactIndex {
     pub fn seed_generated(&mut self, count: u64) -> Result<(), ResultIndexError> {
         let transaction = self.connection.transaction()?;
         transaction.execute_batch("CREATE TEMP TABLE digits(value INTEGER PRIMARY KEY); INSERT INTO digits VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);")?;
-        let sql = "INSERT INTO artifacts (artifact_id,original_name,original_path,mime_type,method,status,threat,size_bytes,partition_id)
-                   SELECT printf('%07d', n), 'report-'||n||'.pdf', '/generated/report-'||n||'.pdf', 'application/pdf',
+        let sql = "INSERT INTO artifacts (artifact_id,display_name,original_name,original_path,mime_type,method,status,threat,size_bytes,partition_id)
+                   SELECT printf('%07d', n), 'report-'||n||'.pdf', 'report-'||n||'.pdf', '/generated/report-'||n||'.pdf', 'application/pdf',
                           CASE WHEN n%2=0 THEN 'metadata' ELSE 'carving' END, 'complete_validated', 'no_rule_match', n+100, 'p1'
                    FROM (SELECT a.value+b.value*10+c.value*100+d.value*1000+e.value*10000+f.value*100000 AS n FROM digits a,digits b,digits c,digits d,digits e,digits f) WHERE n < ?1";
         transaction.execute(sql, [count as i64])?;
-        transaction.execute("INSERT INTO artifacts_fts SELECT artifact_id,original_name,original_path,mime_type FROM artifacts", [])?;
+        transaction.execute("INSERT INTO artifacts_fts SELECT artifact_id,display_name,original_name,original_path,mime_type FROM artifacts", [])?;
         transaction.commit()?;
         Ok(())
     }
+}
+
+fn table_has_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
+    for current in columns {
+        if current? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 #[derive(Debug, thiserror::Error)]

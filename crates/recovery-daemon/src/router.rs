@@ -1320,6 +1320,7 @@ fn index_artifacts(
         .iter()
         .map(|artifact| ArtifactRow {
             artifact_id: artifact.artifact_id.clone(),
+            display_name: artifact.display_name.clone(),
             original_name: artifact.original_name.clone(),
             original_path: artifact.original_path.clone(),
             mime_type: artifact.mime_type.clone(),

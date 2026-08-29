@@ -1,7 +1,16 @@
-const key = (caseId: string, field: 'workspacePath' | 'sourceId' | 'jobId') => `recovery:${caseId}:${field}`;
+type CaseField = 'workspacePath' | 'sourceId' | 'jobId' | 'goal';
+const key = (caseId: string, field: CaseField) => `recovery:${caseId}:${field}`;
 
 export function rememberCase(caseId: string, workspacePath: string): void {
+  const previous = activeWorkspace(caseId);
+  if (previous && previous !== workspacePath) {
+    for (const field of ['sourceId', 'jobId', 'goal'] satisfies CaseField[]) sessionStorage.removeItem(key(caseId, field));
+  }
   sessionStorage.setItem(key(caseId, 'workspacePath'), workspacePath);
+}
+
+export function forgetCase(caseId: string): void {
+  for (const field of ['workspacePath', 'sourceId', 'jobId', 'goal'] satisfies CaseField[]) sessionStorage.removeItem(key(caseId, field));
 }
 
 export function rememberSource(caseId: string, sourceId: string): void {

@@ -203,6 +203,16 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
     );
     assert_eq!(artifact["threatStatus"], "not_scanned");
     assert_eq!(artifact["previewStatus"], "unsupported");
+    let visible_name_search = daemon.rpc(
+        "artifact.query",
+        json!({ "search": artifact["displayName"], "pageSize": 25 }),
+    );
+    assert_eq!(visible_name_search["items"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        visible_name_search["items"][0]["artifactId"],
+        artifact["artifactId"]
+    );
+    assert!(visible_name_search["items"][0]["originalName"].is_null());
 
     let loaded = daemon.rpc("artifact.get", json!({ "artifactId": artifact_id }));
     assert_eq!(loaded["sha256"], artifact["sha256"]);

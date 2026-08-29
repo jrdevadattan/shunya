@@ -1,14 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { launchPackagedApp } from './support/electron-app.js';
+import { createLiveCase } from './support/case-context.js';
 
 test('damaged device flow refuses to simulate unavailable ddrescue progress', async () => {
   const electronApp = await launchPackagedApp();
+  let cleanup: () => Promise<void> = async () => undefined;
   try {
     const page = await electronApp.firstWindow();
-    await page.evaluate(() => { window.location.hash = '#/cases/damaged/recovery/damaged'; });
+    const context = await createLiveCase(page, 'Damaged device context'); cleanup = context.cleanup;
+    await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/recovery/damaged`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Damaged device recovery' })).toBeVisible();
     await expect(page.getByText('DDRESCUE_UI_UNAVAILABLE')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start first pass' })).toBeDisabled();
     await expect(page.getByText(/No rescued, unreadable, or pending ranges are simulated/)).toBeVisible();
-  } finally { await electronApp.close(); }
+  } finally { await electronApp.close(); await cleanup(); }
 });

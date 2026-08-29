@@ -14,7 +14,9 @@ test('live recovery renders daemon partitions, progress, results, preview and re
   image[510] = 0x55; image[511] = 0xaa; image[446 + 4] = 0x0c;
   image.writeUInt32LE(1, 446 + 8); image.writeUInt32LE(image.length / 512 - 1, 446 + 12);
   image.write('FAT32   ', 512 + 82, 'ascii');
-  Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from('live renderer recovery'), 0xff, 0xd9]).copy(image, 4096);
+  for (let index = 0; index < 101; index += 1) {
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from(`live renderer recovery ${index}`), 0xff, 0xd9]).copy(image, 4096 + index * 64);
+  }
   await writeFile(imagePath, image);
   const electronApp = await launchPackagedApp();
   try {
@@ -49,6 +51,10 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await expect(page.getByText(/Recovered JPEG 0000001/).first()).toBeVisible();
     await expect(page.getByText(/Preview derivative is unavailable/i)).toBeVisible();
     await expect(page.getByText(/not scanned/i)).toBeVisible();
+    await page.getByRole('button', { name: 'Load more results' }).click();
+    await expect(page.getByText(/Recovered JPEG 0000101/).first()).toBeVisible();
+    await page.getByRole('searchbox').fill('Recovered JPEG 0000001');
+    await expect(page.getByText(/Recovered JPEG 0000001/).first()).toBeVisible();
     await page.getByRole('link', { name: 'Reports' }).click();
     await page.getByRole('button', { name: 'Generate report' }).click();
     await expect(page.getByText(/YARA_X_UNAVAILABLE/)).toBeVisible();
