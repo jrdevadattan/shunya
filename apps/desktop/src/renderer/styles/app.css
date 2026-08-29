@@ -1,0 +1,26 @@
+.welcome-page, .form-page { max-width: 1120px; margin: 0 auto; padding: 32px 48px 56px; }
+.welcome-topbar, .case-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.welcome-hero { max-width: 760px; padding: 76px 0 40px; }
+.welcome-hero h1, .form-page h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.15; letter-spacing: -0.025em; }
+.welcome-hero > p:last-child, .form-page header > p:last-child { color: var(--text-secondary); font-size: 16px; }
+.eyebrow { margin: 0; color: var(--accent-primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.start-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 24px; }
+.start-card { min-height: 132px; display: flex; flex-direction: column; gap: 8px; padding: 22px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-panel); text-decoration: none; box-shadow: 0 6px 20px rgb(15 23 42 / 5%); }
+.start-card:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+.start-card strong { font-size: 16px; }
+.start-card span { color: var(--text-secondary); }
+.back-link { display: inline-block; margin-bottom: 48px; text-decoration: none; color: var(--accent-primary); }
+.form-page { max-width: 760px; }
+.case-form { display: grid; gap: 18px; margin-top: 32px; padding: 28px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-panel); }
+.case-form label { display: grid; gap: 7px; font-weight: 600; }
+.case-form label span { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
+.case-form input, .case-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-app); color: var(--text-primary); }
+.form-hint { margin: -8px 0 0; color: var(--text-secondary); font-size: 12px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px; }
+.button { padding: 10px 16px; border: 1px solid transparent; border-radius: 8px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.button--primary { background: var(--accent-primary); color: white; }
+.button--secondary { border-color: var(--border-subtle); background: var(--surface-panel); }
+.case-header { width: 100%; }
+.case-header > div { display: grid; }
+.case-header span { color: var(--text-secondary); font-size: 12px; }
+@media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }

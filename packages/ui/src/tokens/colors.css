@@ -1,0 +1,26 @@
+:root {
+  color-scheme: light dark;
+  --surface-app: #f4f7fb;
+  --surface-panel: #ffffff;
+  --surface-muted: #edf2f7;
+  --text-primary: #142033;
+  --text-secondary: #526176;
+  --accent-primary: #1859a9;
+  --accent-hover: #104681;
+  --status-success: #147548;
+  --status-warning: #9b5b00;
+  --status-danger: #b42318;
+  --status-info: #175cd3;
+  --status-neutral: #667085;
+  --border-subtle: #d8e0eb;
+  --focus-ring: #2e90fa;
+}
+
+[data-theme='dark'] {
+  --surface-app: #0f1724;
+  --surface-panel: #172131;
+  --surface-muted: #233044;
+  --text-primary: #f4f7fb;
+  --text-secondary: #b7c3d4;
+  --border-subtle: #33445a;
+}

@@ -1,21 +1,8 @@
-import path from 'node:path';
-import { _electron as electron, expect, test } from '@playwright/test';
-
-function packagedExecutablePath(): string {
-  const packageRoot = path.resolve(`out/@recovery-desktop-${process.platform}-${process.arch}`);
-  if (process.platform === 'win32') return path.join(packageRoot, '@recovery-desktop.exe');
-  if (process.platform === 'darwin') {
-    return path.join(packageRoot, '@recovery-desktop.app', 'Contents', 'MacOS', '@recovery-desktop');
-  }
-  return path.join(packageRoot, '@recovery-desktop');
-}
+import { expect, test } from '@playwright/test';
+import { launchPackagedApp } from './support/electron-app.js';
 
 test('security shell keeps Node globals out of the renderer', async () => {
-  const electronApp = await electron.launch({
-    executablePath: packagedExecutablePath(),
-    args: [],
-    env: { ...process.env, NODE_ENV: 'production', RECOVERY_RELEASE_BUILD: '1' },
-  });
+  const electronApp = await launchPackagedApp();
 
   try {
     const page = await electronApp.firstWindow();
