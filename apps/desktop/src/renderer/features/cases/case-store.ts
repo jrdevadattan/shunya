@@ -10,14 +10,6 @@ export interface CreateCaseInput {
   estimatedRequiredBytes?: number;
 }
 
-declare global {
-  interface Window {
-    recoveryApi: {
-      createCase(input: CreateCaseInput): Promise<unknown>;
-    };
-  }
-}
-
 export async function createCase(input: CreateCaseInput): Promise<RecoveryCase> {
   const title = input.title.trim();
   const operator = input.operator.trim();

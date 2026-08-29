@@ -4,6 +4,7 @@ use recovery_domain::{RecoveryGoal, ScanPreset};
 use recovery_ipc::{RpcErrorBody, RpcFrame, RpcRequest};
 use serde::Deserialize;
 use serde_json::json;
+use source_inventory::SourceInventory;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -44,6 +45,11 @@ struct JobCommandParams {
     job_id: Uuid,
 }
 
+#[derive(Deserialize)]
+struct AddImageParams {
+    path: PathBuf,
+}
+
 pub fn route(request: &RpcRequest) -> RpcFrame {
     if request.method == "runtime.get" {
         let mode = if std::env::var("RECOVERY_RUNTIME_MODE").as_deref() == Ok("rescue") {
@@ -72,6 +78,30 @@ pub fn route(request: &RpcRequest) -> RpcFrame {
                 result: serde_json::to_value(store.manifest()).expect("manifest serializes"),
             },
             Err(error) => error_frame(request, "CASE_OPEN_FAILED", error.to_string()),
+        };
+    }
+
+    if request.method == "source.list" {
+        return match SourceInventory.list_physical_sources() {
+            Ok(sources) => RpcFrame::Response {
+                id: request.id,
+                result: serde_json::to_value(sources).expect("sources serialize"),
+            },
+            Err(error) => error_frame(request, "SOURCE_INVENTORY_FAILED", error.to_string()),
+        };
+    }
+
+    if request.method == "source.add_image" {
+        let params = match serde_json::from_value::<AddImageParams>(request.params.clone()) {
+            Ok(params) => params,
+            Err(error) => return error_frame(request, "INVALID_IMAGE_INPUT", error.to_string()),
+        };
+        return match SourceInventory.add_image(&params.path) {
+            Ok(source) => RpcFrame::Response {
+                id: request.id,
+                result: serde_json::to_value(source).expect("image source serializes"),
+            },
+            Err(error) => error_frame(request, "IMAGE_SOURCE_FAILED", error.to_string()),
         };
     }
 

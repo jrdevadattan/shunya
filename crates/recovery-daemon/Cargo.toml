@@ -16,5 +16,6 @@ recovery-ipc = { path = "../recovery-ipc" }
 recovery-domain = { path = "../recovery-domain" }
 serde.workspace = true
 serde_json.workspace = true
+source-inventory = { path = "../source-inventory" }
 tokio.workspace = true
 uuid.workspace = true
