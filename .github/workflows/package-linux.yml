@@ -1,0 +1,35 @@
+name: Package Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { toolchain: 1.98.0 }
+      - run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg rpm
+      - run: corepack enable && corepack pnpm install --frozen-lockfile
+      - run: cargo build --workspace --release --locked
+      - run: corepack pnpm --filter @recovery/desktop make
+        env: { RECOVERY_RELEASE_BUILD: '1' }
+      - name: Verify package contents and fuses
+        run: corepack pnpm --filter @recovery/desktop exec tsx ../../packaging/scripts/verify-package.ts "out/SIH Recovery Platform-linux-x64"
+        working-directory: apps/desktop
+      - name: BOSS install command validation
+        run: sh tests/platform/boss10-install.sh "$(find apps/desktop/out/make -name '*.deb' -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recovery-platform-linux-x64
+          path: apps/desktop/out/make/**/*
+          if-no-files-found: error

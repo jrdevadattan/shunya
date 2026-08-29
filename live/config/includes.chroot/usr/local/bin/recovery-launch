@@ -19,4 +19,4 @@ if ! sha256sum --check --strict release-manifest.sha256 >/var/log/recovery-launc
   exit 1
 fi
 
-exec "$APP" --no-sandbox
+exec "$APP"

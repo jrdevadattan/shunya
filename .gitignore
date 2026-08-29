@@ -11,3 +11,5 @@ test-results/
 *.log
 .DS_Store
 Thumbs.db
+apps/desktop/resources/*
+!apps/desktop/resources/.gitkeep

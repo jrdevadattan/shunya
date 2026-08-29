@@ -61,8 +61,9 @@ async function startDaemon(): Promise<DaemonSupervisor | undefined> {
   }
   if (!app.isPackaged) return undefined;
 
-  const bundledExecutable = path.join(process.resourcesPath, process.platform === 'win32' ? 'recoveryd.exe' : 'recoveryd');
-  const manifestPath = path.join(process.resourcesPath, 'recoveryd.sha256');
+  const bundledResources = path.join(process.resourcesPath, 'resources');
+  const bundledExecutable = path.join(bundledResources, process.platform === 'win32' ? 'recoveryd.exe' : 'recoveryd');
+  const manifestPath = path.join(bundledResources, 'recoveryd.sha256');
   try {
     const expectedHash = (await readFile(manifestPath, 'utf8')).trim().split(/\s+/)[0];
     if (!expectedHash) return undefined;

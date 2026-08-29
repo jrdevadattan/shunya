@@ -4,12 +4,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { _electron as electron } from '@playwright/test';
 
 function packagedExecutablePath(): string {
-  const packageRoot = path.resolve(`out/@recovery-desktop-${process.platform}-${process.arch}`);
-  if (process.platform === 'win32') return path.join(packageRoot, '@recovery-desktop.exe');
+  const packageRoot = path.resolve(`out/SIH Recovery Platform-${process.platform}-${process.arch}`);
+  if (process.platform === 'win32') return path.join(packageRoot, 'recovery-platform.exe');
   if (process.platform === 'darwin') {
-    return path.join(packageRoot, '@recovery-desktop.app', 'Contents', 'MacOS', '@recovery-desktop');
+    return path.join(packageRoot, 'SIH Recovery Platform.app', 'Contents', 'MacOS', 'SIH Recovery Platform');
   }
-  return path.join(packageRoot, '@recovery-desktop');
+  return path.join(packageRoot, 'recovery-platform');
 }
 
 export function launchPackagedApp() {

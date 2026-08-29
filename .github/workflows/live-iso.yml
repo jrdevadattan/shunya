@@ -11,11 +11,23 @@ permissions:
 jobs:
   build-rescue-iso:
     runs-on: ubuntu-24.04
-    container: debian:bookworm
     steps:
-      - name: Install build prerequisites
-        run: apt-get update && apt-get install -y live-build git ca-certificates coreutils
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { toolchain: 1.98.0 }
+      - name: Install build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y live-build fakeroot dpkg rpm
+      - run: corepack enable && corepack pnpm install --frozen-lockfile
+      - run: cargo build --workspace --release --locked
+      - name: Build application package for the live system
+        run: corepack pnpm --filter @recovery/desktop make
+      - name: Stage application and helper into live-build
+        run: |
+          mkdir -p live/config/includes.chroot/opt/recovery/staging
+          cp "$(find apps/desktop/out/make -name '*.deb' -print -quit)" live/config/includes.chroot/opt/recovery/staging/
+          cp target/release/recovery-privileged-helper live/config/includes.chroot/opt/recovery/staging/
       - name: Verify immutable Rescue configuration
         run: sh live/scripts/verify-live.sh
       - name: Build hybrid BIOS and UEFI ISO

@@ -1,7 +1,11 @@
 {
   "name": "@recovery/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
+  "productName": "SIH Recovery Platform",
+  "description": "Offline-first read-only forensic recovery workstation",
+  "author": "SIH 26149 Recovery Team",
+  "license": "Apache-2.0",
   "main": ".vite/build/main.js",
   "scripts": {
     "lint": "tsc --noEmit",
@@ -9,8 +13,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "start": "electron-forge start",
-    "build": "electron-forge package",
-    "make": "electron-forge make"
+    "stage:resources": "tsx ../../packaging/scripts/stage-tools.ts",
+    "build": "pnpm stage:resources && electron-forge package",
+    "make": "pnpm stage:resources && electron-forge make"
   },
   "dependencies": {
     "@recovery/contracts": "workspace:*",
@@ -22,13 +27,20 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-deb": "7.11.2",
+    "@electron-forge/maker-dmg": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
+    "@electron-forge/plugin-fuses": "7.11.2",
     "@electron-forge/plugin-vite": "7.11.2",
     "@electron-forge/shared-types": "7.11.2",
+    "@electron/fuses": "2.1.2",
     "@playwright/test": "1.55.0",
     "@types/node": "24.3.0",
     "@types/react": "19.1.11",
     "@types/react-dom": "19.1.7",
     "electron": "44.0.0",
+    "tsx": "4.20.5",
     "typescript": "5.9.2",
     "vite": "7.3.6",
     "vitest": "3.2.4"
