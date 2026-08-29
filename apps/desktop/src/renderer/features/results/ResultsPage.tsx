@@ -1,5 +1,6 @@
 import { ArtifactPageSchema, PreviewDescriptorSchema, type ArtifactPage, type PreviewDescriptor } from '@recovery/contracts';
 import { useEffect, useRef, useState } from 'react';
+import { SurfaceCard } from '@recovery/ui';
 import { ArtifactDetailsPanel } from './ArtifactDetailsPanel.js';
 import { ArtifactTable } from './ArtifactTable.js';
 import { ResultFilters } from './ResultFilters.js';
@@ -70,7 +71,19 @@ export function ResultsPage() {
     return () => { active = false; };
   }, [selected]);
   const artifact = page.items.find((item) => item.artifactId === selected);
-  return <section className="results-page"><header><p className="eyebrow">Recovered files</p><h1>Review recovery results</h1><p>Results are loaded from the case index in daemon-paginated pages.</p></header>{error ? <p role="alert" className="form-error">{error}</p> : null}<div className="results-workspace"><ResultFilters search={search} onSearch={setSearch} /><main>{page.items.length ? <ArtifactTable artifacts={page.items} selected={selected} onSelect={setSelected} /> : <p>{error ? 'Results unavailable.' : 'No recovered artifacts were returned.'}</p>}{page.nextCursor ? <button className="button button--secondary" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading more results…' : 'Load more results'}</button> : null}</main><ArtifactDetailsPanel artifact={artifact} preview={preview} previewError={previewError} /></div></section>;
+  const artifactLabel = `${page.totalCount} indexed ${page.totalCount === 1 ? 'artifact' : 'artifacts'}`;
+  return <section className="results-page">
+    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Review recovery results</h1><p className="page-heading__description">Browse daemon-indexed artifacts without opening recovered originals in an operating-system application.</p></div><span className="results-page__count">{artifactLabel}</span></header>
+    {error ? <p role="alert" className="form-error">{error}</p> : null}
+    <div className="results-workspace" aria-label="Recovery result browser">
+      <ResultFilters search={search} onSearch={setSearch} />
+      <main className="results-browser"><SurfaceCard title="Recovered files" description={`${page.items.length} loaded of ${page.totalCount} indexed`}>
+        {page.items.length ? <ArtifactTable artifacts={page.items} selected={selected} onSelect={setSelected} /> : <p className="empty-state">{error ? 'Results unavailable.' : 'No recovered artifacts were returned.'}</p>}
+        {page.nextCursor ? <button className="button button--secondary results-browser__more" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading more results…' : 'Load more results'}</button> : null}
+      </SurfaceCard></main>
+      <ArtifactDetailsPanel artifact={artifact} preview={preview} previewError={previewError} />
+    </div>
+  </section>;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Recovery results could not be loaded.'; }

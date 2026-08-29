@@ -369,6 +369,8 @@ describe('live renderer pages', () => {
   it('renders daemon artifact pages and the daemon preview refusal', async () => {
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     expect(await findText('JPEG_live.jpg')).toBeTruthy();
+    expect(await findText('1 indexed artifact')).toBeTruthy();
+    expect(container?.querySelector('.results-workspace[aria-label="Recovery result browser"]')).toBeTruthy();
     await click(button(/JPEG_live.jpg/));
     expect(await findText(/preview derivative is unavailable/i)).toBeTruthy();
     expect(await findText(/not scanned/i)).toBeTruthy();
