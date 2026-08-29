@@ -10,7 +10,7 @@ export function ReportsPage() {
         <p className="verified-badge">Source hash verified</p>
         <code className="hash-value">{sourceHash}</code>
       </article>
-      <article className="report-limitations"><h2>Warnings and limitations</h2><ul><li>Source health unknown.</li><li>One unreadable range was recorded.</li><li>Original names are unavailable for carved files.</li></ul></article>
+      <article className="report-limitations"><h2>Warnings and limitations</h2><ul><li>Source health unknown.</li><li>One unreadable range was recorded.</li><li>Original names are unavailable for carved files.</li><li>TRIM or overwritten sectors may make recovery impossible.</li><li>Locked encryption requires authorized keys.</li><li>Installed Mode is not equivalent to a trusted rescue environment.</li></ul></article>
     </div>
     <div className="report-actions"><button className="button button--secondary" type="button">Generate JSON</button><button className="button button--primary" type="button">Generate Markdown</button></div>
   </section>;

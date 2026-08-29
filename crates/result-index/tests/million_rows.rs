@@ -15,6 +15,7 @@ fn indexed_first_page_scales_to_one_million_rows() {
             ..Default::default()
         })
         .unwrap();
+    println!("one-million-row first-page search: {:?}", started.elapsed());
     assert_eq!(page.items.len(), 1);
     assert!(
         started.elapsed() < Duration::from_secs(5),

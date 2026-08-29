@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import type { RpcFrame, RpcMethod } from '@recovery/contracts';
+import { RpcFrameSchema, type RpcFrame, type RpcMethod } from '@recovery/contracts';
+
+const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 
 export interface SpawnedDaemon {
   stdin: NodeJS.WritableStream;
@@ -26,7 +28,7 @@ interface SupervisorOptions {
 }
 
 export class DaemonError extends Error {
-  constructor(public readonly code: 'DAEMON_UNAVAILABLE' | 'DAEMON_HASH_MISMATCH', message: string) {
+  constructor(public readonly code: 'DAEMON_UNAVAILABLE' | 'DAEMON_HASH_MISMATCH' | 'DAEMON_PROTOCOL_ERROR', message: string) {
     super(message);
     this.name = 'DaemonError';
   }
@@ -105,14 +107,36 @@ export class DaemonSupervisor {
 
   private consumeOutput(chunk: unknown): void {
     this.outputBuffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+    if (Buffer.byteLength(this.outputBuffer, 'utf8') > MAX_FRAME_BYTES && !this.outputBuffer.includes('\n')) {
+      this.failProtocol('Daemon frame exceeded the 8 MiB limit');
+      return;
+    }
     for (;;) {
       const newline = this.outputBuffer.indexOf('\n');
       if (newline < 0) return;
       const line = this.outputBuffer.slice(0, newline);
       this.outputBuffer = this.outputBuffer.slice(newline + 1);
       if (!line) continue;
-      this.settle(JSON.parse(line) as RpcFrame);
+      if (Buffer.byteLength(line, 'utf8') > MAX_FRAME_BYTES) {
+        this.failProtocol('Daemon frame exceeded the 8 MiB limit');
+        return;
+      }
+      try {
+        this.settle(RpcFrameSchema.parse(JSON.parse(line)) as RpcFrame);
+      } catch {
+        this.failProtocol('Daemon emitted an invalid RPC frame');
+        return;
+      }
     }
+  }
+
+  private failProtocol(message: string): void {
+    const child = this.child;
+    this.child = undefined;
+    this.status = 'unavailable';
+    this.outputBuffer = '';
+    this.rejectPending(new DaemonError('DAEMON_PROTOCOL_ERROR', message));
+    child?.kill();
   }
 
   private settle(frame: RpcFrame): void {

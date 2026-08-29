@@ -20,7 +20,7 @@
     "lint": "corepack pnpm -r lint && cargo clippy --workspace --all-targets -- -D warnings",
     "typecheck": "corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test && corepack pnpm test:package && cargo nextest run --workspace --no-tests pass",
-    "test:package": "corepack pnpm --filter @recovery/desktop exec tsx --test ../../tests/platform/package-integrity.test.ts ../../tests/corpus-repro.test.ts",
+    "test:package": "corepack pnpm --filter @recovery/desktop exec tsx --test ../../tests/platform/package-integrity.test.ts ../../tests/corpus-repro.test.ts ../../tests/security/electron-fuses.test.ts",
     "test:e2e": "corepack pnpm --filter @recovery/desktop test:e2e",
     "build": "cargo build --workspace --release && corepack pnpm -r build"
   }

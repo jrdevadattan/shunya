@@ -1,0 +1,1 @@
+pub const REFERENCE_FIXTURE_BYTES: usize = 32 * 1024 * 1024;

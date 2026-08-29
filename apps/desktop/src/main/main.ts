@@ -29,8 +29,8 @@ function registerAppProtocol(): void {
 
 async function createMainWindow(): Promise<void> {
   const preloadPath = path.join(__dirname, 'preload.js');
-  const window = new BrowserWindow(buildMainWindowOptions(preloadPath));
-  hardenWindow(window);
+  const window = new BrowserWindow(buildMainWindowOptions(preloadPath, app.isPackaged));
+  hardenWindow(window, !app.isPackaged);
   window.once('ready-to-show', () => window.show());
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -40,6 +40,7 @@ async function createMainWindow(): Promise<void> {
   }
 }
 
+app.enableSandbox();
 app.whenReady().then(async () => {
   registerAppProtocol();
   const daemon = await startDaemon();

@@ -1,6 +1,6 @@
 import type { BrowserWindowConstructorOptions } from 'electron';
 
-export function buildMainWindowOptions(preloadPath: string): BrowserWindowConstructorOptions {
+export function buildMainWindowOptions(preloadPath: string, packaged = false): BrowserWindowConstructorOptions {
   return {
     width: 1440,
     height: 900,
@@ -14,7 +14,7 @@ export function buildMainWindowOptions(preloadPath: string): BrowserWindowConstr
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
-      devTools: !process.env.RECOVERY_RELEASE_BUILD,
+      devTools: !packaged,
     },
   };
 }

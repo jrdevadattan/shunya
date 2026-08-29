@@ -52,4 +52,29 @@ describe('DaemonSupervisor', () => {
     expect(supervisor.status).toBe('unavailable');
     await expect(supervisor.request('runtime.get', {})).rejects.toMatchObject({ code: 'DAEMON_UNAVAILABLE' });
   });
+
+  it('fails closed on malformed and oversized daemon frames without terminating the renderer', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'recoveryd-protocol-test-'));
+    temporaryDirectories.push(directory);
+    const executablePath = path.join(directory, 'recoveryd-fixture');
+    const bytes = Buffer.from('signed protocol fixture');
+    await writeFile(executablePath, bytes);
+    const children: FixtureDaemon[] = [];
+    const supervisor = new DaemonSupervisor({
+      executablePath,
+      expectedSha256: createHash('sha256').update(bytes).digest('hex'),
+      spawnProcess: () => { const child = new FixtureDaemon(); children.push(child); return child; },
+    });
+    await supervisor.start();
+    const pending = supervisor.request('runtime.get', {});
+    children[0]?.stdout.write('{malformed json}\n');
+    await expect(pending).rejects.toMatchObject({ code: 'DAEMON_PROTOCOL_ERROR' });
+    expect(supervisor.status).toBe('unavailable');
+
+    const second = new DaemonSupervisor({ executablePath, expectedSha256: createHash('sha256').update(bytes).digest('hex'), spawnProcess: () => new FixtureDaemon() });
+    await second.start();
+    const oversized = second.request('runtime.get', {});
+    (second as unknown as { child: FixtureDaemon }).child.stdout.write('x'.repeat(8 * 1024 * 1024 + 1));
+    await expect(oversized).rejects.toMatchObject({ code: 'DAEMON_PROTOCOL_ERROR' });
+  });
 });

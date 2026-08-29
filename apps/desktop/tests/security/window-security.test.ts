@@ -10,4 +10,9 @@ describe('main window security', () => {
     expect(options.webPreferences?.sandbox).toBe(true);
     expect(options.webPreferences?.webSecurity).toBe(true);
   });
+
+  it('disables DevTools in every packaged build regardless of environment variables', () => {
+    const options = buildMainWindowOptions('C:/app/preload.js', true);
+    expect(options.webPreferences?.devTools).toBe(false);
+  });
 });
