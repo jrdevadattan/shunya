@@ -8,6 +8,7 @@ require_text() { grep -F "$2" "$1" >/dev/null || { echo "missing '$2' in $1" >&2
 
 require_file "$LIVE/auto/config"
 require_text "$LIVE/auto/config" 'lb config noauto'
+require_text "$LIVE/scripts/build-live.sh" 'lb clean'
 require_file "$LIVE/config/package-lists/recovery.list.chroot"
 require_file "$LIVE/config/includes.chroot/etc/fstab"
 require_file "$LIVE/config/includes.chroot/etc/udev/rules.d/99-recovery-no-automount.rules"

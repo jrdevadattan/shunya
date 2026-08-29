@@ -6,7 +6,7 @@ OUTPUT="$ROOT/dist/rescue"
 command -v lb >/dev/null || { echo "live-build is required (run this script on Debian Bookworm)" >&2; exit 2; }
 mkdir -p "$OUTPUT"
 cd "$ROOT/live"
-lb clean --purge
+lb clean
 ./auto/config
 lb build
 ISO="$OUTPUT/recovery-rescue-${VERSION}-x86_64.iso"
