@@ -1,8 +1,11 @@
 export * from './components/AppShell.js';
 export * from './components/CapabilityBanner.js';
+export * from './components/IconButton.js';
 export * from './components/InfoPopover.js';
+export * from './components/MetricCard.js';
 export * from './components/ResultStatusBadge.js';
 export * from './components/RuntimeModeBadge.js';
+export * from './components/SurfaceCard.js';
 export * from './components/StageTimeline.js';
 import './tokens/colors.css';
 import './tokens/components.css';
