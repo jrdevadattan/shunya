@@ -13,6 +13,7 @@ require_file "$LIVE/config/includes.chroot/etc/fstab"
 require_file "$LIVE/config/includes.chroot/etc/udev/rules.d/99-recovery-no-automount.rules"
 require_file "$LIVE/config/includes.chroot/usr/local/bin/recovery-launch"
 require_file "$LIVE/config/hooks/live/020-disable-network-default.hook.chroot"
+require_text "$LIVE/config/hooks/live/010-install-recovery-app.hook.chroot" 'install -d -m 0755 /usr/local/libexec'
 require_text "$LIVE/config/includes.chroot/etc/udev/rules.d/99-recovery-no-automount.rules" 'UDISKS_IGNORE'
 require_text "$LIVE/config/hooks/live/020-disable-network-default.hook.chroot" 'disable NetworkManager.service'
 require_text "$LIVE/config/hooks/live/020-disable-network-default.hook.chroot" 'mask udisks2.service'
@@ -20,6 +21,7 @@ require_text "$LIVE/config/includes.chroot/usr/local/bin/recovery-launch" 'RECOV
 require_text "$LIVE/config/includes.chroot/usr/local/bin/recovery-launch" 'sha256sum --check --strict'
 require_text "$LIVE/config/package-lists/recovery.list.chroot" 'gddrescue'
 require_text "$LIVE/config/package-lists/recovery.list.chroot" 'ewf-tools'
+require_text "$LIVE/config/package-lists/recovery.list.chroot" 'libglib2.0-bin'
 if grep -Ev '^(#|$|proc |tmpfs )' "$LIVE/config/includes.chroot/etc/fstab" | grep . >/dev/null; then
   echo "fstab contains a persistent or writable source mount" >&2; exit 1
 fi
