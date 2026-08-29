@@ -17,6 +17,7 @@ import { ScanOptionsPage } from '../../src/renderer/features/recovery/ScanOption
 import { CaseOverviewPage } from '../../src/renderer/routes/CaseOverviewPage.js';
 import { WorkflowFrame } from '../../src/renderer/components/WorkflowFrame.js';
 import { CapabilityBanner } from '@recovery/ui';
+import { NewCaseForm } from '../../src/renderer/features/cases/NewCaseForm.js';
 
 const createdAt = '2026-08-29T12:00:00Z';
 const source = {
@@ -156,6 +157,15 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Complete');
     expect(container?.querySelector('section[aria-labelledby]')).toBeTruthy();
     expect(await findText('Mounted source')).toBeTruthy();
+  });
+
+  it('selects a case workspace with the native folder picker', async () => {
+    const chooseWorkspaceFolder = vi.fn().mockResolvedValue('D:/recovery-cases/friendly-case');
+    Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder }) });
+    await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
+    await click(button('Browse'));
+    expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
+    expect(input('Case workspace destination').value).toBe('D:/recovery-cases/friendly-case');
   });
 
   it('opens the persisted case and renders the daemon case title', async () => {

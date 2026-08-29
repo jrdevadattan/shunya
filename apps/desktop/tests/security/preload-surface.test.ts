@@ -30,6 +30,13 @@ describe('preload API surface', () => {
     ]);
   });
 
+  it('maps workspace folder selection through a narrow typed IPC method', async () => {
+    const invoke = vi.fn().mockResolvedValue('D:/recovery-cases/case-1');
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+    await expect(api.chooseWorkspaceFolder()).resolves.toBe('D:/recovery-cases/case-1');
+    expect(invoke).toHaveBeenCalledWith('dialog.choose_workspace', {});
+  });
+
   it('rejects malformed daemon responses instead of casting unknown values', async () => {
     const api = createRecoveryApi({
       invoke: async () => [],

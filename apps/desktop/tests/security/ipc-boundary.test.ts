@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+const showOpenDialog = vi.fn();
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => handlers.set(channel, handler)) },
+  BrowserWindow: { fromWebContents: vi.fn(() => null) },
+  dialog: { showOpenDialog },
 }));
 vi.mock('../../src/main/security.js', () => ({ validateIpcSender: vi.fn() }));
 
@@ -22,5 +25,12 @@ describe('main IPC schema boundary', () => {
     const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
     registerIpcHandlers({ request } as never);
     await expect(handlers.get('job.status')?.({}, { jobId: 'job-live' })).rejects.toThrow();
+  });
+
+  it('returns only the selected workspace path from the native folder dialog', async () => {
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['D:/cases/case-1'] });
+    const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
+    registerIpcHandlers();
+    await expect(handlers.get('dialog.choose_workspace')?.({ sender: {} }, {})).resolves.toBe('D:/cases/case-1');
   });
 });

@@ -14,6 +14,7 @@ import {
 import { JobEventSchema } from './events.js';
 
 export const RuntimeInfoSchema = z.object({ mode: RuntimeModeSchema });
+export const WorkspaceFolderResultSchema = z.string().min(1).nullable();
 export const SourceAssessmentSchema = z.object({
   sourceId: z.string().min(1),
   decision: z.enum(['ready', 'warning', 'blocked']),
@@ -108,6 +109,7 @@ export type ReportDescriptor = z.infer<typeof ReportDescriptorSchema>;
 
 export interface RecoveryDesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
+  chooseWorkspaceFolder(): Promise<string | null>;
   createCase(input: CreateCaseInput): Promise<z.infer<typeof RecoveryCaseSchema>>;
   openCase(casePath: string): Promise<z.infer<typeof RecoveryCaseSchema>>;
   listSources(): Promise<z.infer<typeof SourceDescriptorSchema>[]>;

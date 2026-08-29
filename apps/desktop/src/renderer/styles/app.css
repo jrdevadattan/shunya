@@ -1,4 +1,4 @@
-.welcome-page, .form-page { max-width: 1160px; margin: 0 auto; padding: 24px 48px 56px; }
+.welcome-page, .form-page { max-width: 1160px; margin: 0 auto; padding: 24px 48px 48px; }
 .welcome-topbar, .case-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .welcome-topbar { min-height: 48px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle); }
 .welcome-brand { display: flex; align-items: center; gap: 10px; }
@@ -18,15 +18,26 @@
 .start-card small { color: var(--text-tertiary); font-size: 10px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
 .start-card strong { font-size: 16px; }
 .start-card > span:last-child { max-width: 85%; margin-top: 3px; color: var(--text-secondary); font-size: 13px; }
-.back-link { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 48px; text-decoration: none; color: var(--text-secondary); font-size: 13px; }
+.back-link { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 26px; text-decoration: none; color: var(--text-secondary); font-size: 13px; }
 .back-link svg { width: 15px; height: 15px; }
-.form-page { max-width: 760px; }
-.case-form { display: grid; gap: 18px; margin-top: 32px; padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); box-shadow: 0 1px 2px oklch(0 0 0 / 4%); }
+.form-page { max-width: 980px; }
+.case-form { display: grid; gap: 0; margin-top: 22px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); box-shadow: 0 1px 2px oklch(0 0 0 / 4%); }
 .case-form label { display: grid; gap: 7px; font-weight: 600; }
 .case-form label span { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
 .case-form input, .case-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-app); color: var(--text-primary); }
+.case-form input::placeholder, .case-form textarea::placeholder { color: var(--text-tertiary); }
+.case-form__section { padding: 20px 22px; border-bottom: 1px solid var(--border-subtle); }
+.case-form__section > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--space-4); }
+.case-form__section h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.case-form__section header p { margin: 3px 0 0; color: var(--text-secondary); font-size: 11px; }
+.case-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 18px; }
+.case-form__wide { grid-column: 1 / -1; }
+.case-form__wide small { color: var(--text-secondary); font-size: 11px; font-weight: 400; }
+.folder-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+.folder-picker .button { min-width: 112px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.folder-picker .button svg { width: 16px; height: 16px; }
 .form-hint { margin: -8px 0 0; color: var(--text-secondary); font-size: 12px; }
-.form-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 22px; }
 .button { padding: 10px 16px; border: 1px solid transparent; border-radius: 8px; font-weight: 650; text-decoration: none; cursor: pointer; }
 .button--primary { background: var(--accent-primary); color: white; }
 .button--secondary { border-color: var(--border-subtle); background: var(--surface-panel); }
@@ -69,7 +80,8 @@
 .read-error-map ul { display: flex; gap: var(--space-5); color: var(--text-secondary); }
 .workflow-page table { width: 100%; border-collapse: collapse; }
 .workflow-page th, .workflow-page td { padding: var(--space-2); border-bottom: 1px solid var(--border-subtle); text-align: left; }
-@media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }
+@media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page, .form-page { padding-inline: 24px; } }
+@media (max-width: 640px) { .case-form__grid, .folder-picker { grid-template-columns: 1fr; } .case-form__wide { grid-column: auto; } .folder-picker .button { width: 100%; } }
 
 .overview-page { width: min(100%, 1320px); margin: 0 auto; }
 .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }

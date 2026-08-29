@@ -3,11 +3,11 @@ import {
   CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportJobSchema, JobEventSchema,
   JobEventsParamsSchema, JobParamsSchema, JobStatusSchema, PreviewDescriptorSchema, RecoveryArtifactSchema,
   RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, RuntimeInfoSchema,
-  SourceAssessmentSchema, SourceDescriptorSchema, SourceParamsSchema, type JobEvent, type RecoveryDesktopApi,
+  SourceAssessmentSchema, SourceDescriptorSchema, SourceParamsSchema, WorkspaceFolderResultSchema, type JobEvent, type RecoveryDesktopApi,
 } from '@recovery/contracts';
 
 export const recoveryApiMethodNames = [
-  'getRuntimeInfo', 'createCase', 'openCase', 'listSources', 'addImageSource', 'assessSource',
+  'getRuntimeInfo', 'chooseWorkspaceFolder', 'createCase', 'openCase', 'listSources', 'addImageSource', 'assessSource',
   'createRecoveryJob', 'startJob', 'pauseJob', 'resumeJob', 'cancelJob', 'queryArtifacts',
   'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'subscribeJobEvents',
 ] as const;
@@ -20,6 +20,7 @@ export interface PreloadTransport {
 export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopApi {
   const api: RecoveryDesktopApi = {
     getRuntimeInfo: async () => RuntimeInfoSchema.parse(await transport.invoke('runtime.get', {})),
+    chooseWorkspaceFolder: async () => WorkspaceFolderResultSchema.parse(await transport.invoke('dialog.choose_workspace', {})),
     createCase: async (input) => RecoveryCaseSchema.parse(await transport.invoke('case.create', CreateCaseInputSchema.parse(input))),
     openCase: async (casePath) => RecoveryCaseSchema.parse(await transport.invoke('case.open', CaseOpenParamsSchema.parse({ casePath }))),
     listSources: async () => SourceDescriptorSchema.array().parse(await transport.invoke('source.list', {})),
