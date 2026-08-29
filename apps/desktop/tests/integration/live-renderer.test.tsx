@@ -14,6 +14,7 @@ import { ReportsPage } from '../../src/renderer/features/reports/ReportsPage.js'
 import { MemoryResultsPage } from '../../src/renderer/features/memory/MemoryResultsPage.js';
 import { CaseLayout } from '../../src/renderer/routes/CaseLayout.js';
 import { ScanOptionsPage } from '../../src/renderer/features/recovery/ScanOptionsPage.js';
+import { CaseOverviewPage } from '../../src/renderer/routes/CaseOverviewPage.js';
 
 const createdAt = '2026-08-29T12:00:00Z';
 const source = {
@@ -42,7 +43,7 @@ function api(overrides: Record<string, unknown> = {}) {
     assessSource: vi.fn().mockResolvedValue({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [{ code: 'DAEMON_READY', level: 'supported', title: 'Live image ready', explanation: 'Daemon assessment completed.', recommendedAction: 'Continue.' }] }),
     createRecoveryJob: vi.fn(), startJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn(), cancelJob: vi.fn(),
     getJobStatus: vi.fn().mockResolvedValue(status), listJobEvents: vi.fn().mockResolvedValue([{ eventId: 'event-live', jobId: 'job-live', sequence: 9, stage: 'completed', occurredAt: createdAt, message: 'Recovery completed' }]),
-    queryArtifacts: vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null }),
+    queryArtifacts: vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 1 }),
     getArtifact: vi.fn().mockResolvedValue(artifact), requestPreview: vi.fn().mockResolvedValue({ artifactId: artifact.artifactId, status: 'unsupported', policy: 'derivative_required', detectedMimeType: 'image/jpeg', derivativePath: null }),
     exportArtifacts: vi.fn().mockResolvedValue({ exportId: 'export-live', items: [{ artifactId: artifact.artifactId, outputPath: 'D:/verified/JPEG_live.jpg', sha256: artifact.sha256, verified: true }] }),
     generateReport: vi.fn().mockResolvedValue({ caseId: 'case-live', jsonPath: 'D:/case/report.json', markdownPath: 'D:/case/report.md', limitations: status.limitations }),
@@ -157,9 +158,33 @@ describe('live renderer pages', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('renders Overview metrics only from live daemon state', async () => {
+    const secondSource = { ...source, sourceId: 'source-second', displayName: 'second-evidence.raw' };
+    Object.assign(window, { recoveryApi: api({
+      listSources: vi.fn().mockResolvedValue([source, secondSource]),
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 501 }),
+    }) });
+    await renderRoute(<CaseOverviewPage />, '/cases/case-live/overview', '/cases/:caseId/overview');
+    await findText('501');
+    const metrics = Array.from(container?.querySelectorAll('.metric-card') ?? []).map((element) => element.textContent);
+    expect(metrics).toEqual(expect.arrayContaining([
+      expect.stringContaining('Sources2'),
+      expect.stringContaining('Recovery jobCompleted'),
+      expect.stringContaining('Recovered artifacts501'),
+      expect.stringContaining('Limitations1'),
+    ]));
+  });
+
+  it('shows an Overview alert instead of invented metrics when daemon loading fails', async () => {
+    Object.assign(window, { recoveryApi: api({ listSources: vi.fn().mockRejectedValue(new Error('SOURCE_LIST_FAILED: unavailable')) }) });
+    await renderRoute(<CaseOverviewPage />, '/cases/case-live/overview', '/cases/:caseId/overview');
+    expect((await findText(/SOURCE_LIST_FAILED/)).getAttribute('role')).toBe('alert');
+    expect(container?.querySelectorAll('.metric-card')).toHaveLength(0);
+  });
+
   it('does not mount case children while the matching case open is pending', async () => {
     const pending = deferred<Awaited<ReturnType<typeof window.recoveryApi.openCase>>>();
-    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null, totalCount: 0 });
     Object.assign(window, { recoveryApi: api({ openCase: vi.fn().mockReturnValue(pending.promise), queryArtifacts }) });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseArtifactProbe />} /></Route></Routes></MemoryRouter>));
@@ -172,7 +197,7 @@ describe('live renderer pages', () => {
   it('does not mount case children after case open fails', async () => {
     sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
     sessionStorage.setItem('recovery:case-live:goal', 'recover_everything');
-    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null, totalCount: 0 });
     Object.assign(window, { recoveryApi: api({ openCase: vi.fn().mockRejectedValue(new Error('CASE_OPEN_FAILED: unavailable')), queryArtifacts }) });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseArtifactProbe />} /></Route></Routes></MemoryRouter>));
@@ -189,7 +214,7 @@ describe('live renderer pages', () => {
     sessionStorage.setItem('recovery:case-b:workspacePath', 'D:/case-b');
     sessionStorage.setItem('recovery:case-b:jobId', 'job-from-wrong-case');
     const second = deferred<Awaited<ReturnType<typeof window.recoveryApi.openCase>>>();
-    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null, totalCount: 0 });
     const openCase = vi.fn((workspace: string) => workspace === 'D:/case-live'
       ? Promise.resolve({ caseId: 'case-live', title: 'Case A', operator: 'operator', referenceNumber: null, organization: null, workspacePath: 'D:/case-live', notes: null, createdAt })
       : second.promise);
@@ -322,7 +347,7 @@ describe('live renderer pages', () => {
   });
 
   it('sends changed result searches back through the typed daemon query', async () => {
-    const queryArtifacts = vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null });
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 1 });
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
@@ -334,8 +359,8 @@ describe('live renderer pages', () => {
   it('loads daemon result pagination cursors without renderer fixtures', async () => {
     const secondArtifact = { ...artifact, artifactId: 'artifact-second', displayName: 'Recovered JPEG 0000002' };
     const queryArtifacts = vi.fn()
-      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-live' })
-      .mockResolvedValueOnce({ items: [secondArtifact], nextCursor: null });
+      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-live', totalCount: 2 })
+      .mockResolvedValueOnce({ items: [secondArtifact], nextCursor: null, totalCount: 2 });
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
@@ -345,16 +370,16 @@ describe('live renderer pages', () => {
   });
 
   it('ignores an older result query that resolves after a newer search', async () => {
-    const oldQuery = deferred<{ items: RecoveryArtifact[]; nextCursor: null }>();
-    const newQuery = deferred<{ items: RecoveryArtifact[]; nextCursor: null }>();
+    const oldQuery = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
+    const newQuery = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
     const newer = { ...artifact, artifactId: 'artifact-newer', displayName: 'ledger-result.jpg' };
     const queryArtifacts = vi.fn().mockReturnValueOnce(oldQuery.promise).mockReturnValueOnce(newQuery.promise);
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await change(input('Search recovered files'), 'ledger');
-    await act(async () => newQuery.resolve({ items: [newer], nextCursor: null }));
+    await act(async () => newQuery.resolve({ items: [newer], nextCursor: null, totalCount: 1 }));
     expect(await findText('ledger-result.jpg')).toBeTruthy();
-    await act(async () => oldQuery.resolve({ items: [artifact], nextCursor: null }));
+    await act(async () => oldQuery.resolve({ items: [artifact], nextCursor: null, totalCount: 1 }));
     expect(container?.textContent).toContain('ledger-result.jpg');
     expect(container?.textContent).not.toContain('JPEG_live.jpg');
   });
@@ -362,8 +387,8 @@ describe('live renderer pages', () => {
   it('resets selection and preview when a replacement result query arrives', async () => {
     const newer = { ...artifact, artifactId: 'artifact-newer', displayName: 'replacement.jpg' };
     const queryArtifacts = vi.fn()
-      .mockResolvedValueOnce({ items: [artifact], nextCursor: null })
-      .mockResolvedValueOnce({ items: [newer], nextCursor: null });
+      .mockResolvedValueOnce({ items: [artifact], nextCursor: null, totalCount: 1 })
+      .mockResolvedValueOnce({ items: [newer], nextCursor: null, totalCount: 1 });
     const requestPreview = vi.fn((artifactId: string) => Promise.resolve({ artifactId, status: 'unsupported', policy: 'derivative_required', detectedMimeType: 'image/jpeg', derivativePath: null }));
     Object.assign(window, { recoveryApi: api({ queryArtifacts, requestPreview }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
@@ -374,9 +399,9 @@ describe('live renderer pages', () => {
   });
 
   it('locks a cursor page while it is loading to prevent duplicate append requests', async () => {
-    const next = deferred<{ items: RecoveryArtifact[]; nextCursor: null }>();
+    const next = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
     const queryArtifacts = vi.fn()
-      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-live' })
+      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-live', totalCount: 2 })
       .mockReturnValue(next.promise);
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
@@ -385,16 +410,16 @@ describe('live renderer pages', () => {
     await click(loadMore);
     await click(loadMore);
     expect(queryArtifacts).toHaveBeenCalledTimes(2);
-    await act(async () => next.resolve({ items: [{ ...artifact, artifactId: 'artifact-next', displayName: 'next.jpg' }], nextCursor: null }));
+    await act(async () => next.resolve({ items: [{ ...artifact, artifactId: 'artifact-next', displayName: 'next.jpg' }], nextCursor: null, totalCount: 2 }));
   });
 
   it('unlocks pagination when a replacement search supersedes a pending cursor page', async () => {
-    const staleAppend = deferred<{ items: RecoveryArtifact[]; nextCursor: null }>();
+    const staleAppend = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
     const replacement = { ...artifact, artifactId: 'artifact-replacement', displayName: 'replacement.jpg' };
     const queryArtifacts = vi.fn()
-      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-old' })
+      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-old', totalCount: 1 })
       .mockReturnValueOnce(staleAppend.promise)
-      .mockResolvedValueOnce({ items: [replacement], nextCursor: 'cursor-new' });
+      .mockResolvedValueOnce({ items: [replacement], nextCursor: 'cursor-new', totalCount: 2 });
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
@@ -402,7 +427,7 @@ describe('live renderer pages', () => {
     await change(input('Search recovered files'), 'replacement');
     await findText('replacement.jpg');
     expect(button('Load more results').disabled).toBe(false);
-    await act(async () => staleAppend.resolve({ items: [], nextCursor: null }));
+    await act(async () => staleAppend.resolve({ items: [], nextCursor: null, totalCount: 1 }));
   });
 
   it('offers only the live text search filter and uses complete ARIA grid cells', async () => {
@@ -445,8 +470,8 @@ describe('live renderer pages', () => {
     const firstPage = Array.from({ length: 500 }, (_, index) => ({ ...artifact, artifactId: `artifact-${index + 1}`, displayName: `Artifact ${index + 1}` }));
     const lastArtifact = { ...artifact, artifactId: 'artifact-501', displayName: 'Artifact 501' };
     const queryArtifacts = vi.fn()
-      .mockResolvedValueOnce({ items: firstPage, nextCursor: 'cursor-500' })
-      .mockResolvedValueOnce({ items: [lastArtifact], nextCursor: null });
+      .mockResolvedValueOnce({ items: firstPage, nextCursor: 'cursor-500', totalCount: 501 })
+      .mockResolvedValueOnce({ items: [lastArtifact], nextCursor: null, totalCount: 501 });
     let submittedIds: string[] = [];
     const exportArtifacts = vi.fn(async (request: { artifactIds: string[] }) => {
       submittedIds = request.artifactIds;

@@ -1,17 +1,27 @@
-.welcome-page, .form-page { max-width: 1120px; margin: 0 auto; padding: 32px 48px 56px; }
+.welcome-page, .form-page { max-width: 1160px; margin: 0 auto; padding: 24px 48px 56px; }
 .welcome-topbar, .case-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.welcome-hero { max-width: 760px; padding: 76px 0 40px; }
-.welcome-hero h1, .form-page h1 { margin: 8px 0 12px; font-size: 36px; line-height: 1.15; letter-spacing: -0.025em; }
+.welcome-topbar { min-height: 48px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle); }
+.welcome-brand { display: flex; align-items: center; gap: 10px; }
+.welcome-brand > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; background: var(--accent-primary); color: var(--accent-contrast); }
+.welcome-brand svg { width: 18px; height: 18px; }
+.welcome-hero { max-width: 760px; padding: 64px 0 44px; }
+.welcome-hero h1, .form-page h1 { margin: 8px 0 12px; font-size: 32px; line-height: 1.15; letter-spacing: -0.03em; }
 .welcome-hero > p:last-child, .form-page header > p:last-child { color: var(--text-secondary); font-size: 16px; }
 .eyebrow { margin: 0; color: var(--accent-primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.start-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-bottom: 24px; }
-.start-card { min-height: 132px; display: flex; flex-direction: column; gap: 8px; padding: 22px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-panel); text-decoration: none; box-shadow: 0 6px 20px rgb(15 23 42 / 5%); }
-.start-card:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+.section-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: var(--space-4); }
+.section-heading h2 { margin: 4px 0 0; font-size: 17px; }
+.start-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; margin-bottom: 24px; }
+.start-card { position: relative; min-height: 150px; display: flex; flex-direction: column; gap: 5px; padding: 20px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); text-decoration: none; box-shadow: 0 1px 2px oklch(0 0 0 / 4%); }
+.start-card:hover { background: var(--surface-muted); }
+.start-card__icon { position: absolute; top: 18px; right: 18px; display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--radius-sm); background: var(--surface-muted); color: var(--text-secondary); }
+.start-card__icon svg { width: 17px; height: 17px; }
+.start-card small { color: var(--text-tertiary); font-size: 10px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; }
 .start-card strong { font-size: 16px; }
-.start-card span { color: var(--text-secondary); }
-.back-link { display: inline-block; margin-bottom: 48px; text-decoration: none; color: var(--accent-primary); }
+.start-card > span:last-child { max-width: 85%; margin-top: 3px; color: var(--text-secondary); font-size: 13px; }
+.back-link { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 48px; text-decoration: none; color: var(--text-secondary); font-size: 13px; }
+.back-link svg { width: 15px; height: 15px; }
 .form-page { max-width: 760px; }
-.case-form { display: grid; gap: 18px; margin-top: 32px; padding: 28px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-panel); }
+.case-form { display: grid; gap: 18px; margin-top: 32px; padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); box-shadow: 0 1px 2px oklch(0 0 0 / 4%); }
 .case-form label { display: grid; gap: 7px; font-weight: 600; }
 .case-form label span { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
 .case-form input, .case-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-app); color: var(--text-primary); }
@@ -60,6 +70,25 @@
 .workflow-page table { width: 100%; border-collapse: collapse; }
 .workflow-page th, .workflow-page td { padding: var(--space-2); border-bottom: 1px solid var(--border-subtle); text-align: left; }
 @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }
+
+.overview-page { width: min(100%, 1320px); margin: 0 auto; }
+.page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
+.page-heading h1 { margin: 4px 0 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.025em; }
+.page-heading__description { max-width: 720px; margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+.metric-grid--overview { margin-top: var(--space-6); }
+.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+.overview-list { list-style: none; margin: 0; padding: 0; }
+.overview-list li { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.overview-list li:first-child { padding-top: 0; }
+.overview-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+.overview-list span { overflow-wrap: anywhere; font-weight: 600; }
+.overview-list small, .empty-state { color: var(--text-secondary); }
+.overview-list--limitations span { color: var(--status-warning); font-size: 12px; }
+.empty-state { margin: 0; font-size: 13px; }
+
+@media (max-width: 1080px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .metric-grid, .overview-grid { grid-template-columns: 1fr; } .page-heading { align-items: stretch; flex-direction: column; } }
 
 .case-header { width: 100%; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .case-header__title { min-width: 0; display: flex !important; align-items: center; gap: var(--space-3); }

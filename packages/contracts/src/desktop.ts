@@ -52,7 +52,11 @@ export const ArtifactQuerySchema = z.object({
   minSize: z.number().int().nonnegative().optional(), maxSize: z.number().int().nonnegative().optional(),
   cursor: z.string().optional(), pageSize: z.number().int().min(1).max(500),
 });
-export const ArtifactPageSchema = z.object({ items: z.array(RecoveryArtifactSchema), nextCursor: z.string().nullable() });
+export const ArtifactPageSchema = z.object({
+  items: z.array(RecoveryArtifactSchema),
+  nextCursor: z.string().nullable(),
+  totalCount: z.number().int().nonnegative(),
+});
 export const PreviewDescriptorSchema = z.object({
   artifactId: z.string().min(1), status: z.enum(['safe_preview', 'blocked', 'unsupported']),
   policy: z.string().min(1), detectedMimeType: z.string().nullable(), derivativePath: z.string().nullable(),

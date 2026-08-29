@@ -17,6 +17,7 @@ import { DamagedDeviceWizard } from '../features/recovery/DamagedDeviceWizard.js
 import { MemorySourcePage } from '../features/memory/MemorySourcePage.js';
 import { MemoryOptionsPage } from '../features/memory/MemoryOptionsPage.js';
 import { MemoryResultsPage } from '../features/memory/MemoryResultsPage.js';
+import { CaseOverviewPage } from './CaseOverviewPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -27,7 +28,7 @@ export const router = createHashRouter([
     element: <CaseLayout />,
     children: [
       { index: true, element: <Navigate to="overview" replace /> },
-      { path: 'overview', element: <RoutePlaceholder title="Case overview" description="Add a source to begin recovery." /> },
+      { path: 'overview', element: <CaseOverviewPage /> },
       { path: 'sources', element: <AddSourcePage /> },
       { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
       { path: 'recovery/destination', element: <DestinationPage /> },

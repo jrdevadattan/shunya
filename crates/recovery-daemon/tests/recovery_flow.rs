@@ -190,6 +190,7 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
     let page = daemon.rpc("artifact.query", json!({ "pageSize": 25 }));
     let artifacts = page["items"].as_array().unwrap();
     assert_eq!(artifacts.len(), 1);
+    assert_eq!(page["totalCount"], json!(1));
     let artifact = &artifacts[0];
     let artifact_id = artifact["artifactId"].as_str().unwrap();
     assert_eq!(artifact["recoveryMethod"], "carving");

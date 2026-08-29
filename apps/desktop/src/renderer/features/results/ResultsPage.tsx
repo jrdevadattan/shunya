@@ -6,7 +6,7 @@ import { ResultFilters } from './ResultFilters.js';
 
 export function ResultsPage() {
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState<ArtifactPage>({ items: [], nextCursor: null });
+  const [page, setPage] = useState<ArtifactPage>({ items: [], nextCursor: null, totalCount: 0 });
   const [selected, setSelected] = useState<string>();
   const [preview, setPreview] = useState<PreviewDescriptor>();
   const [previewError, setPreviewError] = useState<string>();
@@ -26,7 +26,7 @@ export function ResultsPage() {
     try {
       const result = ArtifactPageSchema.parse(await window.recoveryApi.queryArtifacts({ search: search || undefined, cursor, pageSize: 100 }));
       if (generation.current === expectedGeneration) {
-        setPage((current) => current.nextCursor === cursor ? { items: [...current.items, ...result.items], nextCursor: result.nextCursor } : current);
+        setPage((current) => current.nextCursor === cursor ? { items: [...current.items, ...result.items], nextCursor: result.nextCursor, totalCount: result.totalCount } : current);
         setError(undefined);
       }
     } catch (cause) {
@@ -45,7 +45,7 @@ export function ResultsPage() {
     appendToken.current += 1;
     appendInFlight.current = false;
     setLoadingMore(false);
-    setPage({ items: [], nextCursor: null });
+    setPage({ items: [], nextCursor: null, totalCount: 0 });
     setSelected(undefined);
     setPreview(undefined);
     setPreviewError(undefined);

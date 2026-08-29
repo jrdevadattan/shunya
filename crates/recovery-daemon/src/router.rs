@@ -508,6 +508,9 @@ impl DaemonState {
             .map_err(|error| ("INVALID_ARTIFACT_QUERY", error.to_string()))?;
         let index = ArtifactIndex::open(&job_directory(&root, job_id).join("results.sqlite"))
             .map_err(|error| ("ARTIFACT_QUERY_FAILED", error.to_string()))?;
+        let total_count = index
+            .count(&query)
+            .map_err(|error| ("ARTIFACT_QUERY_FAILED", error.to_string()))?;
         let page = index
             .query(&query)
             .map_err(|error| ("ARTIFACT_QUERY_FAILED", error.to_string()))?;
@@ -520,7 +523,7 @@ impl DaemonState {
             .iter()
             .filter_map(|row| by_id.get(&row.artifact_id).cloned())
             .collect::<Vec<_>>();
-        Ok(json!({ "items": items, "nextCursor": page.next_cursor }))
+        Ok(json!({ "items": items, "nextCursor": page.next_cursor, "totalCount": total_count }))
     }
 
     fn get_artifact(&self, request: &RpcRequest) -> RouteResult {

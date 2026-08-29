@@ -2,7 +2,7 @@ import { ArtifactPageSchema, ExportJobSchema, type ArtifactPage, type ExportJob 
 import { useEffect, useState, type FormEvent } from 'react';
 
 export function ExportWizard() {
-  const [page, setPage] = useState<ArtifactPage>({ items: [], nextCursor: null });
+  const [page, setPage] = useState<ArtifactPage>({ items: [], nextCursor: null, totalCount: 0 });
   const [selected, setSelected] = useState<string[]>([]);
   const [result, setResult] = useState<ExportJob>();
   const [error, setError] = useState<string>();
@@ -15,15 +15,17 @@ export function ExportWizard() {
       const items: ArtifactPage['items'] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
+      let totalCount = 0;
       do {
         const loaded = ArtifactPageSchema.parse(await window.recoveryApi.queryArtifacts({ pageSize: 500, cursor }));
         items.push(...loaded.items);
+        totalCount = loaded.totalCount;
         cursor = loaded.nextCursor ?? undefined;
         if (cursor && cursors.has(cursor)) throw new Error('Artifact pagination did not advance.');
         if (cursor) cursors.add(cursor);
       } while (cursor);
       if (!active) return;
-      setPage({ items, nextCursor: null });
+      setPage({ items, nextCursor: null, totalCount });
       setSelected(items.map((item) => item.artifactId));
     })().catch((cause) => { if (active) setError(message(cause)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

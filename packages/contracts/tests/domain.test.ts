@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/source-descriptor.json' with { type: 'json' };
+import { ArtifactPageSchema } from '../src/desktop.js';
 import { JobStageSchema, SourceDescriptorSchema } from '../src/domain.js';
 
 describe('SourceDescriptor', () => {
@@ -19,5 +20,12 @@ describe('SourceDescriptor', () => {
 describe('JobStage', () => {
   it('rejects unknown states instead of accepting an untyped string', () => {
     expect(JobStageSchema.safeParse('silently_finished').success).toBe(false);
+  });
+});
+
+describe('ArtifactPage', () => {
+  it('requires and preserves the daemon-computed filtered total', () => {
+    expect(ArtifactPageSchema.parse({ items: [], nextCursor: null, totalCount: 501 }).totalCount).toBe(501);
+    expect(ArtifactPageSchema.safeParse({ items: [], nextCursor: null }).success).toBe(false);
   });
 });
