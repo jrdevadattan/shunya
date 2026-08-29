@@ -57,4 +57,6 @@
 .read-error-map .is-unreadable { background: #dc2626; }
 .read-error-map .is-pending { background: #94a3b8; }
 .read-error-map ul { display: flex; gap: var(--space-5); color: var(--text-secondary); }
+.workflow-page table { width: 100%; border-collapse: collapse; }
+.workflow-page th, .workflow-page td { padding: var(--space-2); border-bottom: 1px solid var(--border-subtle); text-align: left; }
 @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } .welcome-page { padding-inline: 24px; } }

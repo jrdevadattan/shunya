@@ -14,6 +14,9 @@ import { ExportWizard } from '../features/export/ExportWizard.js';
 import { ReportsPage } from '../features/reports/ReportsPage.js';
 import { AcquisitionOptions } from '../features/recovery/AcquisitionOptions.js';
 import { DamagedDeviceWizard } from '../features/recovery/DamagedDeviceWizard.js';
+import { MemorySourcePage } from '../features/memory/MemorySourcePage.js';
+import { MemoryOptionsPage } from '../features/memory/MemoryOptionsPage.js';
+import { MemoryResultsPage } from '../features/memory/MemoryResultsPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -35,7 +38,9 @@ export const router = createHashRouter([
       { path: 'recovery/partitions', element: <PartitionList /> },
       { path: 'jobs', element: <JobProgressPage /> },
       { path: 'results', element: <ResultsPage /> },
-      { path: 'memory', element: <RoutePlaceholder title="Memory analysis" description="Analyze supported volatile-memory images." /> },
+      { path: 'memory', element: <MemorySourcePage /> },
+      { path: 'memory/options', element: <MemoryOptionsPage /> },
+      { path: 'memory/results', element: <MemoryResultsPage /> },
       { path: 'exports', element: <ExportWizard /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'activity', element: <RoutePlaceholder title="Case activity" description="Review the append-only audit trail." /> },
