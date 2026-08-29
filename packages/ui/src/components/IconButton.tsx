@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'aria-label'> {
@@ -6,10 +6,13 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   icon: LucideIcon;
 }
 
-export function IconButton({ label, icon: Icon, className = '', type = 'button', ...props }: IconButtonProps) {
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { label, icon: Icon, className = '', type = 'button', ...props },
+  ref,
+) {
   return (
-    <button {...props} type={type} className={['icon-button', className].filter(Boolean).join(' ')} aria-label={label} title={label}>
+    <button {...props} ref={ref} type={type} className={['icon-button', className].filter(Boolean).join(' ')} aria-label={label} title={label}>
       <Icon aria-hidden="true" />
     </button>
   );
-}
+});

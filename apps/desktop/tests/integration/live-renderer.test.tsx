@@ -139,6 +139,24 @@ describe('live renderer pages', () => {
     expect(await findText('Overview loaded')).toBeTruthy();
   });
 
+  it('renders grouped case navigation and restores search trigger focus after Escape', async () => {
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<p>Overview loaded</p>} /></Route></Routes></MemoryRouter>));
+    await findText('Overview loaded');
+
+    expect(container.querySelectorAll('.navigation-group')).toHaveLength(3);
+    expect(container.querySelector('a[aria-current="page"]')?.textContent).toContain('Overview');
+    expect(container.textContent).toContain('Volatility is unavailable');
+    const trigger = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.getAttribute('aria-label') === 'Search screens and actions');
+    expect(trigger).toBeTruthy();
+
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
+    expect(container.querySelector('[role="dialog"][aria-label="Command search"]')).toBeTruthy();
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it('does not mount case children while the matching case open is pending', async () => {
     const pending = deferred<Awaited<ReturnType<typeof window.recoveryApi.openCase>>>();
     const queryArtifacts = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
