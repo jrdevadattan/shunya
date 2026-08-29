@@ -137,16 +137,7 @@ jobs:
         run: |
           mkdir publish
           find downloaded -type f \( -name '*.exe' -o -name '*.nupkg' -o -name '*.deb' -o -name '*.dmg' -o -name '*.zip' -o -name '*.iso' -o -name '*.iso.sha256' -o -name '*.manifest.json' \) -exec cp {} publish/ \;
-          cd publish
-          sha256sum * > SHA256SUMS
-          python3 - <<'PY'
-          import hashlib, json, pathlib
-          files=[]
-          for path in sorted(pathlib.Path('.').iterdir()):
-              if path.is_file() and path.name != 'release-manifest.json':
-                  data=path.read_bytes(); files.append({'name':path.name,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-          pathlib.Path('release-manifest.json').write_text(json.dumps({'schemaVersion':1,'tag':'${{ github.ref_name }}','files':files},indent=2)+'\n')
-          PY
+          node packaging/scripts/assemble-release.mjs publish '${{ github.ref_name }}'
       - uses: softprops/action-gh-release@v2
         with:
           body_path: RELEASE_NOTES.md

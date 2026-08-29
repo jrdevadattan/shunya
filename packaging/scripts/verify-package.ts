@@ -12,13 +12,16 @@ export async function verifyPackage(packageRoot: string): Promise<void> {
   const resourceRoot = path.dirname(manifestPath);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
   if (manifest.schemaVersion !== 1 || !manifest.airGapped || manifest.telemetry || manifest.autoUpdate) throw new Error('package is not the declared air-gapped profile');
+  const requiredDocuments = new Set(['LICENSE', 'THIRD_PARTY_NOTICES.md']);
   for (const file of manifest.files) {
     const candidate = path.resolve(resourceRoot, file.path);
     if (!candidate.startsWith(`${resourceRoot}${path.sep}`)) throw new Error(`unsafe package manifest path: ${file.path}`);
     if ((await lstat(candidate)).isSymbolicLink()) throw new Error(`package executable must not be a symlink: ${file.path}`);
     const actual = createHash('sha256').update(await readFile(candidate)).digest('hex');
     if (actual !== file.sha256) throw new Error(`package checksum mismatch: ${file.path}`);
+    requiredDocuments.delete(file.path);
   }
+  if (requiredDocuments.size) throw new Error(`package licensing documents missing: ${[...requiredDocuments].join(', ')}`);
   const appAsar = await findNamed(packageRoot, 'app.asar');
   if (!appAsar) throw new Error('app.asar not found');
   const mainBundle = extractFile(appAsar, path.join('.vite', 'build', 'main.js')).toString('utf8');

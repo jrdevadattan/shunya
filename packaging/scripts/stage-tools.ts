@@ -45,7 +45,14 @@ for (const tool of lock.tools.filter((entry) => entry.platform === platform)) {
   files.push({ id: tool.id, path: path.posix.join('tools', relative.split(path.sep).join('/')), sha256: tool.sha256, executable: true, license: tool.license });
 }
 await cp(lockPath, path.join(output, 'tools.lock.json'));
-await cp(path.join(repository, 'THIRD_PARTY_NOTICES.md'), path.join(output, 'THIRD_PARTY_NOTICES.md'));
+for (const document of [
+  { id: 'project-license', target: 'LICENSE', license: 'Apache-2.0' },
+  { id: 'third-party-notices', target: 'THIRD_PARTY_NOTICES.md', license: 'Mixed; see document' },
+]) {
+  const bytes = await readFile(path.join(repository, document.target));
+  await writeFile(path.join(output, document.target), bytes);
+  files.push({ id: document.id, path: document.target, sha256: digest(bytes), executable: false, license: document.license });
+}
 const manifest = { schemaVersion: 1, platform, airGapped: true, telemetry: false, autoUpdate: false, fuses: { runAsNode: false, nodeOptions: false, nodeCliInspect: false, embeddedAsarIntegrity: true, onlyLoadFromAsar: true, wasmTrapHandlers: true }, files: files.sort((a, b) => a.path.localeCompare(b.path)) };
 await writeFile(path.join(output, 'package-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 }
