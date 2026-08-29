@@ -20,7 +20,7 @@ const core = [
 const files: PackageFile[] = [];
 for (const item of core) {
   const bytes = await readFile(item.source).catch(() => { throw new Error(`missing release binary: ${item.source}; run cargo build --workspace --release first`); });
-  await writeFile(path.join(output, item.target), bytes);
+  await writeFile(path.join(output, item.target), bytes, process.platform === 'win32' ? undefined : { mode: 0o755 });
   const sha256 = digest(bytes);
   files.push({ id: item.id, path: item.target, sha256, executable: true, license: item.license });
   if (item.id === 'recoveryd') await writeFile(path.join(output, 'recoveryd.sha256'), `${sha256}  ${item.target}\n`);

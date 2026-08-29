@@ -16,7 +16,11 @@ export async function verifyPackage(packageRoot: string): Promise<void> {
   for (const file of manifest.files) {
     const candidate = path.resolve(resourceRoot, file.path);
     if (!candidate.startsWith(`${resourceRoot}${path.sep}`)) throw new Error(`unsafe package manifest path: ${file.path}`);
-    if ((await lstat(candidate)).isSymbolicLink()) throw new Error(`package executable must not be a symlink: ${file.path}`);
+    const metadata = await lstat(candidate);
+    if (metadata.isSymbolicLink()) throw new Error(`package executable must not be a symlink: ${file.path}`);
+    if (file.executable && process.platform !== 'win32' && (metadata.mode & 0o111) === 0) {
+      throw new Error(`package executable is missing Unix execute permissions: ${file.path}`);
+    }
     const actual = createHash('sha256').update(await readFile(candidate)).digest('hex');
     if (actual !== file.sha256) throw new Error(`package checksum mismatch: ${file.path}`);
     requiredDocuments.delete(file.path);
