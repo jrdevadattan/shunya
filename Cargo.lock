@@ -56,6 +56,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "carving"
+version = "0.1.0"
+dependencies = [
+ "recovery-domain",
+ "serde",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "case-store"
 version = "0.1.0"
 dependencies = [
