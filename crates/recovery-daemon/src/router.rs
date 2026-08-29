@@ -1,8 +1,11 @@
 use case_store::{AuditEventInput, CaseInput, CaseStore};
+use job_engine::JobEngine;
+use recovery_domain::{RecoveryGoal, ScanPreset};
 use recovery_ipc::{RpcErrorBody, RpcFrame, RpcRequest};
 use serde::Deserialize;
 use serde_json::json;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 const DESTINATION_RESERVE_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -22,6 +25,23 @@ struct CreateCaseParams {
 #[serde(rename_all = "camelCase")]
 struct OpenCaseParams {
     case_path: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateJobParams {
+    case_path: PathBuf,
+    case_id: Uuid,
+    source_id: String,
+    goal: RecoveryGoal,
+    preset: ScanPreset,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobCommandParams {
+    case_path: PathBuf,
+    job_id: Uuid,
 }
 
 pub fn route(request: &RpcRequest) -> RpcFrame {
@@ -52,6 +72,52 @@ pub fn route(request: &RpcRequest) -> RpcFrame {
                 result: serde_json::to_value(store.manifest()).expect("manifest serializes"),
             },
             Err(error) => error_frame(request, "CASE_OPEN_FAILED", error.to_string()),
+        };
+    }
+
+    if request.method == "job.create" {
+        let params = match serde_json::from_value::<CreateJobParams>(request.params.clone()) {
+            Ok(params) => params,
+            Err(error) => return error_frame(request, "INVALID_JOB_INPUT", error.to_string()),
+        };
+        return match JobEngine::open(&params.case_path).and_then(|mut engine| {
+            engine.create_job(
+                params.case_id,
+                &params.source_id,
+                params.goal,
+                params.preset,
+            )
+        }) {
+            Ok(job) => RpcFrame::Response {
+                id: request.id,
+                result: serde_json::to_value(job).expect("job serializes"),
+            },
+            Err(error) => error_frame(request, "JOB_CREATE_FAILED", error.to_string()),
+        };
+    }
+
+    if matches!(
+        request.method.as_str(),
+        "job.start" | "job.pause" | "job.resume" | "job.cancel"
+    ) {
+        let params = match serde_json::from_value::<JobCommandParams>(request.params.clone()) {
+            Ok(params) => params,
+            Err(error) => return error_frame(request, "INVALID_JOB_INPUT", error.to_string()),
+        };
+        return match JobEngine::open(&params.case_path).and_then(|mut engine| {
+            match request.method.as_str() {
+                "job.start" => engine.start(params.job_id),
+                "job.pause" => engine.pause(params.job_id),
+                "job.resume" => engine.resume(params.job_id),
+                "job.cancel" => engine.cancel(params.job_id),
+                _ => unreachable!(),
+            }
+        }) {
+            Ok(job) => RpcFrame::Response {
+                id: request.id,
+                result: serde_json::to_value(job).expect("job serializes"),
+            },
+            Err(error) => error_frame(request, "JOB_COMMAND_FAILED", error.to_string()),
         };
     }
 

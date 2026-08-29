@@ -2,6 +2,7 @@ import { createHashRouter, Navigate } from 'react-router-dom';
 import { CaseLayout } from './CaseLayout.js';
 import { NewCasePage } from './NewCasePage.js';
 import { WelcomePage } from './WelcomePage.js';
+import { JobProgressPage } from '../features/jobs/JobProgressPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -14,7 +15,7 @@ export const router = createHashRouter([
       { index: true, element: <Navigate to="overview" replace /> },
       { path: 'overview', element: <RoutePlaceholder title="Case overview" description="Add a source to begin recovery." /> },
       { path: 'sources', element: <RoutePlaceholder title="Sources" description="Add and assess devices or forensic images." /> },
-      { path: 'jobs', element: <RoutePlaceholder title="Recovery jobs" description="Configure and monitor recovery operations." /> },
+      { path: 'jobs', element: <JobProgressPage /> },
       { path: 'results', element: <RoutePlaceholder title="Recovered files" description="Search, preview, verify, and select recovered files." /> },
       { path: 'memory', element: <RoutePlaceholder title="Memory analysis" description="Analyze supported volatile-memory images." /> },
       { path: 'exports', element: <RoutePlaceholder title="Exports" description="Copy verified results to a safe destination." /> },
