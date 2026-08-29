@@ -760,6 +760,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "threat-scan"
+version = "0.1.0"
+dependencies = [
+ "recovery-domain",
+ "serde",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

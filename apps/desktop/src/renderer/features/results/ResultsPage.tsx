@@ -7,7 +7,7 @@ import { ResultFilters } from './ResultFilters.js';
 const artifacts: RecoveryArtifact[] = [
   { artifactId: 'a1', sourceId: 's1', partitionId: 'p1', originalName: 'report.pdf', originalPath: '/Finance/report.pdf', displayName: 'report.pdf', extension: 'pdf', mimeType: 'application/pdf', sizeBytes: '48210', recoveryMethod: 'metadata', recoveryState: 'complete_validated', sha256: 'a'.repeat(64), sourceRanges: [], threatStatus: 'no_rule_match', previewStatus: 'safe_preview' },
   { artifactId: 'a2', sourceId: 's1', partitionId: null, originalName: null, originalPath: null, displayName: 'Recovered JPEG 0000123', extension: 'jpg', mimeType: 'image/jpeg', sizeBytes: '15042', recoveryMethod: 'carving', recoveryState: 'complete_unverified', sha256: 'b'.repeat(64), sourceRanges: [], threatStatus: 'no_rule_match', previewStatus: 'safe_preview' },
-  { artifactId: 'a3', sourceId: 's1', partitionId: 'p1', originalName: 'script.exe', originalPath: '/Downloads/script.exe', displayName: 'script.exe', extension: 'exe', mimeType: 'application/x-msdownload', sizeBytes: '8128', recoveryMethod: 'metadata', recoveryState: 'partial_unverified', sha256: null, sourceRanges: [], threatStatus: 'potential_threat', previewStatus: 'blocked' },
+  { artifactId: 'a3', sourceId: 's1', partitionId: 'p1', originalName: 'script.exe', originalPath: '/Downloads/script.exe', displayName: 'script.exe', extension: 'exe', mimeType: 'application/x-msdownload', sizeBytes: '8128', recoveryMethod: 'metadata', recoveryState: 'partial_unverified', sha256: null, sourceRanges: [], threatStatus: 'no_rule_match', previewStatus: 'blocked' },
 ];
 
 export function ResultsPage() {
