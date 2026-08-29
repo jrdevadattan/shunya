@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+if ls /opt/recovery/staging/*.deb >/dev/null 2>&1; then
+  dpkg -i /opt/recovery/staging/*.deb || apt-get -f install -y
+fi
+test -f /opt/recovery/staging/recovery-privileged-helper
+install -m 0755 /opt/recovery/staging/recovery-privileged-helper /usr/local/libexec/recovery-privileged-helper

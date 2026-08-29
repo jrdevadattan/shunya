@@ -1,0 +1,29 @@
+name: Rescue ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build-rescue-iso:
+    runs-on: ubuntu-24.04
+    container: debian:bookworm
+    steps:
+      - name: Install build prerequisites
+        run: apt-get update && apt-get install -y live-build git ca-certificates coreutils
+      - uses: actions/checkout@v4
+      - name: Verify immutable Rescue configuration
+        run: sh live/scripts/verify-live.sh
+      - name: Build hybrid BIOS and UEFI ISO
+        env:
+          RECOVERY_VERSION: ${{ github.ref_name }}
+        run: sh live/scripts/build-live.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recovery-rescue-${{ github.ref_name }}-x86_64
+          path: dist/rescue/*
+          if-no-files-found: error
