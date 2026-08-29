@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import { app, BrowserWindow, net, protocol } from 'electron';
+import { DaemonSupervisor } from './daemon-supervisor.js';
 import { registerIpcHandlers } from './ipc-handlers.js';
 import { hardenWindow } from './security.js';
 import { buildMainWindowOptions } from './windows.js';
@@ -40,10 +42,34 @@ async function createMainWindow(): Promise<void> {
 
 app.whenReady().then(async () => {
   registerAppProtocol();
-  registerIpcHandlers();
+  const daemon = await startDaemon();
+  registerIpcHandlers(daemon);
   await createMainWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+async function startDaemon(): Promise<DaemonSupervisor | undefined> {
+  const executablePath = process.env.RECOVERY_DAEMON_PATH;
+  const expectedSha256 = process.env.RECOVERY_DAEMON_SHA256;
+  if (executablePath && expectedSha256) {
+    const daemon = new DaemonSupervisor({ executablePath, expectedSha256 });
+    await daemon.start();
+    return daemon;
+  }
+  if (!app.isPackaged) return undefined;
+
+  const bundledExecutable = path.join(process.resourcesPath, process.platform === 'win32' ? 'recoveryd.exe' : 'recoveryd');
+  const manifestPath = path.join(process.resourcesPath, 'recoveryd.sha256');
+  try {
+    const expectedHash = (await readFile(manifestPath, 'utf8')).trim().split(/\s+/)[0];
+    if (!expectedHash) return undefined;
+    const daemon = new DaemonSupervisor({ executablePath: bundledExecutable, expectedSha256: expectedHash });
+    await daemon.start();
+    return daemon;
+  } catch {
+    return undefined;
+  }
+}

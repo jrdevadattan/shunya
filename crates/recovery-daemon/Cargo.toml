@@ -9,6 +9,9 @@ name = "recoveryd"
 path = "src/main.rs"
 
 [dependencies]
+case-store = { path = "../case-store" }
+fs2.workspace = true
 recovery-ipc = { path = "../recovery-ipc" }
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

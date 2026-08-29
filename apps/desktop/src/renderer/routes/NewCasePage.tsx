@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
+import { NewCaseForm } from '../features/cases/NewCaseForm.js';
 
 export function NewCasePage() {
-  return <main className="form-page"><Link to="/" className="back-link">← Back</Link><header><p className="eyebrow">Case intake</p><h1>Create recovery case</h1><p>Record the case details before selecting a source.</p></header><form className="case-form"><label>Case title<input name="title" required minLength={3} maxLength={120} autoFocus /></label><label>Reference number <span>Optional</span><input name="reference" /></label><label>Operator name or ID<input name="operator" required /></label><label>Organization or unit <span>Optional</span><input name="organization" /></label><label>Case workspace destination<input name="workspace" required placeholder="Choose a destination folder" /></label><p className="form-hint">Choose a destination with enough free space for the disk image and recovered files. The source device cannot be used as the destination.</p><label>Notes <span>Optional</span><textarea name="notes" rows={4} /></label><div className="form-actions"><Link to="/" className="button button--secondary">Cancel</Link><button type="submit" className="button button--primary">Create case</button></div></form></main>;
+  return <main className="form-page"><Link to="/" className="back-link">← Back</Link><header><p className="eyebrow">Case intake</p><h1>Create recovery case</h1><p>Record the case details before selecting a source.</p></header><NewCaseForm /></main>;
 }
