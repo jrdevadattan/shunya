@@ -9,13 +9,27 @@ name = "recoveryd"
 path = "src/main.rs"
 
 [dependencies]
+carving = { path = "../carving" }
 case-store = { path = "../case-store" }
+exporter = { path = "../exporter" }
 fs2.workspace = true
+image-io = { path = "../image-io" }
 job-engine = { path = "../job-engine" }
+partition-scan = { path = "../partition-scan" }
 recovery-ipc = { path = "../recovery-ipc" }
 recovery-domain = { path = "../recovery-domain" }
+reporting = { path = "../reporting" }
+result-index = { path = "../result-index" }
+safety-policy = { path = "../safety-policy" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 source-inventory = { path = "../source-inventory" }
+threat-scan = { path = "../threat-scan" }
 tokio.workspace = true
+tokio-util.workspace = true
 uuid.workspace = true
+validation = { path = "../validation" }
+
+[dev-dependencies]
+tempfile = "3"

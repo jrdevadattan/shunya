@@ -17,6 +17,8 @@ const METHODS: &[&str] = &[
     "job.pause",
     "job.resume",
     "job.cancel",
+    "job.status",
+    "job.events",
     "artifact.query",
     "artifact.get",
     "artifact.preview",
