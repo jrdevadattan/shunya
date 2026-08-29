@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use tool_runner::{
-    DiscoveryStatus, ToolCandidateCatalog, ToolDiscoveryRequest, current_platform, discover_tools,
+    DiscoveryStatus, ToolCandidateCatalog, ToolDiscoveryRequest, ToolRegistry, current_platform,
+    discover_tools,
 };
 
 #[tokio::main]
@@ -27,6 +28,7 @@ async fn run() -> Result<bool, String> {
     if catalog.schema_version != 1 {
         return Err("unsupported candidate catalog schema version".into());
     }
+    catalog.validate()?;
     let report = discover_tools(
         &arguments.tools_root,
         ToolDiscoveryRequest {
@@ -36,6 +38,8 @@ async fn run() -> Result<bool, String> {
         },
     )
     .await;
+    ToolRegistry::from_manifest(&arguments.tools_root, report.manifest.clone())
+        .map_err(|error| format!("generated manifest is not loadable: {error}"))?;
     write_json(&arguments.manifest, &report.manifest).await?;
     write_json(&arguments.report, &report).await?;
     Ok(report

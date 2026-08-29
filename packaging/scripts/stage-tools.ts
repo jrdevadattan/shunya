@@ -2,10 +2,7 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-
-interface ToolEntry { id: string; version: string; license: string; origin: string; platform: string; relativePath: string; sha256: string; networkAllowed: boolean; redistributionAllowed: boolean }
-interface ToolLock { manifestVersion: number; tools: ToolEntry[] }
-interface PackageFile { id: string; path: string; sha256: string; executable: boolean; license: string }
+import { stageExternalTools, type PackageFile } from './tool-staging.js';
 
 async function main(): Promise<void> {
 const repository = path.resolve(process.cwd(), '../..');
@@ -30,22 +27,7 @@ for (const item of core) {
 }
 
 const lockPath = path.join(repository, 'tools/manifests/tools.lock.json');
-const lock = JSON.parse(await readFile(lockPath, 'utf8')) as ToolLock;
-if (lock.manifestVersion !== 1 || !Array.isArray(lock.tools)) throw new Error('unsupported tool lock manifest');
-for (const tool of lock.tools) {
-  if (!tool.id || !tool.version || !tool.license || !tool.origin || !/^[a-f0-9]{64}$/.test(tool.sha256)) throw new Error(`incomplete integrity, provenance, or license metadata for ${tool.id || 'unknown tool'}`);
-  if (tool.networkAllowed) throw new Error(`air-gapped package refuses network-enabled tool ${tool.id}`);
-  if (!tool.redistributionAllowed) throw new Error(`package refuses tool without reviewed redistribution approval: ${tool.id}`);
-  if (tool.platform !== platform) continue;
-  const relative = safeRelative(tool.relativePath);
-  const source = path.join(repository, 'tools', relative);
-  const bytes = await readFile(source);
-  if (digest(bytes) !== tool.sha256) throw new Error(`checksum mismatch for ${tool.id}`);
-  const target = path.join(output, 'tools', relative);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, bytes);
-  files.push({ id: tool.id, path: path.posix.join('tools', relative.split(path.sep).join('/')), sha256: tool.sha256, executable: true, license: tool.license });
-}
+files.push(...await stageExternalTools({ repositoryRoot: repository, outputRoot: output, lockPath, platform }));
 await cp(lockPath, path.join(output, 'tools.lock.json'));
 for (const document of [
   { id: 'project-license', target: 'LICENSE', license: 'Apache-2.0' },
@@ -65,7 +47,6 @@ main().catch((error: unknown) => {
 });
 
 function digest(bytes: Buffer): string { return createHash('sha256').update(bytes).digest('hex'); }
-function safeRelative(value: string): string { const normalized = path.normalize(value); if (path.isAbsolute(normalized) || normalized.startsWith(`..${path.sep}`) || normalized === '..') throw new Error(`unsafe tool path: ${value}`); return normalized; }
 function platformId(os: NodeJS.Platform, arch: string): string {
   const mappedOs = os === 'win32' ? 'windows' : os === 'darwin' ? 'macos' : os;
   const mappedArch = arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : arch;

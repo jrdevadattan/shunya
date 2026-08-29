@@ -76,3 +76,15 @@ Observed GREEN:
 - The generator verifies local artifact identity and recorded provenance but cannot prove the legal review occurred; `redistributionAllowed` is an explicit human approval gate, and packaging fails closed when it is absent or false.
 - The daemon does not consume the generated capability report in this change and no real forensic tool execution is claimed. Its unavailable limitations remain accurate. Generated locks are compatible with the existing verified `ToolRegistry`/`ToolRunner` execution boundary, proven only with the end-to-end fixture.
 - OS-level network sandboxing remains an external worker/platform responsibility. This change rejects every entry that declares network access and does not weaken the existing air-gapped execution policy.
+
+## Review fix round 1
+
+Commit follow-up addresses every review finding with observed RED/GREEN evidence:
+
+- **Inherited-pipe timeout:** RED showed a version-probe descendant holding stdout/stderr open beyond the 700 ms test guard (the test process lasted about five seconds). The probe now applies one deadline to child wait and both bounded drains, aborts drain tasks, requests child termination, bounds cleanup wait, and awaits task cancellation. The real descendant-inherited-pipe regression completes within the guard and returns `probe_failed`.
+- **Ancestor symlink containment:** RED resolved an executable through an ancestor symlink outside the tool root and reported `available`. Discovery now canonicalizes the root and candidate before reading or probing, requires containment, and returns `symlink_forbidden` without observed hash/version fields for an escape.
+- **Exact version match:** RED accepted expected `1.2.3` from output `fixture-tool 11.2.30`. Version matching now compares normalized complete version tokens (including an optional `v` prefix), and the near collision returns `version_mismatch`.
+- **Duplicate candidate IDs:** RED exited 2 after writing a duplicate lock/report, and a direct discovery regression showed duplicate candidates entering their probes. Catalog uniqueness is now validated before discovery or writes; duplicates exit 1 and leave both outputs absent. Direct `discover_tools` calls also mark every duplicated ID invalid before any probe. The generator additionally loads the generated manifest through `ToolRegistry` before writing it.
+- **Package stageability/off-platform validation:** RED could not import a staging boundary because staging existed only inside the packaging main program. `stageExternalTools` now behaviorally stages a non-empty verified lock, canonicalizes current-platform sources, and validates metadata, digest syntax, approval flags, duplicate IDs, and safe paths for every platform before selection. Tests prove both non-empty staging and off-platform malformed path/hash refusal. Only current-platform payload bytes can be re-hashed because other platform files are not expected on a native build host.
+
+Round verification commands and results are recorded in the final task handoff. No third-party binary was added, and the daemon capability behavior remains unchanged and truthful.

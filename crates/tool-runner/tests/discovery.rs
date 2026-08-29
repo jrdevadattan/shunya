@@ -198,9 +198,125 @@ async fn missing_license_is_invalid_metadata_and_not_manifested() {
     assert!(report.manifest.tools.is_empty());
 }
 
+#[tokio::test]
+async fn probe_timeout_covers_descendant_inherited_output_pipes() {
+    let fixture = DiscoveryFixture::new();
+    let mut candidate = fixture.candidate();
+    candidate.version_arguments = vec!["version-with-descendant".into()];
+
+    let result = tokio::time::timeout(
+        Duration::from_millis(700),
+        discover_tools(
+            &fixture.tools_root,
+            ToolDiscoveryRequest {
+                platform: current_platform().into(),
+                candidates: vec![candidate],
+                probe_timeout: Duration::from_millis(150),
+            },
+        ),
+    )
+    .await;
+
+    assert!(
+        result.is_ok(),
+        "probe drain outlived the configured timeout"
+    );
+    assert_eq!(
+        result.unwrap().capabilities[0].status,
+        DiscoveryStatus::ProbeFailed
+    );
+}
+
+#[tokio::test]
+async fn ancestor_symlink_escape_is_forbidden_before_hash_or_probe() {
+    let fixture = DiscoveryFixture::new();
+    let outside = fixture._root.path().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let outside_executable = outside.join("tool-runner-fixture");
+    std::fs::copy(
+        PathBuf::from(env!("CARGO_BIN_EXE_tool-runner-fixture")),
+        &outside_executable,
+    )
+    .unwrap();
+    create_directory_symlink(&outside, &fixture.tools_root.join("escaped"));
+    let mut candidate = fixture.candidate();
+    candidate.relative_path = PathBuf::from("escaped/tool-runner-fixture");
+    candidate.expected_sha256 = sha256(&outside_executable);
+
+    let report = fixture.discover(candidate).await;
+
+    assert_eq!(
+        report.capabilities[0].status,
+        DiscoveryStatus::SymlinkForbidden
+    );
+    assert!(report.capabilities[0].actual_sha256.is_none());
+    assert!(report.capabilities[0].detected_version.is_none());
+    assert!(report.manifest.tools.is_empty());
+}
+
+#[tokio::test]
+async fn version_near_collision_is_not_accepted() {
+    let fixture = DiscoveryFixture::new();
+    let mut candidate = fixture.candidate();
+    candidate.version_arguments = vec!["near-version".into()];
+
+    let report = fixture.discover(candidate).await;
+
+    assert_eq!(
+        report.capabilities[0].status,
+        DiscoveryStatus::VersionMismatch
+    );
+    assert_eq!(
+        report.capabilities[0].detected_version.as_deref(),
+        Some("fixture-tool 11.2.30")
+    );
+    assert!(report.manifest.tools.is_empty());
+}
+
+#[tokio::test]
+async fn duplicate_ids_are_invalid_before_any_probe() {
+    let fixture = DiscoveryFixture::new();
+    let mut first = fixture.candidate();
+    first.version_arguments = vec!["sleep".into()];
+    let second = first.clone();
+
+    let result = tokio::time::timeout(
+        Duration::from_millis(300),
+        discover_tools(
+            &fixture.tools_root,
+            ToolDiscoveryRequest {
+                platform: current_platform().into(),
+                candidates: vec![first, second],
+                probe_timeout: Duration::from_secs(5),
+            },
+        ),
+    )
+    .await;
+
+    assert!(result.is_ok(), "duplicate candidates were probed");
+    let report = result.unwrap();
+    assert!(
+        report
+            .capabilities
+            .iter()
+            .all(|capability| capability.status == DiscoveryStatus::InvalidMetadata)
+    );
+    assert!(report.manifest.tools.is_empty());
+}
+
 fn sha256(path: &Path) -> String {
     Sha256::digest(std::fs::read(path).unwrap())
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+#[cfg(unix)]
+fn create_directory_symlink(target: &Path, link: &Path) {
+    std::os::unix::fs::symlink(target, link).unwrap();
+}
+
+#[cfg(windows)]
+fn create_directory_symlink(target: &Path, link: &Path) {
+    std::os::windows::fs::symlink_dir(target, link).unwrap();
 }

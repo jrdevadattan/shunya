@@ -140,3 +140,53 @@ fn generator_fails_closed_but_records_typed_missing_capability() {
     let capabilities: Value = serde_json::from_slice(&std::fs::read(report).unwrap()).unwrap();
     assert_eq!(capabilities["capabilities"][0]["status"], "missing");
 }
+
+#[test]
+fn generator_rejects_duplicate_ids_before_writing_outputs() {
+    let root = tempdir().unwrap();
+    let tools_root = root.path().join("tools");
+    std::fs::create_dir_all(&tools_root).unwrap();
+    let candidates = root.path().join("candidates.json");
+    let manifest = root.path().join("tools.lock.json");
+    let report = root.path().join("capabilities.json");
+    let candidate = json!({
+        "id": "duplicate",
+        "version": "1.0.0",
+        "license": "test-only",
+        "origin": "test-fixture",
+        "platform": tool_runner::current_platform(),
+        "relativePath": "missing/tool",
+        "expectedSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "versionArguments": ["--version"],
+        "networkAllowed": false,
+        "redistributionAllowed": true
+    });
+    std::fs::write(
+        &candidates,
+        serde_json::to_vec_pretty(&json!({
+            "schemaVersion": 1,
+            "candidates": [candidate.clone(), candidate]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tool-manifest-generator"))
+        .args([
+            "--tools-root",
+            tools_root.to_str().unwrap(),
+            "--candidates",
+            candidates.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--report",
+            report.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("duplicate tool ID: duplicate"));
+    assert!(!manifest.exists());
+    assert!(!report.exists());
+}
