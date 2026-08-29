@@ -10,6 +10,7 @@ pub enum CheckpointStatus {
     Started,
     InProgress,
     Completed,
+    Failed,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

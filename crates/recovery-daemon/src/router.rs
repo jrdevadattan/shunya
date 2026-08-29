@@ -2,7 +2,7 @@ use carving::normalize_carved_file;
 use case_store::{AuditEventInput, CaseInput, CaseStore};
 use exporter::{ExportItem, ExportRequest, Exporter};
 use image_io::RawImageReader;
-use job_engine::{CheckpointStatus, JobEngine, JobStage};
+use job_engine::{CheckpointStatus, JobEngine, JobSnapshot, JobStage};
 use partition_scan::{PartitionScanResult, PartitionScanner};
 use recovery_domain::{
     CapabilityLevel, PreviewStatus, RecoveryArtifact, RecoveryGoal, RuntimeMode, ScanPreset,
@@ -20,11 +20,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
-use threat_scan::ThreatScanner;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use validation::{SafePreviewKind, ValidatorRegistry};
+use validation::ValidatorRegistry;
 
 const DESTINATION_RESERVE_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -94,7 +95,8 @@ struct ArtifactParams {
 struct ExportParams {
     artifact_ids: Vec<String>,
     destination_path: PathBuf,
-    destination_physical_id: String,
+    #[serde(rename = "destinationPhysicalId")]
+    _destination_physical_id: String,
     #[serde(default)]
     acknowledge_unsafe: bool,
 }
@@ -121,6 +123,41 @@ struct DaemonState {
     sources: HashMap<String, ImageSource>,
     jobs: HashMap<Uuid, PathBuf>,
     latest_job: Option<Uuid>,
+    controls: HashMap<Uuid, Arc<JobControl>>,
+}
+
+const CONTROL_RUNNING: u8 = 0;
+const CONTROL_PAUSE: u8 = 1;
+const CONTROL_CANCEL: u8 = 2;
+
+struct JobControl {
+    requested: AtomicU8,
+    checkpoint_gate: Mutex<()>,
+    worker: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl JobControl {
+    fn new() -> Self {
+        Self {
+            requested: AtomicU8::new(CONTROL_RUNNING),
+            checkpoint_gate: Mutex::new(()),
+            worker: Mutex::new(None),
+        }
+    }
+
+    fn request(&self, request: u8) {
+        self.requested.store(request, Ordering::SeqCst);
+    }
+
+    fn requested(&self) -> u8 {
+        self.requested.load(Ordering::SeqCst)
+    }
+
+    fn join(&self) {
+        if let Some(worker) = self.worker.lock().expect("worker lock").take() {
+            let _ = worker.join();
+        }
+    }
 }
 
 type RouteResult = Result<Value, (&'static str, String)>;
@@ -209,6 +246,7 @@ impl DaemonState {
         self.sources.clear();
         self.jobs.clear();
         self.latest_job = None;
+        self.controls.clear();
         Ok(result)
     }
 
@@ -220,6 +258,10 @@ impl DaemonState {
         self.sources = load_sources(&params.case_path);
         self.jobs = load_job_roots(&params.case_path);
         self.latest_job = self.jobs.keys().max().copied();
+        self.controls.clear();
+        JobEngine::open(&params.case_path)
+            .and_then(|mut engine| engine.recover_incomplete_jobs())
+            .map_err(|error| ("JOB_RECOVERY_FAILED", error.to_string()))?;
         serde_json::to_value(store.manifest())
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))
     }
@@ -307,20 +349,111 @@ impl DaemonState {
     fn job_command(&mut self, request: &RpcRequest) -> RouteResult {
         let params: JobParams = parse(request, "INVALID_JOB_INPUT")?;
         let root = self.job_root(params.job_id, params.case_path.as_deref())?;
-        if request.method == "job.start" {
-            self.run_recovery(&root, params.job_id)?;
-            return self.status_value(&root, params.job_id);
-        }
         let mut engine =
             JobEngine::open(&root).map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
-        let job = match request.method.as_str() {
-            "job.pause" => engine.pause(params.job_id),
-            "job.resume" => engine.resume(params.job_id),
-            "job.cancel" => engine.cancel(params.job_id),
+        match request.method.as_str() {
+            "job.start" => {
+                let job = engine
+                    .start(params.job_id)
+                    .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                engine
+                    .checkpoint(
+                        params.job_id,
+                        JobStage::Preflight,
+                        CheckpointStatus::InProgress,
+                        0,
+                        json!({ "phase": "source_revalidation" }),
+                    )
+                    .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                let source = self.source(&job.source_id)?.clone();
+                self.spawn_job(root.clone(), job, source);
+                self.status_value(&root, params.job_id)
+            }
+            "job.resume" => {
+                let job = engine
+                    .resume(params.job_id)
+                    .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                engine
+                    .checkpoint(
+                        params.job_id,
+                        job.stage,
+                        CheckpointStatus::InProgress,
+                        0,
+                        json!({ "phase": "resuming" }),
+                    )
+                    .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                let source = self.source(&job.source_id)?.clone();
+                self.spawn_job(root.clone(), job, source);
+                self.status_value(&root, params.job_id)
+            }
+            "job.pause" => {
+                let control = self.controls.get(&params.job_id).cloned().ok_or((
+                    "JOB_NOT_RUNNING",
+                    "The recovery job has no active worker".into(),
+                ))?;
+                control.request(CONTROL_PAUSE);
+                {
+                    let _gate = control.checkpoint_gate.lock().expect("checkpoint gate");
+                    let current = engine
+                        .snapshot(params.job_id)
+                        .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                    if !matches!(
+                        current.stage,
+                        JobStage::Completed | JobStage::Cancelled | JobStage::Failed
+                    ) {
+                        engine
+                            .pause(params.job_id)
+                            .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                    }
+                }
+                control.join();
+                self.status_value(&root, params.job_id)
+            }
+            "job.cancel" => {
+                let control = self.controls.get(&params.job_id).cloned();
+                if let Some(control) = &control {
+                    control.request(CONTROL_CANCEL);
+                    let _gate = control.checkpoint_gate.lock().expect("checkpoint gate");
+                    let current = engine
+                        .snapshot(params.job_id)
+                        .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                    if !matches!(
+                        current.stage,
+                        JobStage::Completed | JobStage::Cancelled | JobStage::Failed
+                    ) {
+                        engine
+                            .cancel(params.job_id)
+                            .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                    }
+                } else {
+                    engine
+                        .cancel(params.job_id)
+                        .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
+                }
+                if let Some(control) = control {
+                    control.join();
+                }
+                self.status_value(&root, params.job_id)
+            }
             _ => unreachable!(),
         }
-        .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
-        serde_json::to_value(job).map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))
+    }
+
+    fn spawn_job(&mut self, root: PathBuf, job: JobSnapshot, source: ImageSource) {
+        let job_id = job.job_id;
+        let control = Arc::new(JobControl::new());
+        let worker_control = Arc::clone(&control);
+        let worker_root = root.clone();
+        let worker = std::thread::spawn(move || {
+            if let Err(failure) = run_recovery_worker(&worker_root, &job, &source, &worker_control)
+            {
+                persist_worker_failure(&worker_root, job.job_id, &worker_control, failure);
+            }
+        });
+        *control.worker.lock().expect("worker lock") = Some(worker);
+        self.controls.insert(job_id, control);
+        self.jobs.insert(job_id, root);
+        self.latest_job = Some(job_id);
     }
 
     fn job_status(&self, request: &RpcRequest) -> RouteResult {
@@ -371,18 +504,19 @@ impl DaemonState {
     fn preview_artifact(&self, request: &RpcRequest) -> RouteResult {
         let params: ArtifactParams = parse(request, "INVALID_ARTIFACT_INPUT")?;
         let artifact = self.find_artifact(&params.artifact_id)?.0;
-        let kind = match artifact.mime_type.as_deref() {
-            Some("image/jpeg" | "image/png") => "sanitized_image",
-            Some("application/pdf") => "rendered_pages",
-            Some("text/plain") => "bounded_text",
-            _ => "unsupported",
-        };
+        let active_or_unsupported = is_active_or_unsupported(&artifact);
+        let (status, policy) =
+            if artifact.threat_status == ThreatStatus::PotentialThreat || active_or_unsupported {
+                (PreviewStatus::Blocked, "active_or_unsupported_content")
+            } else {
+                (PreviewStatus::Unsupported, "derivative_required")
+            };
         Ok(json!({
             "artifactId": artifact.artifact_id,
-            "status": artifact.preview_status,
-            "kind": kind,
-            "mimeType": artifact.mime_type,
-            "activeContent": false
+            "status": status,
+            "policy": policy,
+            "detectedMimeType": artifact.mime_type,
+            "derivativePath": null
         }))
     }
 
@@ -415,10 +549,12 @@ impl DaemonState {
             });
         }
         let destination = params.destination_path.clone();
+        let (source_physical_id, destination_physical_id) =
+            verified_distinct_physical_identities(&source.canonical_path, &destination)?;
         let exported = run_export(ExportRequest {
             export_root: destination.clone(),
-            source_physical_id: source.descriptor.stable_id.clone(),
-            destination_physical_id: params.destination_physical_id,
+            source_physical_id,
+            destination_physical_id,
             acknowledge_unsafe: params.acknowledge_unsafe,
             items,
         })
@@ -499,10 +635,6 @@ impl DaemonState {
             tools: vec![
                 tool_record("partition-scan-built-in"),
                 tool_record("signature-carver-built-in"),
-                ToolRecord {
-                    id: "yara-x-adapter".into(),
-                    version: "1".into(),
-                },
             ],
             method_counts,
             quality_counts,
@@ -532,151 +664,6 @@ impl DaemonState {
             "markdownPath": markdown_path,
             "limitations": limitations
         }))
-    }
-
-    fn run_recovery(&self, root: &Path, job_id: Uuid) -> RouteResult {
-        let mut engine =
-            JobEngine::open(root).map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
-        let snapshot = engine
-            .start(job_id)
-            .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
-        let source = self.source(&snapshot.source_id)?.clone();
-        let assessment = self.assessment_for(&snapshot.source_id, snapshot.preset)?;
-        if assessment.decision == Decision::Blocked {
-            checkpoint(
-                &mut engine,
-                job_id,
-                JobStage::NeedsAttention,
-                0,
-                json!({ "assessment": assessment }),
-                "PREFLIGHT_FAILED",
-            )?;
-            return self.status_value(root, job_id);
-        }
-        let source_hash = sha256_file(&source.canonical_path)
-            .map_err(|error| ("PREFLIGHT_FAILED", error.to_string()))?;
-        write_json_atomic(
-            &job_directory(root, job_id).join("source-hash.json"),
-            &source_hash,
-        )
-        .map_err(|error| ("PREFLIGHT_FAILED", error.to_string()))?;
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::Preflight,
-            source.descriptor.size_bytes,
-            json!({ "assessment": assessment, "sourceHash": source_hash }),
-            "PREFLIGHT_FAILED",
-        )?;
-
-        let partitions = scan_partitions(source.canonical_path.clone())
-            .map_err(|error| ("PARTITION_SCAN_FAILED", error))?;
-        write_json_atomic(
-            &job_directory(root, job_id).join("partitions.json"),
-            &partitions,
-        )
-        .map_err(|error| ("PARTITION_SCAN_FAILED", error.to_string()))?;
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::PartitionScan,
-            source.descriptor.size_bytes,
-            serde_json::to_value(&partitions).unwrap_or_default(),
-            "PARTITION_SCAN_FAILED",
-        )?;
-
-        let mut limitations = vec![limitation(
-            "TSK_METADATA_UNAVAILABLE",
-            JobStage::MetadataScan,
-            "Sleuth Kit metadata recovery is not available in the current verified tool catalog.",
-            "Install and verify Sleuth Kit to recover surviving original names and paths.",
-        )];
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::MetadataScan,
-            0,
-            json!({ "limitations": limitations }),
-            "METADATA_SCAN_FAILED",
-        )?;
-        if !permits_raw_carving(snapshot.goal) {
-            write_json_atomic(
-                &job_directory(root, job_id).join("limitations.json"),
-                &limitations,
-            )
-            .map_err(|error| ("JOB_COMMAND_FAILED", error.to_string()))?;
-            checkpoint(
-                &mut engine,
-                job_id,
-                JobStage::NeedsAttention,
-                0,
-                json!({ "reason": "metadata_engine_unavailable" }),
-                "JOB_COMMAND_FAILED",
-            )?;
-            return self.status_value(root, job_id);
-        }
-
-        limitations.push(limitation(
-            "PHOTOREC_UNAVAILABLE",
-            JobStage::Carving,
-            "PhotoRec is unavailable; the built-in bounded JPEG signature engine was used.",
-            "Install and verify PhotoRec for broader content-signature coverage.",
-        ));
-        write_json_atomic(
-            &job_directory(root, job_id).join("limitations.json"),
-            &limitations,
-        )
-        .map_err(|error| ("CARVING_FAILED", error.to_string()))?;
-        let mut artifacts = carve_jpegs(root, job_id, &source)?;
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::Carving,
-            source.descriptor.size_bytes,
-            json!({ "artifactCount": artifacts.len(), "limitations": limitations }),
-            "CARVING_FAILED",
-        )?;
-
-        validate_artifacts(root, &mut artifacts)?;
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::Validating,
-            artifacts.len() as u64,
-            json!({ "artifactCount": artifacts.len() }),
-            "VALIDATION_FAILED",
-        )?;
-        threat_scan_artifacts(root, &mut artifacts)?;
-        checkpoint(
-            &mut engine,
-            job_id,
-            JobStage::ThreatScan,
-            artifacts.len() as u64,
-            json!({ "artifactCount": artifacts.len() }),
-            "THREAT_SCAN_FAILED",
-        )?;
-
-        write_json_atomic(
-            &job_directory(root, job_id).join("artifacts.json"),
-            &artifacts,
-        )
-        .map_err(|error| ("INDEXING_FAILED", error.to_string()))?;
-        index_artifacts(root, job_id, &artifacts)?;
-        for stage in [
-            JobStage::Indexing,
-            JobStage::ReviewReady,
-            JobStage::Completed,
-        ] {
-            checkpoint(
-                &mut engine,
-                job_id,
-                stage,
-                artifacts.len() as u64,
-                json!({ "artifactCount": artifacts.len() }),
-                "JOB_COMMAND_FAILED",
-            )?;
-        }
-        self.status_value(root, job_id)
     }
 
     fn assessment_for(
@@ -760,18 +747,449 @@ impl DaemonState {
     }
 }
 
+struct WorkerFailure {
+    stage: JobStage,
+    code: &'static str,
+    message: String,
+    needs_attention: bool,
+}
+
+impl WorkerFailure {
+    fn attention(stage: JobStage, code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            stage,
+            code,
+            message: message.into(),
+            needs_attention: true,
+        }
+    }
+
+    fn failed(stage: JobStage, code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            stage,
+            code,
+            message: message.into(),
+            needs_attention: false,
+        }
+    }
+}
+
+fn run_recovery_worker(
+    root: &Path,
+    job: &JobSnapshot,
+    source: &ImageSource,
+    control: &JobControl,
+) -> Result<(), WorkerFailure> {
+    let mut engine = JobEngine::open(root).map_err(|error| {
+        WorkerFailure::failed(JobStage::Preflight, "JOB_OPEN_FAILED", error.to_string())
+    })?;
+    let job_id = job.job_id;
+
+    if !stage_completed(&engine, job_id, JobStage::Preflight)? {
+        if !begin_stage(&mut engine, job_id, JobStage::Preflight, control)? {
+            return Ok(());
+        }
+        let current = SourceInventory
+            .add_image(&source.canonical_path)
+            .map_err(|error| {
+                WorkerFailure::attention(
+                    JobStage::Preflight,
+                    "SOURCE_REVALIDATION_FAILED",
+                    error.to_string(),
+                )
+            })?;
+        let assessment = SafetyPolicy.assess_source(
+            SourceScenario {
+                identity_changed: current.descriptor.stable_id != source.descriptor.stable_id,
+                requires_write: false,
+                system_disk: source.descriptor.system_disk,
+                encrypted_state: source.descriptor.encrypted_state,
+                health: source.descriptor.health,
+                experimental_filesystem: false,
+                unsupported: !source.findings.is_empty(),
+            },
+            job.preset,
+            runtime_mode(),
+        );
+        if assessment.decision == Decision::Blocked {
+            return Err(WorkerFailure::attention(
+                JobStage::Preflight,
+                "SOURCE_BLOCKED",
+                "Source revalidation returned a safety block",
+            ));
+        }
+        let source_hash =
+            controlled_sha256_file(&source.canonical_path, control).map_err(|error| {
+                WorkerFailure::attention(
+                    JobStage::Preflight,
+                    "SOURCE_READ_FAILED",
+                    error.to_string(),
+                )
+            })?;
+        if control.requested() != CONTROL_RUNNING {
+            return Ok(());
+        }
+        write_json_atomic(
+            &job_directory(root, job_id).join("source-hash.json"),
+            &source_hash,
+        )
+        .map_err(|error| {
+            WorkerFailure::failed(JobStage::Preflight, "PREFLIGHT_FAILED", error.to_string())
+        })?;
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::Preflight,
+            source.descriptor.size_bytes,
+            json!({ "assessment": assessment, "sourceHash": source_hash }),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+
+    if !stage_completed(&engine, job_id, JobStage::PartitionScan)? {
+        if !begin_stage(&mut engine, job_id, JobStage::PartitionScan, control)? {
+            return Ok(());
+        }
+        let partitions = scan_partitions(source.canonical_path.clone()).map_err(|error| {
+            WorkerFailure::failed(JobStage::PartitionScan, "PARTITION_SCAN_FAILED", error)
+        })?;
+        write_json_atomic(
+            &job_directory(root, job_id).join("partitions.json"),
+            &partitions,
+        )
+        .map_err(|error| {
+            WorkerFailure::failed(
+                JobStage::PartitionScan,
+                "PARTITION_SCAN_FAILED",
+                error.to_string(),
+            )
+        })?;
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::PartitionScan,
+            source.descriptor.size_bytes,
+            serde_json::to_value(partitions).unwrap_or_default(),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+
+    let mut limitations = load_limitations(root, job_id).map_err(|(_, message)| {
+        WorkerFailure::failed(JobStage::MetadataScan, "LIMITATION_STORE_FAILED", message)
+    })?;
+    add_limitation(
+        &mut limitations,
+        limitation(
+            "TSK_METADATA_UNAVAILABLE",
+            JobStage::MetadataScan,
+            "Sleuth Kit metadata recovery is not available in the current verified tool catalog.",
+            "Install and verify Sleuth Kit to recover surviving original names and paths.",
+        ),
+    );
+    if !stage_completed(&engine, job_id, JobStage::MetadataScan)? {
+        if !begin_stage(&mut engine, job_id, JobStage::MetadataScan, control)? {
+            return Ok(());
+        }
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::MetadataScan,
+            0,
+            json!({ "limitations": limitations }),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+    if !permits_raw_carving(job.goal) {
+        write_json_atomic(
+            &job_directory(root, job_id).join("limitations.json"),
+            &limitations,
+        )
+        .map_err(|error| {
+            WorkerFailure::failed(
+                JobStage::MetadataScan,
+                "LIMITATION_STORE_FAILED",
+                error.to_string(),
+            )
+        })?;
+        return Err(WorkerFailure::attention(
+            JobStage::MetadataScan,
+            "METADATA_ENGINE_UNAVAILABLE",
+            "The selected goal requires metadata recovery",
+        ));
+    }
+
+    add_limitation(
+        &mut limitations,
+        limitation(
+            "PHOTOREC_UNAVAILABLE",
+            JobStage::Carving,
+            "PhotoRec is unavailable; the built-in bounded JPEG signature engine was used.",
+            "Install and verify PhotoRec for broader content-signature coverage.",
+        ),
+    );
+    add_limitation(
+        &mut limitations,
+        limitation(
+            "YARA_X_UNAVAILABLE",
+            JobStage::ThreatScan,
+            "YARA-X is not available in the current verified tool catalog; recovered content was not threat-scanned.",
+            "Install and verify YARA-X before relying on threat classifications.",
+        ),
+    );
+    write_json_atomic(
+        &job_directory(root, job_id).join("limitations.json"),
+        &limitations,
+    )
+    .map_err(|error| {
+        WorkerFailure::failed(
+            JobStage::Carving,
+            "LIMITATION_STORE_FAILED",
+            error.to_string(),
+        )
+    })?;
+
+    let artifacts_path = job_directory(root, job_id).join("artifacts.json");
+    let mut artifacts =
+        if stage_completed(&engine, job_id, JobStage::Carving)? && artifacts_path.exists() {
+            load_artifacts(root, job_id).map_err(|(_, message)| {
+                WorkerFailure::failed(JobStage::Carving, "ARTIFACT_STORE_FAILED", message)
+            })?
+        } else {
+            if !begin_stage(&mut engine, job_id, JobStage::Carving, control)? {
+                return Ok(());
+            }
+            let artifacts = carve_jpegs(root, job_id, source, control)?;
+            write_json_atomic(&artifacts_path, &artifacts).map_err(|error| {
+                WorkerFailure::failed(
+                    JobStage::Carving,
+                    "ARTIFACT_STORE_FAILED",
+                    error.to_string(),
+                )
+            })?;
+            if !finish_stage(
+                &mut engine,
+                job_id,
+                JobStage::Carving,
+                source.descriptor.size_bytes,
+                json!({ "artifactCount": artifacts.len(), "limitations": limitations }),
+                control,
+            )? {
+                return Ok(());
+            }
+            artifacts
+        };
+
+    if !stage_completed(&engine, job_id, JobStage::Validating)? {
+        if !begin_stage(&mut engine, job_id, JobStage::Validating, control)? {
+            return Ok(());
+        }
+        validate_artifacts(root, &mut artifacts)?;
+        write_json_atomic(&artifacts_path, &artifacts).map_err(|error| {
+            WorkerFailure::failed(
+                JobStage::Validating,
+                "ARTIFACT_STORE_FAILED",
+                error.to_string(),
+            )
+        })?;
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::Validating,
+            artifacts.len() as u64,
+            json!({ "artifactCount": artifacts.len() }),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+
+    if !stage_completed(&engine, job_id, JobStage::ThreatScan)? {
+        if !begin_stage(&mut engine, job_id, JobStage::ThreatScan, control)? {
+            return Ok(());
+        }
+        for artifact in &mut artifacts {
+            artifact.threat_status = ThreatStatus::NotScanned;
+            artifact.preview_status = PreviewStatus::Unsupported;
+        }
+        write_json_atomic(&artifacts_path, &artifacts).map_err(|error| {
+            WorkerFailure::failed(
+                JobStage::ThreatScan,
+                "ARTIFACT_STORE_FAILED",
+                error.to_string(),
+            )
+        })?;
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::ThreatScan,
+            artifacts.len() as u64,
+            json!({ "artifactCount": artifacts.len(), "limitations": limitations }),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+
+    if !stage_completed(&engine, job_id, JobStage::Indexing)? {
+        if !begin_stage(&mut engine, job_id, JobStage::Indexing, control)? {
+            return Ok(());
+        }
+        index_artifacts(root, job_id, &artifacts)?;
+        if !finish_stage(
+            &mut engine,
+            job_id,
+            JobStage::Indexing,
+            artifacts.len() as u64,
+            json!({ "artifactCount": artifacts.len() }),
+            control,
+        )? {
+            return Ok(());
+        }
+    }
+    for stage in [JobStage::ReviewReady, JobStage::Completed] {
+        if !stage_completed(&engine, job_id, stage)?
+            && (!begin_stage(&mut engine, job_id, stage, control)?
+                || !finish_stage(
+                    &mut engine,
+                    job_id,
+                    stage,
+                    artifacts.len() as u64,
+                    json!({ "artifactCount": artifacts.len() }),
+                    control,
+                )?)
+        {
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+fn begin_stage(
+    engine: &mut JobEngine,
+    job_id: Uuid,
+    stage: JobStage,
+    control: &JobControl,
+) -> Result<bool, WorkerFailure> {
+    let _gate = control.checkpoint_gate.lock().expect("checkpoint gate");
+    if control.requested() != CONTROL_RUNNING {
+        return Ok(false);
+    }
+    engine
+        .checkpoint(
+            job_id,
+            stage,
+            CheckpointStatus::InProgress,
+            0,
+            json!({ "phase": "running" }),
+        )
+        .map_err(|error| WorkerFailure::failed(stage, "CHECKPOINT_FAILED", error.to_string()))?;
+    Ok(true)
+}
+
+fn finish_stage(
+    engine: &mut JobEngine,
+    job_id: Uuid,
+    stage: JobStage,
+    progress: u64,
+    continuation: Value,
+    control: &JobControl,
+) -> Result<bool, WorkerFailure> {
+    let _gate = control.checkpoint_gate.lock().expect("checkpoint gate");
+    if control.requested() != CONTROL_RUNNING {
+        return Ok(false);
+    }
+    engine
+        .checkpoint(
+            job_id,
+            stage,
+            CheckpointStatus::Completed,
+            progress,
+            continuation,
+        )
+        .map_err(|error| WorkerFailure::failed(stage, "CHECKPOINT_FAILED", error.to_string()))?;
+    Ok(true)
+}
+
+fn stage_completed(
+    engine: &JobEngine,
+    job_id: Uuid,
+    stage: JobStage,
+) -> Result<bool, WorkerFailure> {
+    engine
+        .checkpoint_for(job_id, stage)
+        .map(|checkpoint| {
+            checkpoint.is_some_and(|value| value.status == CheckpointStatus::Completed)
+        })
+        .map_err(|error| WorkerFailure::failed(stage, "CHECKPOINT_FAILED", error.to_string()))
+}
+
+fn persist_worker_failure(root: &Path, job_id: Uuid, control: &JobControl, failure: WorkerFailure) {
+    let _gate = control.checkpoint_gate.lock().expect("checkpoint gate");
+    if control.requested() != CONTROL_RUNNING {
+        return;
+    }
+    let terminal = if failure.needs_attention {
+        JobStage::NeedsAttention
+    } else {
+        JobStage::Failed
+    };
+    if let Ok(mut engine) = JobEngine::open(root) {
+        let _ = engine.checkpoint(
+            job_id,
+            failure.stage,
+            CheckpointStatus::Failed,
+            0,
+            json!({
+                "failedStage": failure.stage,
+                "code": failure.code,
+                "message": failure.message
+            }),
+        );
+        if failure.needs_attention {
+            let _ = engine.needs_attention(job_id, failure.stage, failure.code);
+        } else {
+            let _ = engine.checkpoint(
+                job_id,
+                terminal,
+                CheckpointStatus::Failed,
+                0,
+                json!({ "failedStage": failure.stage, "code": failure.code }),
+            );
+        }
+    }
+}
+
+fn add_limitation(limitations: &mut Vec<CapabilityLimitation>, value: CapabilityLimitation) {
+    if !limitations.iter().any(|item| item.code == value.code) {
+        limitations.push(value);
+    }
+}
+
 fn carve_jpegs(
     root: &Path,
     job_id: Uuid,
     source: &ImageSource,
-) -> Result<Vec<RecoveryArtifact>, (&'static str, String)> {
-    let bytes =
-        fs::read(&source.canonical_path).map_err(|error| ("CARVING_FAILED", error.to_string()))?;
+    control: &JobControl,
+) -> Result<Vec<RecoveryArtifact>, WorkerFailure> {
+    let bytes = read_source_controlled(&source.canonical_path, control).map_err(|error| {
+        WorkerFailure::attention(JobStage::Carving, "SOURCE_READ_FAILED", error.to_string())
+    })?;
     let carved = job_directory(root, job_id).join("carved");
-    fs::create_dir_all(&carved).map_err(|error| ("CARVING_FAILED", error.to_string()))?;
+    fs::create_dir_all(&carved).map_err(|error| {
+        WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
+    })?;
     let mut artifacts = Vec::new();
     let mut cursor = 0;
     while cursor + 3 <= bytes.len() {
+        if control.requested() != CONTROL_RUNNING {
+            break;
+        }
         let Some(relative_start) = bytes[cursor..]
             .windows(3)
             .position(|window| window == [0xff, 0xd8, 0xff])
@@ -787,16 +1205,20 @@ fn carve_jpegs(
         };
         let end = start + 3 + relative_end + 2;
         let path = carved.join(format!("f{:07}.jpg", artifacts.len() + 1));
-        fs::write(&path, &bytes[start..end])
-            .map_err(|error| ("CARVING_FAILED", error.to_string()))?;
+        fs::write(&path, &bytes[start..end]).map_err(|error| {
+            WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
+        })?;
         let mut artifact = normalize_carved_file(&source.descriptor.source_id, &path, "jpeg")
-            .map_err(|error| ("CARVING_FAILED", error.to_string()))?;
+            .map_err(|error| {
+                WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
+            })?;
         artifact.source_ranges = vec![SourceRange {
             offset: start as u64,
             length: (end - start) as u64,
         }];
-        fs::copy(&path, artifact_payload_path(root, &artifact))
-            .map_err(|error| ("CARVING_FAILED", error.to_string()))?;
+        fs::copy(&path, artifact_payload_path(root, &artifact)).map_err(|error| {
+            WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
+        })?;
         artifacts.push(artifact);
         cursor = end;
     }
@@ -806,36 +1228,16 @@ fn carve_jpegs(
 fn validate_artifacts(
     root: &Path,
     artifacts: &mut [RecoveryArtifact],
-) -> Result<(), (&'static str, String)> {
+) -> Result<(), WorkerFailure> {
     for artifact in artifacts {
         let outcome = ValidatorRegistry::default()
             .validate(&artifact_payload_path(root, artifact), Default::default())
-            .map_err(|error| ("VALIDATION_FAILED", error.to_string()))?;
+            .map_err(|error| {
+                WorkerFailure::failed(JobStage::Validating, "VALIDATION_FAILED", error.to_string())
+            })?;
         artifact.recovery_state = outcome.state;
         artifact.mime_type = outcome.detected_type;
-        artifact.preview_status = match outcome.safe_preview_kind {
-            SafePreviewKind::SanitizedImage
-            | SafePreviewKind::PdfPages
-            | SafePreviewKind::BoundedText => PreviewStatus::SafePreview,
-            SafePreviewKind::MetadataOnly => PreviewStatus::Unsupported,
-            SafePreviewKind::Blocked => PreviewStatus::Blocked,
-        };
-    }
-    Ok(())
-}
-
-fn threat_scan_artifacts(
-    root: &Path,
-    artifacts: &mut [RecoveryArtifact],
-) -> Result<(), (&'static str, String)> {
-    for artifact in artifacts {
-        let outcome = ThreatScanner::default()
-            .scan(&artifact_payload_path(root, artifact))
-            .map_err(|error| ("THREAT_SCAN_FAILED", error.to_string()))?;
-        artifact.threat_status = outcome.status;
-        if outcome.status == ThreatStatus::PotentialThreat {
-            artifact.preview_status = PreviewStatus::Blocked;
-        }
+        artifact.preview_status = PreviewStatus::Unsupported;
     }
     Ok(())
 }
@@ -844,9 +1246,11 @@ fn index_artifacts(
     root: &Path,
     job_id: Uuid,
     artifacts: &[RecoveryArtifact],
-) -> Result<(), (&'static str, String)> {
+) -> Result<(), WorkerFailure> {
     let mut index = ArtifactIndex::open(&job_directory(root, job_id).join("results.sqlite"))
-        .map_err(|error| ("INDEXING_FAILED", error.to_string()))?;
+        .map_err(|error| {
+            WorkerFailure::failed(JobStage::Indexing, "INDEXING_FAILED", error.to_string())
+        })?;
     let rows = artifacts
         .iter()
         .map(|artifact| ArtifactRow {
@@ -861,9 +1265,9 @@ fn index_artifacts(
             partition_id: artifact.partition_id.clone(),
         })
         .collect::<Vec<_>>();
-    index
-        .insert_batch(&rows)
-        .map_err(|error| ("INDEXING_FAILED", error.to_string()))
+    index.insert_batch(&rows).map_err(|error| {
+        WorkerFailure::failed(JobStage::Indexing, "INDEXING_FAILED", error.to_string())
+    })
 }
 
 fn scan_partitions(path: PathBuf) -> Result<PartitionScanResult, String> {
@@ -901,26 +1305,6 @@ fn run_export(request: ExportRequest) -> Result<Vec<exporter::ExportVerification
     })
     .join()
     .map_err(|_| "export worker panicked".to_owned())?
-}
-
-fn checkpoint(
-    engine: &mut JobEngine,
-    job_id: Uuid,
-    stage: JobStage,
-    progress: u64,
-    continuation: Value,
-    code: &'static str,
-) -> Result<(), (&'static str, String)> {
-    engine
-        .checkpoint(
-            job_id,
-            stage,
-            CheckpointStatus::Completed,
-            progress,
-            continuation,
-        )
-        .map(|_| ())
-        .map_err(|error| (code, error.to_string()))
 }
 
 fn load_sources(root: &Path) -> HashMap<String, ImageSource> {
@@ -1063,6 +1447,145 @@ fn sha256_file(path: &Path) -> std::io::Result<String> {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect())
+}
+
+fn controlled_sha256_file(path: &Path, control: &JobControl) -> std::io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        if control.requested() != CONTROL_RUNNING {
+            return Ok(String::new());
+        }
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+fn read_source_controlled(path: &Path, control: &JobControl) -> std::io::Result<Vec<u8>> {
+    let mut file = fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        if control.requested() != CONTROL_RUNNING {
+            break;
+        }
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..read]);
+    }
+    Ok(bytes)
+}
+
+fn is_active_or_unsupported(artifact: &RecoveryArtifact) -> bool {
+    let active_extension = matches!(
+        artifact
+            .extension
+            .as_deref()
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some(
+            "exe"
+                | "dll"
+                | "com"
+                | "bat"
+                | "cmd"
+                | "ps1"
+                | "sh"
+                | "js"
+                | "html"
+                | "htm"
+                | "jar"
+                | "msi"
+        )
+    );
+    let passive_preview_input = matches!(
+        artifact.mime_type.as_deref(),
+        Some("image/jpeg" | "image/png" | "application/pdf" | "text/plain")
+    );
+    active_extension || !passive_preview_input
+}
+
+fn verified_distinct_physical_identities(
+    source: &Path,
+    destination: &Path,
+) -> Result<(String, String), (&'static str, String)> {
+    let source_filesystem = filesystem_identity(source)
+        .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+    let destination_filesystem = filesystem_identity(destination)
+        .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+    if source_filesystem == destination_filesystem {
+        return Err((
+            "EXPORT_DESTINATION_NOT_SEPARATE",
+            "The daemon resolved the source and destination to the same filesystem device".into(),
+        ));
+    }
+    Err((
+        "EXPORT_DESTINATION_UNVERIFIED",
+        "The daemon resolved different filesystem volumes but cannot prove that they are on separate physical devices"
+            .into(),
+    ))
+}
+
+fn filesystem_identity(path: &Path) -> std::io::Result<String> {
+    let existing = existing_ancestor(path)?;
+    filesystem_identity_for_existing(&existing)
+}
+
+fn existing_ancestor(path: &Path) -> std::io::Result<PathBuf> {
+    let mut candidate = path.to_path_buf();
+    while !candidate.exists() {
+        if !candidate.pop() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "no existing ancestor for destination",
+            ));
+        }
+    }
+    fs::canonicalize(candidate)
+}
+
+#[cfg(windows)]
+fn filesystem_identity_for_existing(path: &Path) -> std::io::Result<String> {
+    use std::path::{Component, Prefix};
+
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(letter) | Prefix::VerbatimDisk(letter) => Ok(format!(
+                "windows-volume:{}",
+                (letter as char).to_ascii_uppercase()
+            )),
+            _ => Err(std::io::Error::other(
+                "destination volume identity is not locally provable",
+            )),
+        },
+        _ => Err(std::io::Error::other(
+            "destination volume identity is not locally provable",
+        )),
+    }
+}
+
+#[cfg(unix)]
+fn filesystem_identity_for_existing(path: &Path) -> std::io::Result<String> {
+    use std::os::unix::fs::MetadataExt;
+    Ok(format!("unix-device:{}", fs::metadata(path)?.dev()))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn filesystem_identity_for_existing(_path: &Path) -> std::io::Result<String> {
+    Err(std::io::Error::other(
+        "filesystem identity is not supported on this platform",
+    ))
 }
 
 fn write_json_atomic(path: &Path, value: &impl Serialize) -> std::io::Result<()> {

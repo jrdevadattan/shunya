@@ -135,6 +135,16 @@ impl JobEngine {
         self.transition(job_id, resume_stage, "Recovery job resumed")
     }
 
+    pub fn needs_attention(
+        &mut self,
+        job_id: Uuid,
+        resume_stage: JobStage,
+        message: &str,
+    ) -> Result<JobSnapshot, JobEngineError> {
+        self.set_resume_stage(job_id, resume_stage)?;
+        self.transition(job_id, JobStage::NeedsAttention, message)
+    }
+
     pub fn cancel(&mut self, job_id: Uuid) -> Result<JobSnapshot, JobEngineError> {
         self.transition(job_id, JobStage::Cancelling, "Cancellation requested")?;
         self.transition(job_id, JobStage::Cancelled, "Recovery job cancelled")
@@ -210,7 +220,8 @@ impl JobEngine {
         let candidates = {
             let mut statement = self.connection.prepare(
                 "SELECT j.job_id, c.stage FROM jobs j JOIN job_checkpoints c ON c.job_id=j.job_id
-                 WHERE c.status IN ('started', 'in_progress') AND j.stage NOT IN ('completed', 'cancelled', 'failed')
+                 WHERE c.status IN ('started', 'in_progress')
+                   AND j.stage NOT IN ('paused', 'needs_attention', 'completed', 'cancelled', 'failed')
                  ORDER BY c.updated_at DESC",
             )?;
             let rows = statement.query_map([], |row| {

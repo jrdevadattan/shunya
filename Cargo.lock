@@ -591,7 +591,6 @@ dependencies = [
  "sha2",
  "source-inventory",
  "tempfile",
- "threat-scan",
  "tokio",
  "tokio-util",
  "uuid",
