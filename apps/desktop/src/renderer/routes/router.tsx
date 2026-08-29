@@ -4,6 +4,8 @@ import { NewCasePage } from './NewCasePage.js';
 import { WelcomePage } from './WelcomePage.js';
 import { JobProgressPage } from '../features/jobs/JobProgressPage.js';
 import { AddSourcePage } from '../features/sources/AddSourcePage.js';
+import { SourceAssessmentPage } from '../features/sources/SourceAssessmentPage.js';
+import { DestinationPage } from '../features/recovery/DestinationPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -16,6 +18,8 @@ export const router = createHashRouter([
       { index: true, element: <Navigate to="overview" replace /> },
       { path: 'overview', element: <RoutePlaceholder title="Case overview" description="Add a source to begin recovery." /> },
       { path: 'sources', element: <AddSourcePage /> },
+      { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
+      { path: 'recovery/destination', element: <DestinationPage /> },
       { path: 'jobs', element: <JobProgressPage /> },
       { path: 'results', element: <RoutePlaceholder title="Recovered files" description="Search, preview, verify, and select recovered files." /> },
       { path: 'memory', element: <RoutePlaceholder title="Memory analysis" description="Analyze supported volatile-memory images." /> },
