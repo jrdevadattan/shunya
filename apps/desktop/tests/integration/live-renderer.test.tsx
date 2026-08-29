@@ -15,6 +15,8 @@ import { MemoryResultsPage } from '../../src/renderer/features/memory/MemoryResu
 import { CaseLayout } from '../../src/renderer/routes/CaseLayout.js';
 import { ScanOptionsPage } from '../../src/renderer/features/recovery/ScanOptionsPage.js';
 import { CaseOverviewPage } from '../../src/renderer/routes/CaseOverviewPage.js';
+import { WorkflowFrame } from '../../src/renderer/components/WorkflowFrame.js';
+import { CapabilityBanner } from '@recovery/ui';
 
 const createdAt = '2026-08-29T12:00:00Z';
 const source = {
@@ -133,6 +135,29 @@ afterEach(() => {
 });
 
 describe('live renderer pages', () => {
+  it('renders a semantic recovery workflow frame with current and completed steps', async () => {
+    await renderRoute(
+      <WorkflowFrame
+        eyebrow="Source"
+        title="Assess evidence"
+        description="Review safety findings."
+        steps={[
+          { id: 'source', label: 'Source', state: 'complete' },
+          { id: 'assessment', label: 'Assessment', state: 'current' },
+        ]}
+        aside={<CapabilityBanner level="warning" title="Mounted source" explanation="Use a read-only image." />}
+      >
+        <p>Assessment content</p>
+      </WorkflowFrame>,
+      '/cases/case-live/sources',
+      '/cases/:caseId/sources',
+    );
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Assessment');
+    expect(container?.textContent).toContain('Complete');
+    expect(container?.querySelector('section[aria-labelledby]')).toBeTruthy();
+    expect(await findText('Mounted source')).toBeTruthy();
+  });
+
   it('opens the persisted case and renders the daemon case title', async () => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<p>Overview loaded</p>} /></Route></Routes></MemoryRouter>));

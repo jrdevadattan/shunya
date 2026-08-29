@@ -1,8 +1,9 @@
 import { RuntimeInfoSchema, SourceAssessmentSchema, SourceDescriptorSchema, type RuntimeMode, type SourceAssessment, type SourceDescriptor } from '@recovery/contracts';
-import { RuntimeModeBadge } from '@recovery/ui';
+import { CapabilityBanner, RuntimeModeBadge } from '@recovery/ui';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AssessmentFinding } from './AssessmentFinding.js';
+import { WorkflowFrame } from '../../components/WorkflowFrame.js';
 
 export function SourceAssessmentPage() {
   const { caseId = '', sourceId = '' } = useParams();
@@ -25,7 +26,18 @@ export function SourceAssessmentPage() {
       .catch(() => undefined);
     return () => { active = false; };
   }, [sourceId]);
-  return <section className="assessment-page"><header><p className="eyebrow">Source assessment</p><h1>{source?.displayName ?? 'Source safety assessment'}</h1><div className="assessment-meta"><span>Read-only analysis</span><RuntimeModeBadge mode={runtimeMode} /></div></header>{error ? <p className="form-error" role="alert">{error}</p> : null}{!assessment && !error ? <p role="status">Assessing source…</p> : null}{assessment?.findings.map((finding) => <AssessmentFinding key={finding.code} finding={finding} />)}{assessment && assessment.decision !== 'blocked' ? <Link className="button button--primary" to={`/cases/${caseId}/recovery/goal`}>Choose recovery goal</Link> : null}</section>;
+  return <WorkflowFrame
+    eyebrow="Source assessment"
+    title={source?.displayName ?? 'Source safety assessment'}
+    description="Review the daemon's safety findings before configuring recovery."
+    steps={[{ id: 'source', label: 'Source', state: 'complete' }, { id: 'assessment', label: 'Assessment', state: 'current' }, { id: 'recovery', label: 'Recovery setup', state: 'upcoming' }]}
+    aside={<><RuntimeModeBadge mode={runtimeMode} /><CapabilityBanner level="info" title="Read-only analysis" explanation="The source is assessed without changing its contents." /></>}
+    actions={assessment && assessment.decision !== 'blocked' ? <Link className="button button--primary" to={`/cases/${caseId}/recovery/goal`}>Choose recovery goal</Link> : null}
+  >
+    {error ? <p className="form-error" role="alert">{error}</p> : null}
+    {!assessment && !error ? <p role="status">Assessing source…</p> : null}
+    <div className="finding-list">{assessment?.findings.map((finding) => <AssessmentFinding key={finding.code} finding={finding} />)}</div>
+  </WorkflowFrame>;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Source assessment failed.'; }
