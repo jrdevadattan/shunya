@@ -7,6 +7,7 @@ require_file() { test -f "$1" || { echo "missing required live file: $1" >&2; ex
 require_text() { grep -F "$2" "$1" >/dev/null || { echo "missing '$2' in $1" >&2; exit 1; }; }
 
 require_file "$LIVE/auto/config"
+require_text "$LIVE/auto/config" 'lb config noauto'
 require_file "$LIVE/config/package-lists/recovery.list.chroot"
 require_file "$LIVE/config/includes.chroot/etc/fstab"
 require_file "$LIVE/config/includes.chroot/etc/udev/rules.d/99-recovery-no-automount.rules"
