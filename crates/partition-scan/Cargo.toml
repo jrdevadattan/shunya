@@ -1,0 +1,14 @@
+[package]
+name = "partition-scan"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+image-io = { path = "../image-io" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tokio.workspace = true
