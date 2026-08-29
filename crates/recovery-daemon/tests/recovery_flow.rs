@@ -390,6 +390,12 @@ fn case_switch_is_refused_while_worker_runs_and_cancel_stays_controlled() {
     .unwrap();
 
     daemon.rpc("job.start", json!({ "jobId": job_id }));
+    let reopened = daemon.rpc("case.open", json!({ "casePath": case_path }));
+    assert_eq!(reopened["title"], "Controlled recovery job");
+    assert_ne!(
+        daemon.rpc("job.status", json!({ "jobId": job_id }))["stage"],
+        "completed"
+    );
     let open_error = daemon.rpc_error("case.open", json!({ "casePath": secondary_path }));
     assert_eq!(open_error["code"], "CASE_BUSY");
     let create_error = daemon.rpc_error(

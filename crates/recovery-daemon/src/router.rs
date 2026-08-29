@@ -261,6 +261,14 @@ impl DaemonState {
 
     fn open_case(&mut self, request: &RpcRequest) -> RouteResult {
         let params: OpenCaseParams = parse(request, "INVALID_CASE_INPUT")?;
+        if self.current_case.as_deref() == Some(params.case_path.as_path())
+            && self.controls.values().any(|control| control.is_active())
+        {
+            let store = CaseStore::open(&params.case_path)
+                .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))?;
+            return serde_json::to_value(store.manifest())
+                .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()));
+        }
         self.ensure_case_switch_allowed()?;
         let store = CaseStore::open(&params.case_path)
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))?;
