@@ -13,7 +13,7 @@ export function ArtifactDetailsPanel({ artifact, preview, previewError }: { arti
       <li><ShieldCheck aria-hidden="true" /><span><strong>{threatLabel(artifact.threatStatus)}</strong><small>A no-rule-match result is classification evidence, not proof of safety.</small></span></li>
       <li><Fingerprint aria-hidden="true" /><span><strong>{artifact.sha256 ? 'SHA-256 recorded' : 'SHA-256 unavailable'}</strong><small className="artifact-evidence__hash">{artifact.sha256 ?? 'No indexed digest was returned.'}</small></span></li>
     </ul></section>
-    <details className="artifact-ranges"><summary><FileQuestion aria-hidden="true" />Source byte ranges ({artifact.sourceRanges.length})</summary>{artifact.sourceRanges.length ? <ol>{artifact.sourceRanges.map((range, index) => <li key={`${range.offset}:${range.length}:${index}`}>Offset {formatInteger(range.offset)} · {formatInteger(range.length)} bytes</li>)}</ol> : <p>No source range evidence was returned.</p>}</details>
+    <details className="artifact-ranges" open><summary><FileQuestion aria-hidden="true" />Source byte ranges ({artifact.sourceRanges.length})</summary>{artifact.sourceRanges.length ? <ol>{artifact.sourceRanges.map((range, index) => <li key={`${range.offset}:${range.length}:${index}`}>Offset {formatInteger(range.offset)} · {formatInteger(range.length)} bytes</li>)}</ol> : <p>No source range evidence was returned.</p>}</details>
   </aside>;
 }
 

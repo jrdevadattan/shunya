@@ -40,6 +40,19 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/jobs`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Recovery completed' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/recovered content was not threat-scanned/i)).toBeVisible();
+    await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/activity`; }, context.caseId);
+    await expect(page.getByRole('heading', { name: 'Case activity' })).toBeVisible();
+    await page.setViewportSize({ width: 1427, height: 894 });
+    const beforeScroll = await page.evaluate(() => ({
+      sidebarTop: document.querySelector('.app-shell__sidebar')?.getBoundingClientRect().top,
+      headerTop: document.querySelector('.app-shell__header')?.getBoundingClientRect().top,
+    }));
+    await page.locator('.app-shell__content').evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    const afterScroll = await page.evaluate(() => ({
+      sidebarTop: document.querySelector('.app-shell__sidebar')?.getBoundingClientRect().top,
+      headerTop: document.querySelector('.app-shell__header')?.getBoundingClientRect().top,
+    }));
+    expect(afterScroll).toEqual(beforeScroll);
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/results`; }, context.caseId);
     const preloadPage = await page.evaluate(() => window.recoveryApi.queryArtifacts({ pageSize: 100 }));
     const sessionState = await page.evaluate(() => Object.fromEntries(Object.entries(sessionStorage)));
@@ -49,6 +62,19 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     expect(Object.keys(sessionState)).toContainEqual(expect.stringMatching(/:jobId$/));
     expect(dom).toContain('Recovered JPEG 0000001');
     await expect(page.getByText(/Recovered JPEG 0000001/).first()).toBeVisible();
+    await page.setViewportSize({ width: 1427, height: 894 });
+    const artifactRow = page.locator('.artifact-table tbody tr').first();
+    const artifactLayout = await artifactRow.evaluate((row) => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      return {
+        display: getComputedStyle(row).display,
+        nameWidth: cells[1]?.getBoundingClientRect().width ?? 0,
+        conditionWidth: cells[5]?.getBoundingClientRect().width ?? 0,
+      };
+    });
+    expect(artifactLayout.display).toBe('table-row');
+    expect(artifactLayout.nameWidth).toBeGreaterThanOrEqual(170);
+    expect(artifactLayout.conditionWidth).toBeGreaterThanOrEqual(90);
     await expect(page.getByText(/Preview derivative is unavailable/i)).toBeVisible();
     await expect(page.getByText(/not scanned/i)).toBeVisible();
     await page.getByRole('button', { name: 'Load more results' }).click();

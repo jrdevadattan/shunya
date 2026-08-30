@@ -1,10 +1,10 @@
 import { JobStatusSchema, type JobStatus } from '@recovery/contracts';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { activeJobId } from '../../application-state.js';
 import { CapabilityBanner } from '@recovery/ui';
 import { WorkflowFrame } from '../../components/WorkflowFrame.js';
-import { Database, HardDrive, LockKeyhole, ScanSearch } from 'lucide-react';
+import { ArrowRight, Database, HardDrive, LockKeyhole, ScanSearch } from 'lucide-react';
 
 export function PartitionList() {
   const { caseId = '' } = useParams();
@@ -42,11 +42,12 @@ export function PartitionList() {
     {status && !result ? <p>Partition discovery has not completed.</p> : null}
     {result ? <div className="partition-discovery">
       <PartitionMap result={result} />
+      {result.partitions.length === 0 && result.candidates.length === 0 ? <section className="partition-empty" aria-labelledby="partition-empty-title"><ScanSearch aria-hidden="true" /><div><h2 id="partition-empty-title">No partition structures were detected</h2><p>Recovery continues across the source bytes using the selected full-scan strategy. Nothing needs to be selected here.</p></div><Link className="button button--primary button--icon" to={`/cases/${caseId}/activity`}>View recovery activity<ArrowRight aria-hidden="true" /></Link></section> : <>
       <div className="partition-discovery__workspace">
         <section className="partition-tree-card" aria-labelledby="partition-tree-title"><header><div><h2 id="partition-tree-title">Detected structures</h2><p>Exact daemon partition records and candidate layouts, grouped beneath the recovery source.</p></div><Database aria-hidden="true" /></header><ul aria-label="Detected partition tree"><li><span className="partition-tree__source"><HardDrive aria-hidden="true" /><span><strong>Recovery source</strong><small>{result.partitions.length} reported partition{result.partitions.length === 1 ? '' : 's'} · {result.candidates.length} candidate layout{result.candidates.length === 1 ? '' : 's'}</small></span></span><ul>{result.partitions.map((partition) => <li key={partition.partitionId}><span><span className="partition-swatch" aria-hidden="true" /><span><strong>{partition.label ?? partition.partitionId}</strong><small>Reported partition · {partition.filesystem ?? partition.partitionType} · {formatBytes(partition.lengthBytes)}</small></span></span></li>)}{result.candidates.map((candidate) => <li key={`${candidate.startOffsetBytes}:${candidate.source}`}><span><span className="partition-swatch partition-swatch--candidate" aria-hidden="true" /><span><strong>{candidateLabel(candidate.filesystem)}</strong><small>{candidate.confidence} confidence · starts at byte {formatInteger(candidate.startOffsetBytes)} · {candidate.source}</small></span></span></li>)}</ul></li></ul></section>
         <section className="partition-scope" aria-labelledby="partition-scope-title"><ScanSearch aria-hidden="true" /><div><h2 id="partition-scope-title">Scan scope is fixed</h2><p>The typed recovery job API does not accept partition selections. The running job controls discovery and recovery scope.</p></div><button className="button button--secondary" type="button" disabled title="Partition selection is unavailable">Choose partition scan scope</button></section>
       </div>
-      <div className="table-scroll partition-details"><table><caption>Daemon partition details</caption><thead><tr><th>Name</th><th>Filesystem</th><th>Start offset (bytes)</th><th>Length (bytes)</th></tr></thead><tbody>{result.partitions.map((partition) => <tr key={partition.partitionId}><td>{partition.label ?? partition.partitionId}</td><td>{partition.filesystem ?? partition.partitionType}</td><td>{partition.startOffsetBytes}</td><td>{partition.lengthBytes}</td></tr>)}</tbody></table>{result.candidates.map((candidate) => <p key={`${candidate.startOffsetBytes}:${candidate.source}`}>Candidate {candidate.filesystem ?? 'unknown filesystem'} at {candidate.startOffsetBytes} bytes · {candidate.confidence}</p>)}</div>
+      <div className="table-scroll partition-details"><table><caption>Daemon partition details</caption><thead><tr><th>Name</th><th>Filesystem</th><th>Start offset (bytes)</th><th>Length (bytes)</th></tr></thead><tbody>{result.partitions.map((partition) => <tr key={partition.partitionId}><td>{partition.label ?? partition.partitionId}</td><td>{partition.filesystem ?? partition.partitionType}</td><td>{partition.startOffsetBytes}</td><td>{partition.lengthBytes}</td></tr>)}</tbody></table>{result.candidates.map((candidate) => <p key={`${candidate.startOffsetBytes}:${candidate.source}`}>Candidate {candidate.filesystem ?? 'unknown filesystem'} at {candidate.startOffsetBytes} bytes · {candidate.confidence}</p>)}</div></>}
       <div className="workflow-truth workflow-truth--safe"><LockKeyhole aria-hidden="true" /><span><strong>Source remains read-only</strong><small>Nothing on this screen can write a partition table.</small></span></div>
     </div> : null}
   </WorkflowFrame>;

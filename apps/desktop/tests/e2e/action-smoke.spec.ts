@@ -80,9 +80,10 @@ test('packaged open/reopen, case sidebar, and source actions are frontmost and r
         { canceled: true, filePaths: [], bookmarks: [] },
         { canceled: false, filePaths: [paths.invalidWorkspace], bookmarks: [] },
         { canceled: false, filePaths: [paths.workspace], bookmarks: [] },
+        { canceled: false, filePaths: [paths.imagePath], bookmarks: [] },
       ];
       dialog.showOpenDialog = async () => responses.shift() ?? { canceled: true, filePaths: [], bookmarks: [] };
-    }, { workspace, invalidWorkspace });
+    }, { workspace, invalidWorkspace, imagePath });
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); window.location.hash = '#/'; });
 
     await clickAndExpectHash(page, page.getByRole('link', { name: 'Open existing case' }), /#\/cases\/open$/);
@@ -114,7 +115,8 @@ test('packaged open/reopen, case sidebar, and source actions are frontmost and r
     const refresh = page.getByRole('button', { name: 'Refresh' });
     await expectFrontmost(refresh);
     await refresh.click();
-    await page.getByLabel('Disk image path').fill(imagePath);
+    await page.getByRole('button', { name: 'Choose image file' }).click();
+    await expect(page.getByLabel('Disk image path')).toHaveValue(imagePath);
     const addImage = page.getByRole('button', { name: 'Add image source' });
     await expectFrontmost(addImage);
     await addImage.click();

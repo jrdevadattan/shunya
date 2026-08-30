@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 const showOpenDialog = vi.fn();
+const showItemInFolder = vi.fn();
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => handlers.set(channel, handler)) },
   BrowserWindow: { fromWebContents: vi.fn(() => null) },
   dialog: { showOpenDialog },
+  shell: { showItemInFolder },
 }));
 vi.mock('../../src/main/security.js', () => ({ validateIpcSender: vi.fn() }));
 
@@ -17,6 +19,7 @@ describe('main IPC schema boundary', () => {
 
   afterEach(() => {
     showOpenDialog.mockReset();
+    showItemInFolder.mockReset();
   });
 
   it('rejects malformed renderer params before the daemon request', async () => {
@@ -69,6 +72,59 @@ describe('main IPC schema boundary', () => {
     registerIpcHandlers();
 
     await expect(handlers.get('dialog.choose_workspace')?.({ sender: {} }, {})).resolves.toBeNull();
+  });
+
+  it('returns only the folder selected by the native export destination dialog', async () => {
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['E:/verified-export'] });
+    const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
+    registerIpcHandlers();
+
+    await expect(handlers.get('dialog.choose_export')?.({ sender: {} }, {})).resolves.toBe('E:/verified-export');
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Choose export destination',
+      buttonLabel: 'Select export folder',
+      properties: ['openDirectory', 'createDirectory'],
+    }));
+  });
+
+  it('returns only the evidence image selected by the native file dialog', async () => {
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['E:/evidence/demo.raw'] });
+    const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
+    registerIpcHandlers();
+
+    await expect(handlers.get('dialog.choose_source_image')?.({ sender: {} }, {})).resolves.toBe('E:/evidence/demo.raw');
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Choose a disk or memory image',
+      buttonLabel: 'Select image',
+      properties: ['openFile'],
+      filters: expect.arrayContaining([
+        expect.objectContaining({ name: 'Evidence images' }),
+        expect.objectContaining({ name: 'All files', extensions: ['*'] }),
+      ]),
+    }));
+  });
+
+  it('reveals a daemon-generated report without launching the report file', async () => {
+    const reportPath = 'D:/case/case-live-recovery-report.json';
+    const request = vi.fn().mockResolvedValue({
+      caseId: 'case-live', jsonPath: reportPath, markdownPath: 'D:/case/case-live-recovery-report.md', limitations: [],
+    });
+    const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
+    registerIpcHandlers({ request } as never);
+    await handlers.get('report.generate')?.({ sender: {} }, { caseId: 'case-live' });
+
+    await expect(handlers.get('report.reveal')?.({ sender: {} }, { reportPath })).resolves.toEqual({ revealed: true });
+    expect(showItemInFolder).toHaveBeenCalledWith(reportPath);
+  });
+
+  it('refuses report reveal paths that were not returned by report generation', async () => {
+    const { registerIpcHandlers } = await import('../../src/main/ipc-handlers.js');
+    registerIpcHandlers({ request: vi.fn() } as never);
+
+    await expect(handlers.get('report.reveal')?.({ sender: {} }, {
+      reportPath: 'C:/Users/example/secrets.json',
+    })).rejects.toThrow('REPORT_PATH_NOT_GENERATED');
+    expect(showItemInFolder).not.toHaveBeenCalled();
   });
 
   it('bounds dialog-scoped directory traversal by depth and total entry count', async () => {

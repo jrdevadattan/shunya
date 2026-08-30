@@ -59,6 +59,8 @@ export const WorkspaceSelectionSchema = z.object({
   }
 });
 export const WorkspaceFolderResultSchema = WorkspaceSelectionSchema.nullable();
+export const ExportFolderResultSchema = z.string().min(1).nullable();
+export const SourceImageResultSchema = z.string().min(1).nullable();
 export const SourceAssessmentSchema = z.object({
   sourceId: z.string().min(1),
   decision: z.enum(['ready', 'warning', 'blocked']),
@@ -141,6 +143,8 @@ export const JobParamsSchema = z.object({ jobId: z.string().min(1) }).strict();
 export const JobEventsParamsSchema = JobParamsSchema.extend({ afterSequence: z.number().int().nonnegative() }).strict();
 export const ArtifactParamsSchema = z.object({ artifactId: z.string().min(1) }).strict();
 export const ReportParamsSchema = z.object({ caseId: z.string().min(1) }).strict();
+export const ReportRevealParamsSchema = z.object({ reportPath: z.string().min(1) }).strict();
+export const ReportRevealResultSchema = z.object({ revealed: z.literal(true) }).strict();
 export type CreateCaseInput = z.infer<typeof CreateCaseInputSchema>;
 export type AddImageSourceInput = z.infer<typeof AddImageSourceInputSchema>;
 export type CreateRecoveryJobInput = z.infer<typeof CreateRecoveryJobInputSchema>;
@@ -163,6 +167,8 @@ export type CaseState = z.infer<typeof CaseStateSchema>;
 export interface RecoveryDesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
   chooseWorkspaceFolder(): Promise<WorkspaceSelection | null>;
+  chooseExportFolder(): Promise<string | null>;
+  chooseSourceImage(): Promise<string | null>;
   createCase(input: CreateCaseInput): Promise<z.infer<typeof RecoveryCaseSchema>>;
   openCase(casePath: string): Promise<z.infer<typeof RecoveryCaseSchema>>;
   getCaseState(): Promise<CaseState>;
@@ -181,6 +187,7 @@ export interface RecoveryDesktopApi {
   requestPreview(artifactId: string): Promise<PreviewDescriptor>;
   exportArtifacts(input: ExportArtifactsInput): Promise<ExportJob>;
   generateReport(caseId: string): Promise<ReportDescriptor>;
+  revealReportInFolder(reportPath: string): Promise<void>;
   subscribeJobEvents(listener: (event: z.infer<typeof JobEventSchema>) => void): () => void;
 }
 

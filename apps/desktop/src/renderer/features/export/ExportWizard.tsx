@@ -1,5 +1,5 @@
 import { ArtifactPageSchema, ExportJobSchema, type ExportJob, type RecoveryArtifact } from '@recovery/contracts';
-import { ArrowRight, CheckCircle2, CheckSquare2, File, FolderLock, HardDrive, LoaderCircle, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CheckCircle2, CheckSquare2, File, FolderLock, FolderOpen, HardDrive, LoaderCircle, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -20,6 +20,8 @@ export function ExportWizard() {
   const [result, setResult] = useState<ExportJob>();
   const [error, setError] = useState<string>();
   const [running, setRunning] = useState(false);
+  const [destinationPath, setDestinationPath] = useState('');
+  const [selectingDestination, setSelectingDestination] = useState(false);
   const [loadingCount, setLoadingCount] = useState(0);
   const [submittedCount, setSubmittedCount] = useState(0);
 
@@ -31,6 +33,19 @@ export function ExportWizard() {
     return () => { active = false; };
   }, [caseId]);
 
+  async function chooseDestination() {
+    setError(undefined);
+    setSelectingDestination(true);
+    try {
+      const selectedPath = await window.recoveryApi.chooseExportFolder();
+      if (selectedPath) setDestinationPath(selectedPath);
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setSelectingDestination(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selection) return;
@@ -41,7 +56,7 @@ export function ExportWizard() {
     try {
       setResult(ExportJobSchema.parse(await window.recoveryApi.exportArtifacts({
         artifactIds: selection.artifactIds,
-        destinationPath: String(values.get('destinationPath') ?? '').trim(),
+        destinationPath: destinationPath.trim(),
         acknowledgeUnsafe: values.get('acknowledgeUnsafe') === 'on',
       })));
     } catch (cause) { setError(message(cause)); } finally { setRunning(false); }
@@ -62,9 +77,9 @@ export function ExportWizard() {
         <section className="export-selection" aria-labelledby="export-selection-title"><header><div><h2 id="export-selection-title">Selected items to export</h2><p>Complete cursor traversal keeps the selection accurate across every daemon page.</p></div>{selection ? <strong>{selectedCount.toLocaleString('en-US')} {selectedCount === 1 ? 'item' : 'items'} selected</strong> : <LoaderCircle className="is-spinning" aria-label="Loading complete artifact selection" />}</header>
           {!selection ? <p role="status">Loading all recovered artifacts… {loadingCount.toLocaleString('en-US')} indexed</p> : <><div className="export-selection__summary"><span><CheckSquare2 aria-hidden="true" /><strong>{selectedCount.toLocaleString('en-US')} items selected</strong></span><strong>{formatBytes(selection.totalBytes)}</strong></div>{ineligibleCount > 0 ? <p className="form-error" role="alert">{verifiedSelectionMessage(ineligibleCount, selectedCount)} Return to Results and review the selection.</p> : null}<ul className="export-selection-list">{selection.previewItems.map((artifact) => <li key={artifact.artifactId}><File aria-hidden="true" /><span><strong>{artifact.displayName}</strong><small>{artifact.recoveryMethod === 'carving' ? 'Original folder unavailable' : artifact.originalPath ?? 'Original path unavailable'}</small></span><em>{formatBytes(BigInt(artifact.sizeBytes))}</em></li>)}</ul>{selectedCount > selection.previewItems.length ? <p className="export-selection__bounded">Showing {selection.previewItems.length} representative items. All {selectedCount.toLocaleString('en-US')} selected identifiers will be submitted.</p> : null}<ConditionSummary conditions={selection.conditions} /></>}
         </section>
-        <section className="export-destination" aria-labelledby="export-destination-title"><header><h2 id="export-destination-title">Export destination</h2><span>Daemon verified at export start</span></header><label>Export destination path<input name="destinationPath" required placeholder="Choose a separate writable destination" /></label><p className="export-destination__pending"><TriangleAlert aria-hidden="true" />Safety pending: entering a path does not prove device separation. The daemon derives the physical topology and refuses export unless separation can be proven.</p><label className="export-form__acknowledgement"><input name="acknowledgeUnsafe" type="checkbox" /> I authorize controlled export of selected artifacts marked potentially unsafe.</label></section>
+        <section className="export-destination" aria-labelledby="export-destination-title"><header><h2 id="export-destination-title">Export destination</h2><span>Daemon verified at export start</span></header><label>Export destination path<div className="export-destination__chooser"><input name="destinationPath" required placeholder="Choose a separate writable destination" value={destinationPath} onChange={(event) => setDestinationPath(event.target.value)} disabled={running || selectingDestination} /><button className="button button--secondary" type="button" onClick={() => void chooseDestination()} disabled={running || selectingDestination}><FolderOpen aria-hidden="true" />{selectingDestination ? 'Opening folder picker…' : 'Choose export folder'}</button></div></label><p className="export-destination__pending"><TriangleAlert aria-hidden="true" />Safety pending: selecting or entering a path does not prove device separation. The daemon derives the physical topology and refuses export unless separation can be proven.</p><label className="export-form__acknowledgement"><input name="acknowledgeUnsafe" type="checkbox" /> I authorize controlled export of selected artifacts marked potentially unsafe.</label></section>
       </div>
-      <footer className="export-actions"><span><ShieldCheck aria-hidden="true" />No source write is requested by this workflow.</span><button className="button button--primary" type="submit" disabled={!selection || running || selectedCount === 0 || ineligibleCount > 0}>{running ? 'Exporting and verifying…' : 'Start verified export'}<ArrowRight aria-hidden="true" /></button></footer>
+      <footer className="export-actions"><span><ShieldCheck aria-hidden="true" />No source write is requested by this workflow.</span><button className="button button--primary" type="submit" disabled={!selection || running || selectingDestination || selectedCount === 0 || ineligibleCount > 0}>{running ? 'Exporting and verifying…' : 'Start verified export'}<ArrowRight aria-hidden="true" /></button></footer>
     </form>
     {result ? <section className={completelyVerified ? 'export-verification is-complete' : 'export-verification is-incomplete'} role={completelyVerified ? 'status' : 'alert'} aria-labelledby="export-verification-title"><header>{completelyVerified ? <CheckCircle2 aria-hidden="true" /> : <TriangleAlert aria-hidden="true" />}<span><h2 id="export-verification-title">{completelyVerified ? 'Export complete and verified' : 'Verification incomplete'}</h2><p>{completelyVerified ? `${verifiedCount} ${verifiedCount === 1 ? 'file' : 'files'} exported and verified.` : `${verifiedCount} of ${submittedCount} selected files were returned and verified. Treat the export as incomplete.`}</p></span><code>{result.exportId}</code></header><ul>{result.items.map((item) => <li key={item.artifactId}><span>{item.outputPath}</span><strong>{item.verified ? 'SHA-256 verified' : 'Verification failed'}</strong></li>)}</ul><p>The destination was not opened automatically.</p></section> : null}
   </section>;

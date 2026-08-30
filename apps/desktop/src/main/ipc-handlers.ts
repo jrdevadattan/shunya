@@ -1,10 +1,11 @@
 import path from 'node:path';
 import type { Dirent, Stats } from 'node:fs';
 import { lstat, readdir, realpath, statfs } from 'node:fs/promises';
-import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron';
 import {
   parseDesktopRpcParams, parseDesktopRpcResult, WORKSPACE_TREE_MAX_DEPTH, WORKSPACE_TREE_MAX_ENTRIES,
-  WorkspaceFolderResultSchema, type RpcMethod, type WorkspaceDirectoryEntry, type WorkspaceSelection,
+  ReportDescriptorSchema, ReportRevealParamsSchema, WorkspaceFolderResultSchema,
+  type RpcMethod, type WorkspaceDirectoryEntry, type WorkspaceSelection,
 } from '@recovery/contracts';
 import type { DaemonSupervisor } from './daemon-supervisor.js';
 import { validateIpcSender } from './security.js';
@@ -116,6 +117,7 @@ function isSafeDirectoryName(name: string): boolean {
 }
 
 export function registerIpcHandlers(daemon?: DaemonSupervisor): void {
+  const generatedReportPaths = new Set<string>();
   ipcMain.handle('dialog.choose_workspace', async (event) => {
     validateIpcSender(event);
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -129,6 +131,43 @@ export function registerIpcHandlers(daemon?: DaemonSupervisor): void {
     if (result.canceled || !selectedPath) return null;
     return inspectWorkspaceSelection(selectedPath);
   });
+  ipcMain.handle('dialog.choose_export', async (event) => {
+    validateIpcSender(event);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options: OpenDialogOptions = {
+      title: 'Choose export destination',
+      buttonLabel: 'Select export folder',
+      properties: ['openDirectory', 'createDirectory'],
+    };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    const selectedPath = result.filePaths[0];
+    return result.canceled || !selectedPath ? null : selectedPath;
+  });
+  ipcMain.handle('dialog.choose_source_image', async (event) => {
+    validateIpcSender(event);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options: OpenDialogOptions = {
+      title: 'Choose a disk or memory image',
+      buttonLabel: 'Select image',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Evidence images', extensions: ['raw', 'img', 'dd', 'e01', 'aff', 'bin', 'mem', 'dmp'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    const selectedPath = result.filePaths[0];
+    return result.canceled || !selectedPath ? null : selectedPath;
+  });
+  ipcMain.handle('report.reveal', async (event, value: unknown) => {
+    validateIpcSender(event);
+    const { reportPath } = ReportRevealParamsSchema.parse(value);
+    if (!generatedReportPaths.has(canonicalPathKey(reportPath))) {
+      throw new Error('REPORT_PATH_NOT_GENERATED: Generate the report in this app session before opening its folder.');
+    }
+    shell.showItemInFolder(reportPath);
+    return { revealed: true };
+  });
   for (const channel of requestChannels) {
     ipcMain.handle(channel, async (event, ...args: unknown[]) => {
       validateIpcSender(event);
@@ -137,7 +176,13 @@ export function registerIpcHandlers(daemon?: DaemonSupervisor): void {
       }
       if (!daemon) throw new Error('DAEMON_UNAVAILABLE');
       const params = parseDesktopRpcParams(channel, args[0] ?? {});
-      return parseDesktopRpcResult(channel, await daemon.request(channel as RpcMethod, params));
+      const result = parseDesktopRpcResult(channel, await daemon.request(channel as RpcMethod, params));
+      if (channel === 'report.generate') {
+        const report = ReportDescriptorSchema.parse(result);
+        generatedReportPaths.add(canonicalPathKey(report.jsonPath));
+        generatedReportPaths.add(canonicalPathKey(report.markdownPath));
+      }
+      return result;
     });
   }
 }

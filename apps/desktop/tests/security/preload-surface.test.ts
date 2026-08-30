@@ -69,6 +69,30 @@ describe('preload API surface', () => {
     await expect(api.chooseWorkspaceFolder()).resolves.toBeNull();
   });
 
+  it('maps native export destination selection through a dedicated IPC method', async () => {
+    const invoke = vi.fn().mockResolvedValue('E:/verified-export');
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+
+    await expect(api.chooseExportFolder()).resolves.toBe('E:/verified-export');
+    expect(invoke).toHaveBeenCalledWith('dialog.choose_export', {});
+  });
+
+  it('maps native evidence-image selection through a dedicated IPC method', async () => {
+    const invoke = vi.fn().mockResolvedValue('E:/evidence/demo.raw');
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+
+    await expect(api.chooseSourceImage()).resolves.toBe('E:/evidence/demo.raw');
+    expect(invoke).toHaveBeenCalledWith('dialog.choose_source_image', {});
+  });
+
+  it('reveals only a generated report through a dedicated IPC method', async () => {
+    const invoke = vi.fn().mockResolvedValue({ revealed: true });
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+
+    await expect(api.revealReportInFolder('D:/case/case-live-recovery-report.json')).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith('report.reveal', { reportPath: 'D:/case/case-live-recovery-report.json' });
+  });
+
   it('turns workspace inspection permission failures into useful guidance', async () => {
     const api = createRecoveryApi({
       invoke: vi.fn().mockRejectedValue(new Error(

@@ -18,7 +18,8 @@ test('add image source identifies a RAW image without modifying it', async () =>
     cleanupCase = context.cleanup;
     await page.getByRole('link', { name: 'Recovery', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Select recovery source' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Discover physical devices' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Choose image file' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Discover physical devices' })).toHaveCount(0);
     await page.getByLabel('Disk image path').fill(imagePath);
     await page.getByRole('button', { name: 'Add image source' }).click();
     await expect(page.getByRole('heading', { name: 'evidence.raw' })).toBeVisible({ timeout: 20_000 });

@@ -55,6 +55,8 @@ function api(overrides: Record<string, unknown> = {}) {
   return {
     getRuntimeInfo: vi.fn().mockResolvedValue({ mode: 'installed' }),
     chooseWorkspaceFolder: vi.fn().mockResolvedValue(null),
+    chooseExportFolder: vi.fn().mockResolvedValue(null),
+    chooseSourceImage: vi.fn().mockResolvedValue(null),
     createCase: vi.fn(), openCase: vi.fn().mockResolvedValue({ caseId: 'case-live', title: 'Live case title', operator: 'operator', referenceNumber: null, organization: null, workspacePath: 'D:/case-live', notes: null, createdAt }), getCaseState: vi.fn().mockResolvedValue({ sourceId: source.sourceId, latestJobId: status.jobId }), listSources: vi.fn().mockResolvedValue([source]), addImageSource: vi.fn(),
     assessSource: vi.fn().mockResolvedValue({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [{ code: 'DAEMON_READY', level: 'supported', title: 'Live image ready', explanation: 'Daemon assessment completed.', recommendedAction: 'Continue.' }] }),
     createRecoveryJob: vi.fn(), startJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn(), cancelJob: vi.fn(),
@@ -62,7 +64,8 @@ function api(overrides: Record<string, unknown> = {}) {
     queryArtifacts: vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 1 }),
     getArtifact: vi.fn().mockResolvedValue(artifact), requestPreview: vi.fn().mockResolvedValue({ artifactId: artifact.artifactId, status: 'unsupported', policy: 'derivative_required', detectedMimeType: 'image/jpeg', derivativePath: null }),
     exportArtifacts: vi.fn().mockResolvedValue({ exportId: 'export-live', items: [{ artifactId: artifact.artifactId, outputPath: 'D:/verified/JPEG_live.jpg', sha256: artifact.sha256, verified: true }] }),
-    generateReport: vi.fn().mockResolvedValue({ caseId: 'case-live', jsonPath: 'D:/case/report.json', markdownPath: 'D:/case/report.md', limitations: status.limitations }),
+    generateReport: vi.fn().mockResolvedValue({ caseId: 'case-live', jsonPath: 'D:/case/case-live-recovery-report.json', markdownPath: 'D:/case/case-live-recovery-report.md', limitations: status.limitations }),
+    revealReportInFolder: vi.fn().mockResolvedValue(undefined),
     subscribeJobEvents: vi.fn().mockReturnValue(() => undefined),
     ...overrides,
   };
@@ -345,14 +348,48 @@ describe('live renderer pages', () => {
     expect(await findText('Mounted source')).toBeTruthy();
   });
 
-  it('renders daemon inventory as live source cards and keeps unsupported physical discovery disabled', async () => {
+  it('keeps image selection first and presents daemon inventory as secondary context', async () => {
     await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
 
     expect(await findText('live-evidence.raw')).toBeTruthy();
     expect(container?.querySelector('[aria-label="Available recovery sources"]')).toBeTruthy();
-    const physicalDiscovery = button('Discover physical devices');
-    expect(physicalDiscovery.disabled).toBe(true);
-    expect(container?.textContent).toContain('Physical-device discovery is unavailable because the typed desktop API exposes image sources only.');
+    expect(button('Choose image file')).toBeTruthy();
+    expect(container?.textContent).not.toContain('Discover physical devices');
+    const picker = button('Choose image file');
+    const inventory = container?.querySelector('[aria-labelledby="available-sources-title"]');
+    expect(picker.compareDocumentPosition(inventory!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('fills the evidence path from the native image picker', async () => {
+    const chooseSourceImage = vi.fn().mockResolvedValue('E:/evidence/demo.raw');
+    Object.assign(window, { recoveryApi: api({ chooseSourceImage }) });
+    await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
+
+    await click(button('Choose image file'));
+
+    expect(input('Disk image path').value).toBe('E:/evidence/demo.raw');
+    expect(chooseSourceImage).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a manual evidence path when native image selection is cancelled', async () => {
+    Object.assign(window, { recoveryApi: api({ chooseSourceImage: vi.fn().mockResolvedValue(null) }) });
+    await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
+    await change(input('Disk image path'), 'D:/manual/demo.raw');
+
+    await click(button('Choose image file'));
+
+    expect(input('Disk image path').value).toBe('D:/manual/demo.raw');
+  });
+
+  it('shows image picker failures without discarding the current path', async () => {
+    Object.assign(window, { recoveryApi: api({ chooseSourceImage: vi.fn().mockRejectedValue(new Error('The evidence image could not be selected.')) }) });
+    await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
+    await change(input('Disk image path'), 'D:/manual/demo.raw');
+
+    await click(button('Choose image file'));
+
+    expect((await findText('The evidence image could not be selected.')).getAttribute('role')).toBe('alert');
+    expect(input('Disk image path').value).toBe('D:/manual/demo.raw');
   });
 
   it('shows immediate pending feedback while source inventory and image actions run', async () => {
@@ -366,7 +403,7 @@ describe('live renderer pages', () => {
     }) });
     await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
 
-    expect(button('Refreshing…').disabled).toBe(true);
+    expect(button('Refresh').disabled).toBe(false);
     await act(async () => inventory.resolve([]));
     expect(button('Refresh').disabled).toBe(false);
     await act(async () => {
@@ -812,6 +849,19 @@ describe('live renderer pages', () => {
     expect(map?.querySelector('[aria-label="Candidate NTFS at byte 1,048,576, high confidence"]')).toBeTruthy();
   });
 
+  it('explains a zero-partition result and offers a direct continuation to case activity', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({
+      ...status,
+      partitions: { sectorSize: 512, partitions: [], candidates: [], gaps: [['0', '4161']], rawToolOutput: null, toolVersion: null },
+    }) }) });
+    await renderRoute(<PartitionList />, '/cases/case-live/recovery/partitions', '/cases/:caseId/recovery/partitions');
+
+    expect(await findText('No partition structures were detected')).toBeTruthy();
+    expect(container?.textContent).toContain('Recovery continues across the source bytes');
+    expect(container?.querySelector('a[href="/cases/case-live/activity"]')?.textContent).toContain('View recovery activity');
+    expect(container?.querySelector('.partition-details')).toBeNull();
+  });
+
   it('keeps partition candidates at both map boundaries inside the track', async () => {
     Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({
       ...status,
@@ -1111,6 +1161,7 @@ describe('live renderer pages', () => {
     expect(await findText('Evidence supporting recovery')).toBeTruthy();
     expect(container?.textContent).toContain('Original path from a surviving file record');
     expect(container?.textContent).toContain('Offset 4,096 · 42 bytes');
+    expect(container?.querySelector<HTMLDetailsElement>('.artifact-ranges')?.open).toBe(true);
 
     const select = container?.querySelector<HTMLInputElement>('input[aria-label="Select ledger.xlsx for export"]');
     expect(select).toBeTruthy();
@@ -1286,6 +1337,42 @@ describe('live renderer pages', () => {
     expect((await findText(/physical topology could not be proven/)).getAttribute('role')).toBe('alert');
   });
 
+  it('fills the export destination from the native folder picker', async () => {
+    const chooseExportFolder = vi.fn().mockResolvedValue('E:/verified-export');
+    Object.assign(window, { recoveryApi: api({ chooseExportFolder }) });
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    await findText('JPEG_live.jpg');
+
+    await click(button('Choose export folder'));
+
+    expect(input('Export destination path').value).toBe('E:/verified-export');
+  });
+
+  it('preserves a manually entered export destination when folder selection is cancelled', async () => {
+    const chooseExportFolder = vi.fn().mockResolvedValue(null);
+    Object.assign(window, { recoveryApi: api({ chooseExportFolder }) });
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    await findText('JPEG_live.jpg');
+    await change(input('Export destination path'), 'D:/manual-export');
+
+    await click(button('Choose export folder'));
+
+    expect(input('Export destination path').value).toBe('D:/manual-export');
+  });
+
+  it('shows native export-folder picker failures without discarding the current path', async () => {
+    const chooseExportFolder = vi.fn().mockRejectedValue(new Error('The export folder could not be selected.'));
+    Object.assign(window, { recoveryApi: api({ chooseExportFolder }) });
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    await findText('JPEG_live.jpg');
+    await change(input('Export destination path'), 'D:/manual-export');
+
+    await click(button('Choose export folder'));
+
+    expect((await findText('The export folder could not be selected.')).closest('[role="alert"]')).toBeTruthy();
+    expect(input('Export destination path').value).toBe('D:/manual-export');
+  });
+
   it('keeps export source identity pending until live artifact traversal returns', async () => {
     const pendingArtifacts = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
     Object.assign(window, { recoveryApi: api({ queryArtifacts: vi.fn().mockReturnValue(pendingArtifacts.promise) }) });
@@ -1415,15 +1502,21 @@ describe('live renderer pages', () => {
     expect(container?.textContent).not.toContain('Export complete');
   });
 
-  it('renders generated report paths and daemon limitations', async () => {
+  it('renders generated report paths and reveals the generated report in its folder', async () => {
+    const revealReportInFolder = vi.fn().mockResolvedValue(undefined);
+    Object.assign(window, { recoveryApi: api({ revealReportInFolder }) });
     await renderRoute(<ReportsPage />, '/cases/case-live/reports', '/cases/:caseId/reports');
     await click(button('Generate report'));
-    expect(await findText('D:/case/report.json')).toBeTruthy();
+    expect(await findText('D:/case/case-live-recovery-report.json')).toBeTruthy();
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
     expect(container?.textContent).toContain('Report output ready');
     expect(container?.textContent).toContain('JSON evidence record');
     expect(container?.textContent).toContain('Markdown recovery summary');
     expect(container?.textContent).toContain('Only daemon-recorded evidence is included');
+
+    await click(button('Open report folder'));
+
+    expect(revealReportInFolder).toHaveBeenCalledWith('D:/case/case-live-recovery-report.json');
   });
 
   it('removes simulated memory findings and shows typed live capability refusal', async () => {
@@ -1495,6 +1588,8 @@ describe('live renderer pages', () => {
     expect(await findText('Case created')).toBeTruthy();
     expect(container.textContent).toContain('Metadata scan started');
     expect(container.textContent).toContain('Recovery completed');
+    expect(container.textContent).toContain('Recovery complete');
+    expect(container.querySelector('a[href="/cases/case-live/results"]')?.textContent).toContain('Review recovered files');
     const rows = Array.from(container.querySelectorAll('[data-activity-sequence]'));
     expect(rows.map((row) => row.getAttribute('data-activity-sequence'))).toEqual(['case', '2', '9']);
     expect(container.textContent).toContain('Audit hash-chain and integrity verification details are unavailable');

@@ -1,15 +1,15 @@
 import {
   AddImageSourceInputSchema, ArtifactPageSchema, ArtifactParamsSchema, ArtifactQuerySchema, CaseOpenParamsSchema, CaseStateSchema,
-  CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportJobSchema, JobEventSchema,
+  CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportFolderResultSchema, ExportJobSchema, JobEventSchema,
   JobEventsParamsSchema, JobParamsSchema, JobStatusSchema, PreviewDescriptorSchema, RecoveryArtifactSchema,
-  RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, RuntimeInfoSchema,
-  SourceAssessmentSchema, SourceDescriptorSchema, SourceParamsSchema, WorkspaceFolderResultSchema, type JobEvent, type RecoveryDesktopApi,
+  RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, ReportRevealParamsSchema, ReportRevealResultSchema, RuntimeInfoSchema,
+  SourceAssessmentSchema, SourceDescriptorSchema, SourceImageResultSchema, SourceParamsSchema, WorkspaceFolderResultSchema, type JobEvent, type RecoveryDesktopApi,
 } from '@recovery/contracts';
 
 export const recoveryApiMethodNames = [
-  'getRuntimeInfo', 'chooseWorkspaceFolder', 'createCase', 'openCase', 'getCaseState', 'listSources', 'addImageSource', 'assessSource',
+  'getRuntimeInfo', 'chooseWorkspaceFolder', 'chooseExportFolder', 'chooseSourceImage', 'createCase', 'openCase', 'getCaseState', 'listSources', 'addImageSource', 'assessSource',
   'createRecoveryJob', 'startJob', 'pauseJob', 'resumeJob', 'cancelJob', 'queryArtifacts',
-  'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'subscribeJobEvents',
+  'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'revealReportInFolder', 'subscribeJobEvents',
 ] as const;
 
 export interface PreloadTransport {
@@ -22,6 +22,8 @@ export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopA
   const api: RecoveryDesktopApi = {
     getRuntimeInfo: async () => RuntimeInfoSchema.parse(await invoke('runtime.get', {})),
     chooseWorkspaceFolder: async () => WorkspaceFolderResultSchema.parse(await invoke('dialog.choose_workspace', {})),
+    chooseExportFolder: async () => ExportFolderResultSchema.parse(await invoke('dialog.choose_export', {})),
+    chooseSourceImage: async () => SourceImageResultSchema.parse(await invoke('dialog.choose_source_image', {})),
     createCase: async (input) => RecoveryCaseSchema.parse(await invoke('case.create', CreateCaseInputSchema.parse(input))),
     openCase: async (casePath) => RecoveryCaseSchema.parse(await invoke('case.open', CaseOpenParamsSchema.parse({ casePath }))),
     getCaseState: async () => CaseStateSchema.parse(await invoke('case.state', {})),
@@ -40,6 +42,7 @@ export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopA
     requestPreview: async (artifactId) => PreviewDescriptorSchema.parse(await invoke('artifact.preview', ArtifactParamsSchema.parse({ artifactId }))),
     exportArtifacts: async (input) => ExportJobSchema.parse(await invoke('export.start', ExportArtifactsInputSchema.parse(input))),
     generateReport: async (caseId) => ReportDescriptorSchema.parse(await invoke('report.generate', ReportParamsSchema.parse({ caseId }))),
+    revealReportInFolder: async (reportPath) => { ReportRevealResultSchema.parse(await invoke('report.reveal', ReportRevealParamsSchema.parse({ reportPath }))); },
     subscribeJobEvents: (listener: (event: JobEvent) => void) => transport.subscribe('job.event', (payload) => listener(JobEventSchema.parse(payload))),
   };
   return Object.freeze(api);

@@ -1,7 +1,7 @@
 import { JobEventSchema, RecoveryCaseSchema, type JobEvent, type RecoveryCase } from '@recovery/contracts';
-import { AlertTriangle, BriefcaseBusiness, CheckCircle2, Clock3, LockKeyhole } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, LockKeyhole } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { activeJobId, activeWorkspace } from '../../application-state.js';
 
 interface ActivityState {
@@ -52,10 +52,13 @@ export function CaseActivityPage() {
 
   if (error) return <section className="activity-page"><p className="form-error" role="alert">{error}</p></section>;
   if (!state) return <section className="activity-page"><p role="status">Loading recorded case activity…</p></section>;
+  const latest = state.events.at(-1);
+  const completed = latest?.stage === 'completed';
 
   return (
     <section className="activity-page" aria-labelledby="activity-title">
       <header><p className="eyebrow">Case record</p><h1 id="activity-title">Case activity</h1><p><BriefcaseBusiness aria-hidden="true" />{state.recoveryCase.title}</p><small>Chronological local presentation of the case identity and available daemon job events.</small></header>
+      {latest ? <section className="activity-summary" data-state={completed ? 'complete' : 'active'} aria-labelledby="activity-summary-title"><CheckCircle2 aria-hidden="true" /><div><h2 id="activity-summary-title">{completed ? 'Recovery complete' : 'Latest recovery event'}</h2><p>{latest.message ?? stageLabel(latest.stage)} · sequence {latest.sequence}</p></div><Link className="button button--primary button--icon" to={completed ? `/cases/${caseId}/results` : `/cases/${caseId}/jobs`}>{completed ? 'Review recovered files' : 'View current recovery'}<ArrowRight aria-hidden="true" /></Link></section> : null}
       <div className="activity-layout">
         <section className="activity-timeline" aria-labelledby="activity-timeline-title">
           <header><h2 id="activity-timeline-title">Recorded timeline</h2><span>{state.events.length + 1} available record{state.events.length === 0 ? '' : 's'}</span></header>
