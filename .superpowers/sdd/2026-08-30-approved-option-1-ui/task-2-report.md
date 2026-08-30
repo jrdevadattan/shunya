@@ -86,3 +86,67 @@ Results:
 
 - Native Windows dialog interaction is not automatable through the current packaged Playwright harness, so packaged case-lifecycle E2E was not run in this task. The contract, main IPC, preload, and live renderer layers required by Task 2 are covered by automated tests; a manual packaged native-dialog check remains appropriate in Task 7.
 - The bounded tree is intentionally a preview, not a filesystem browser. When the depth or entry cap is reached, the UI labels the result as partial and offers another native selection.
+
+## Review fix round 1/5 — workspace inspection hardening
+
+### Findings verified
+
+- The original traversal trusted `Dirent.isDirectory()` and recursively joined paths without `lstat`, `realpath`, canonical root-containment, or visited-target checks. A directory-like reparse fixture could therefore be followed outside the selected root or back to a previously traversed target.
+- `relativePath` accepted absolute paths, drive paths, UNC paths, and parent escapes.
+- The preload destination-collision adapter still instructed the operator to choose an empty folder, contradicting the parent + named child flow.
+- The read-only directory preview used `tree`/`treeitem` roles without the focus or keyboard interaction required for an ARIA tree widget.
+
+### Round 1 RED evidence
+
+Tests were changed before production code and run with:
+
+```text
+corepack pnpm --filter @recovery/contracts test -- --run tests/domain.test.ts
+corepack pnpm --filter @recovery/desktop test -- --run tests/security/ipc-boundary.test.ts tests/security/preload-surface.test.ts tests/integration/live-renderer.test.tsx
+```
+
+Observed RED:
+
+- Contracts: 6 failures, 6 passes. Absolute, drive-rooted, UNC, slash-parent, and backslash-parent paths were all accepted.
+- Desktop: 6 failures, 60 passes.
+  - Main returned Windows-native `Evidence\\Cases` rather than a normalized `Evidence/Cases` contract path.
+  - Canonical-root escape, symbolic-directory, and visited-cycle fixtures were all included in the output.
+  - Preload returned the stale “Choose an empty folder” copy.
+  - Renderer still exposed `tree`/`treeitem` roles and no read-only folder-list label.
+
+### Minimal fixes
+
+- Added a normalized relative-path contract that permits only non-empty forward-slash segments and rejects absolute, drive, UNC, empty, dot, and parent segments.
+- Added native `lstat` and `realpath` operations to inspection. The selected root is canonicalized once; every candidate must be a real directory, must not be symbolic, must canonicalize inside the selected root, and must not have a canonical target already in the visited set.
+- Unsafe platform directory names are omitted, and emitted relative paths use normalized forward slashes on every platform.
+- Updated the existing-destination message to direct the operator to another case-folder name or parent.
+- Replaced non-functional ARIA tree roles with ordinary nested-list semantics and a `Folder preview` accessible label.
+
+### Round 1 GREEN evidence
+
+Focused GREEN run:
+
+```text
+corepack pnpm --filter @recovery/contracts test -- --run tests/domain.test.ts
+corepack pnpm --filter @recovery/desktop test -- --run tests/security/ipc-boundary.test.ts tests/security/preload-surface.test.ts tests/integration/live-renderer.test.tsx
+```
+
+- Contracts: 12/12 passed.
+- Desktop: 66/66 passed, including 9 main IPC boundary tests and the renderer accessibility assertion.
+- The first typecheck identified one pre-existing permission-error fixture that needed the newly required `lstat`/`realpath` dependency members; after completing that fixture, desktop and contracts typechecks both passed.
+
+Final round 1 regression gate:
+
+```text
+corepack pnpm --filter @recovery/contracts test
+corepack pnpm --filter @recovery/ui test
+corepack pnpm --filter @recovery/desktop test
+corepack pnpm -r typecheck
+git diff --check
+```
+
+- Contracts: 12/12 passed.
+- UI foundation/accessibility: 7/7 passed.
+- Desktop: 66/66 passed.
+- Contracts, UI, and desktop typechecks passed.
+- `git diff --check` exited 0; only Windows line-ending conversion notices were printed.

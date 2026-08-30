@@ -22,9 +22,14 @@ export interface WorkspaceDirectoryEntry {
   children: WorkspaceDirectoryEntry[];
   childrenOmitted: boolean;
 }
+export const WorkspaceRelativePathSchema = z.string().min(1).refine((relativePath) => {
+  if (relativePath.includes('\\') || relativePath.startsWith('/') || /^[A-Za-z]:/.test(relativePath)) return false;
+  const segments = relativePath.split('/');
+  return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}, 'Workspace directory paths must be normalized relative paths without parent or root escapes.');
 export const WorkspaceDirectoryEntrySchema: z.ZodType<WorkspaceDirectoryEntry> = z.lazy(() => z.object({
   name: z.string().min(1),
-  relativePath: z.string().min(1),
+  relativePath: WorkspaceRelativePathSchema,
   children: z.array(WorkspaceDirectoryEntrySchema),
   childrenOmitted: z.boolean(),
 }).strict());

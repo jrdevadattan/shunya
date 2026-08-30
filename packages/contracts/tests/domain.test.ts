@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/source-descriptor.json' with { type: 'json' };
-import { ArtifactPageSchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
+import { ArtifactPageSchema, WorkspaceDirectoryEntrySchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
 import { JobStageSchema, SourceDescriptorSchema } from '../src/domain.js';
 
 describe('SourceDescriptor', () => {
@@ -67,6 +67,19 @@ describe('WorkspaceFolderResult', () => {
     expect(WorkspaceFolderResultSchema.safeParse({
       ...parsed,
       directories: [{ name: 'manifest.json', relativePath: 'manifest.json', kind: 'file', children: [], childrenOmitted: false }],
+    }).success).toBe(false);
+  });
+
+  it.each([
+    '/outside',
+    '../outside',
+    'safe/../../outside',
+    'C:\\Windows',
+    '\\\\server\\share',
+    'safe\\..\\outside',
+  ])('rejects absolute or escaping directory paths: %s', (relativePath) => {
+    expect(WorkspaceDirectoryEntrySchema.safeParse({
+      name: 'outside', relativePath, children: [], childrenOmitted: false,
     }).success).toBe(false);
   });
 });

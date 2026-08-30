@@ -52,7 +52,7 @@ describe('main IPC schema boundary', () => {
         freeBytes: expect.stringMatching(/^\d+$/),
         directories: [{
           name: 'Evidence', relativePath: 'Evidence', childrenOmitted: false,
-          children: [{ name: 'Cases', relativePath: path.join('Evidence', 'Cases'), children: [], childrenOmitted: false }],
+          children: [{ name: 'Cases', relativePath: 'Evidence/Cases', children: [], childrenOmitted: false }],
         }],
         truncated: false,
       });
@@ -90,7 +90,7 @@ describe('main IPC schema boundary', () => {
       ]);
       const relativePaths = flatten(result.directories);
       expect(relativePaths.length).toBeLessThanOrEqual(200);
-      expect(Math.max(...relativePaths.map((entry) => entry.split(path.sep).length))).toBeLessThanOrEqual(3);
+      expect(Math.max(...relativePaths.map((entry) => entry.split('/').length))).toBeLessThanOrEqual(3);
       expect(result.truncated).toBe(true);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -104,8 +104,59 @@ describe('main IPC schema boundary', () => {
     await expect(inspectWorkspaceSelection('D:/restricted', {
       statfs: vi.fn().mockRejectedValue(permissionError),
       readdir: vi.fn(),
+      lstat: vi.fn(),
+      realpath: vi.fn(),
     })).rejects.toThrow(
       'WORKSPACE_PERMISSION_DENIED: The selected folder could not be inspected. Choose a folder you have permission to read.',
     );
+  });
+
+  it('omits directory-like entries whose canonical target escapes the selected root', async () => {
+    const { inspectWorkspaceSelection } = await import('../../src/main/ipc-handlers.js');
+    const selected = path.resolve('dialog-selected');
+    const outside = path.resolve('outside-selected-root');
+    const directory = (name: string) => ({ name, isDirectory: () => true });
+
+    const result = await inspectWorkspaceSelection(selected, {
+      statfs: vi.fn().mockResolvedValue({ bsize: 1n, blocks: 1000n, bavail: 600n }),
+      lstat: vi.fn().mockResolvedValue({ isDirectory: () => true, isSymbolicLink: () => false }),
+      realpath: vi.fn(async (candidate: string) => candidate === path.join(selected, 'escape') ? outside : candidate),
+      readdir: vi.fn(async (candidate: string) => candidate === selected
+        ? [directory('escape'), directory('safe')]
+        : candidate === path.join(selected, 'escape') ? [directory('stolen')] : []),
+    } as never);
+
+    expect(result.directories.map((entry) => entry.name)).toEqual(['safe']);
+    expect(JSON.stringify(result)).not.toContain('stolen');
+  });
+
+  it('omits symbolic directory entries even when their target stays inside the selected root', async () => {
+    const { inspectWorkspaceSelection } = await import('../../src/main/ipc-handlers.js');
+    const selected = path.resolve('dialog-selected');
+    const directory = (name: string) => ({ name, isDirectory: () => true });
+
+    const result = await inspectWorkspaceSelection(selected, {
+      statfs: vi.fn().mockResolvedValue({ bsize: 1n, blocks: 1000n, bavail: 600n }),
+      lstat: vi.fn(async (candidate: string) => ({ isDirectory: () => true, isSymbolicLink: () => candidate.endsWith('linked') })),
+      realpath: vi.fn(async (candidate: string) => candidate === path.join(selected, 'linked') ? path.join(selected, 'target') : candidate),
+      readdir: vi.fn(async (candidate: string) => candidate === selected ? [directory('linked'), directory('target')] : []),
+    } as never);
+
+    expect(result.directories.map((entry) => entry.name)).toEqual(['target']);
+  });
+
+  it('omits directory entries whose canonical target was already visited', async () => {
+    const { inspectWorkspaceSelection } = await import('../../src/main/ipc-handlers.js');
+    const selected = path.resolve('dialog-selected');
+    const directory = (name: string) => ({ name, isDirectory: () => true });
+
+    const result = await inspectWorkspaceSelection(selected, {
+      statfs: vi.fn().mockResolvedValue({ bsize: 1n, blocks: 1000n, bavail: 600n }),
+      lstat: vi.fn().mockResolvedValue({ isDirectory: () => true, isSymbolicLink: () => false }),
+      realpath: vi.fn(async (candidate: string) => candidate === path.join(selected, 'cycle') ? selected : candidate),
+      readdir: vi.fn(async (candidate: string) => candidate === selected ? [directory('cycle'), directory('safe')] : []),
+    } as never);
+
+    expect(result.directories.map((entry) => entry.name)).toEqual(['safe']);
   });
 });

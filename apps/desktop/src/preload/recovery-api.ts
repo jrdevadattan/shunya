@@ -58,7 +58,7 @@ function userFacingRecoveryError(message: string): string {
     return 'The selected folder could not be inspected. Choose a folder you have permission to read.';
   }
   if (message.includes('destination already exists and will not be overwritten')) {
-    return 'That folder already contains files. Choose an empty folder so nothing is overwritten.';
+    return 'That case folder already exists. Choose a different case folder name or parent folder so nothing is overwritten.';
   }
   if (message.includes('DAEMON_UNAVAILABLE')) {
     return 'The recovery service is unavailable. Restart the app and try again.';

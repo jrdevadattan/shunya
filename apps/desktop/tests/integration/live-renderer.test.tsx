@@ -254,6 +254,8 @@ describe('live renderer pages', () => {
     expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
     expect(await findText('Prior Cases')).toBeTruthy();
     expect(await findText('Case 004')).toBeTruthy();
+    expect(container?.querySelector('[role="tree"], [role="treeitem"]')).toBeNull();
+    expect(container?.querySelector('ul[aria-label="Folder preview"]')).toBeTruthy();
     expect(container?.textContent).toContain('800 GB free');
     expect(container?.textContent).toContain('2 TB total');
     expect(container?.textContent).not.toMatch(/estimated needed|required space|headroom/i);

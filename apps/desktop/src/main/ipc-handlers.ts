@@ -1,6 +1,6 @@
 import path from 'node:path';
-import type { Dirent } from 'node:fs';
-import { readdir, statfs } from 'node:fs/promises';
+import type { Dirent, Stats } from 'node:fs';
+import { lstat, readdir, realpath, statfs } from 'node:fs/promises';
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import {
   parseDesktopRpcParams, parseDesktopRpcResult, WORKSPACE_TREE_MAX_DEPTH, WORKSPACE_TREE_MAX_ENTRIES,
@@ -18,11 +18,15 @@ const requestChannels = [
 export interface WorkspaceInspectionFileSystem {
   statfs(selectedPath: string): Promise<{ bsize: bigint; blocks: bigint; bavail: bigint }>;
   readdir(directoryPath: string): Promise<Dirent[]>;
+  lstat(directoryPath: string): Promise<Pick<Stats, 'isDirectory' | 'isSymbolicLink'>>;
+  realpath(directoryPath: string): Promise<string>;
 }
 
 const nativeWorkspaceFileSystem: WorkspaceInspectionFileSystem = {
   statfs: (selectedPath) => statfs(selectedPath, { bigint: true }),
   readdir: (directoryPath) => readdir(directoryPath, { withFileTypes: true }),
+  lstat,
+  realpath,
 };
 
 export async function inspectWorkspaceSelection(
@@ -31,6 +35,8 @@ export async function inspectWorkspaceSelection(
 ): Promise<WorkspaceSelection> {
   try {
     const storage = await fileSystem.statfs(selectedPath);
+    const canonicalRoot = await fileSystem.realpath(selectedPath);
+    const visitedDirectories = new Set([canonicalPathKey(canonicalRoot)]);
     let entryCount = 0;
     let truncated = false;
 
@@ -48,8 +54,16 @@ export async function inspectWorkspaceSelection(
           truncated = true;
           break;
         }
+        if (!isSafeDirectoryName(directoryEntry.name)) continue;
+        const childPath = path.join(directoryPath, directoryEntry.name);
+        const metadata = await fileSystem.lstat(childPath);
+        if (!metadata.isDirectory() || metadata.isSymbolicLink()) continue;
+        const canonicalChild = await fileSystem.realpath(childPath);
+        const canonicalKey = canonicalPathKey(canonicalChild);
+        if (!isWithinRoot(canonicalRoot, canonicalChild) || visitedDirectories.has(canonicalKey)) continue;
+        visitedDirectories.add(canonicalKey);
         entryCount += 1;
-        const relativePath = relativeParent ? path.join(relativeParent, directoryEntry.name) : directoryEntry.name;
+        const relativePath = relativeParent ? `${relativeParent}/${directoryEntry.name}` : directoryEntry.name;
         const atDepthLimit = depth >= WORKSPACE_TREE_MAX_DEPTH;
         if (atDepthLimit) truncated = true;
         result.push({
@@ -57,7 +71,7 @@ export async function inspectWorkspaceSelection(
           relativePath,
           children: atDepthLimit
             ? []
-            : await inspectDirectories(path.join(directoryPath, directoryEntry.name), relativePath, depth + 1),
+            : await inspectDirectories(childPath, relativePath, depth + 1),
           childrenOmitted: atDepthLimit,
         });
       }
@@ -85,6 +99,20 @@ export async function inspectWorkspaceSelection(
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`WORKSPACE_INSPECTION_FAILED: The selected folder could not be inspected. ${detail}`);
   }
+}
+
+function canonicalPathKey(directoryPath: string): string {
+  const resolved = path.resolve(directoryPath);
+  return process.platform === 'win32' ? resolved.toLocaleLowerCase() : resolved;
+}
+
+function isWithinRoot(canonicalRoot: string, candidate: string): boolean {
+  const relative = path.relative(canonicalRoot, candidate);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+function isSafeDirectoryName(name: string): boolean {
+  return name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\\') && !name.includes('\0');
 }
 
 export function registerIpcHandlers(daemon?: DaemonSupervisor): void {

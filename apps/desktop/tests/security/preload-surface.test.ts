@@ -79,7 +79,7 @@ describe('preload API surface', () => {
       organization: null,
       workspacePath: 'D:\\case',
       notes: null,
-    })).rejects.toThrow('That folder already contains files. Choose an empty folder so nothing is overwritten.');
+    })).rejects.toThrow('That case folder already exists. Choose a different case folder name or parent folder so nothing is overwritten.');
   });
 
   it('rejects malformed daemon responses instead of casting unknown values', async () => {

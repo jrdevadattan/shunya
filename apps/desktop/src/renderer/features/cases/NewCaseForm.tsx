@@ -121,8 +121,8 @@ function WorkspaceStep({ headingRef, selection, caseFolderName, destinationPath,
       : <div className="workspace-layout">
         <div className="workspace-browser">
           <header><span><HardDrive aria-hidden="true" /><strong>{selection.rootLabel}</strong></span><button type="button" className="button button--secondary" onClick={choose} disabled={selecting}>Choose another folder</button></header>
-          <div className="workspace-browser__tree" role="tree" aria-label={`Folders in ${selection.selectedPath}`}>
-            <div className="workspace-tree__root" role="treeitem" aria-expanded="true"><FolderOpen aria-hidden="true" /><strong>{selection.selectedPath}</strong></div>
+          <div className="workspace-browser__tree">
+            <div className="workspace-tree__root"><FolderOpen aria-hidden="true" /><strong>{selection.selectedPath}</strong></div>
             {selection.directories.length ? <DirectoryTree entries={selection.directories} /> : <p className="workspace-browser__empty">The selected parent has no visible subfolders.</p>}
             {selection.truncated ? <p className="workspace-browser__notice"><Info aria-hidden="true" />Only the first bounded portion of this folder tree is shown.</p> : null}
           </div>
@@ -135,7 +135,7 @@ function WorkspaceStep({ headingRef, selection, caseFolderName, destinationPath,
 }
 
 function DirectoryTree({ entries }: { entries: WorkspaceDirectoryEntry[] }) {
-  return <ul role="group" className="workspace-tree">{entries.map((entry) => <li key={entry.relativePath} role="treeitem" aria-expanded={entry.children.length ? true : undefined}>
+  return <ul className="workspace-tree" aria-label="Folder preview">{entries.map((entry) => <li key={entry.relativePath}>
     <span><Folder aria-hidden="true" />{entry.name}</span>{entry.children.length ? <DirectoryTree entries={entry.children} /> : null}{entry.childrenOmitted ? <small>Deeper folders not shown</small> : null}
   </li>)}</ul>;
 }
