@@ -1,9 +1,9 @@
 import { AppShell, IconButton, RuntimeModeBadge } from '@recovery/ui';
-import { RecoveryCaseSchema, RuntimeInfoSchema, type RecoveryCase } from '@recovery/contracts';
+import { CaseStateSchema, RecoveryCaseSchema, RuntimeInfoSchema, type RecoveryCase } from '@recovery/contracts';
 import { CircleCheck, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
-import { activeWorkspace, forgetCase, rememberValidatedCase, validatedCase } from '../application-state.js';
+import { activeWorkspace, forgetCase, rememberCaseState, rememberValidatedCase, validatedCase } from '../application-state.js';
 import { CommandPalette } from '../components/CommandPalette.js';
 import {
   applyTheme,
@@ -50,12 +50,11 @@ export function CaseLayout() {
     if (!workspace) {
       forgetCase(caseId);
       setError('Case context is unavailable. Open or create the case again.');
-    } else if (validatedCase(caseId, workspace)) {
-      setRecoveryCase(validatedCase(caseId, workspace) ?? undefined);
     } else {
-      void window.recoveryApi.openCase(workspace).then((value) => {
+      const loadCase = async () => {
+        const cached = validatedCase(caseId, workspace);
+        const opened = cached ?? RecoveryCaseSchema.parse(await window.recoveryApi.openCase(workspace));
         if (!active) return;
-        const opened = RecoveryCaseSchema.parse(value);
         if (opened.caseId !== caseId) {
           forgetCase(caseId);
           setError('The opened case does not match the requested case. Open the intended case again.');
@@ -63,8 +62,12 @@ export function CaseLayout() {
         }
         rememberValidatedCase(opened);
         rememberRecentCase(opened);
+        const state = CaseStateSchema.parse(await window.recoveryApi.getCaseState());
+        if (!active) return;
+        rememberCaseState(caseId, state);
         setRecoveryCase(opened);
-      }).catch((cause) => {
+      };
+      void loadCase().catch((cause) => {
         if (!active) return;
         forgetCase(caseId);
         setError(message(cause));

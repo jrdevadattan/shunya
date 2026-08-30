@@ -7,7 +7,7 @@ import { activeJobId } from '../application-state.js';
 
 interface OverviewData {
   sources: SourceDescriptor[];
-  totalArtifacts: number;
+  totalArtifacts: number | null;
   job: JobStatus | null;
 }
 
@@ -24,12 +24,12 @@ export function CaseOverviewPage() {
     void Promise.all([
       window.recoveryApi.listSources().then((value) => SourceDescriptorSchema.array().parse(value)),
       jobId
-        ? window.recoveryApi.queryArtifacts({ pageSize: 1 }).then((value) => ArtifactPageSchema.parse(value).totalCount)
-        : Promise.resolve(0),
-      jobId
         ? window.recoveryApi.getJobStatus(jobId).then((value) => JobStatusSchema.parse(value))
         : Promise.resolve(null),
-    ]).then(([sources, totalArtifacts, job]) => {
+    ]).then(async ([sources, job]) => {
+      const totalArtifacts = job && (job.stage === 'review_ready' || job.stage === 'completed')
+        ? await window.recoveryApi.queryArtifacts({ pageSize: 1 }).then((value) => ArtifactPageSchema.parse(value).totalCount)
+        : job ? null : 0;
       if (active) setData({ sources, totalArtifacts, job });
     }).catch((cause) => {
       if (active) setError(message(cause));
@@ -60,7 +60,7 @@ export function CaseOverviewPage() {
       <div className="metric-grid metric-grid--overview">
         <MetricCard label="Sources" value={data.sources.length} detail="Evidence sources in this case" icon={HardDrive} />
         <MetricCard label="Recovery job" value={data.job ? stageLabel(data.job.stage) : 'Not started'} detail={data.job ? 'Persisted daemon state' : 'Add a source to begin'} icon={Activity} />
-        <MetricCard label="Recovered artifacts" value={data.totalArtifacts.toLocaleString()} detail="Indexed by the recovery daemon" icon={Files} />
+        <MetricCard label="Recovered artifacts" value={data.totalArtifacts === null ? 'Unavailable' : data.totalArtifacts.toLocaleString()} detail={data.totalArtifacts === null ? 'Unavailable until indexing' : 'Indexed by the recovery daemon'} icon={Files} />
         <MetricCard label="Limitations" value={limitationCount} detail="Capabilities requiring attention" icon={TriangleAlert} tone={limitationCount ? 'warning' : 'neutral'} />
       </div>
 

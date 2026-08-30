@@ -9,7 +9,7 @@ const steps: Array<{ id: IntakeStep; label: string }> = [
   { id: 'details', label: 'Details' }, { id: 'workspace', label: 'Workspace' }, { id: 'review', label: 'Review' },
 ];
 
-export function NewCaseForm() {
+export function NewCaseForm({ intent }: { intent?: 'disk-image' | 'memory-image' } = {}) {
   const navigate = useNavigate();
   const [step, setStep] = useState<IntakeStep>('details');
   const [title, setTitle] = useState('');
@@ -65,7 +65,11 @@ export function NewCaseForm() {
         title, operator, referenceNumber: optional(referenceNumber), organization: optional(organization),
         workspacePath: destinationPath, notes: optional(notes),
       });
-      await navigate(`/cases/${recoveryCase.caseId}/sources`);
+      await navigate(intent === 'disk-image'
+        ? `/cases/${recoveryCase.caseId}/sources/add-image`
+        : intent === 'memory-image'
+          ? `/cases/${recoveryCase.caseId}/memory`
+          : `/cases/${recoveryCase.caseId}/sources`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The recovery case could not be created.');
     } finally { setSubmitting(false); }

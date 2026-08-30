@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const REQUIREMENTS = [
+const COMPLETE_REQUIREMENTS = [
   ['Windows Setup executable', (name) => /\.exe$/i.test(name)],
   ['Windows full NuGet package', (name) => /-full\.nupkg$/i.test(name)],
   ['Debian x64 package', (name) => /(?:amd64|x86_64).*\.deb$/i.test(name)],
@@ -16,15 +16,25 @@ const REQUIREMENTS = [
   ['SHA256SUMS', (name) => name === 'SHA256SUMS'],
   ['release manifest', (name) => name === 'release-manifest.json'],
 ];
+const WINDOWS_X64_REQUIREMENTS = COMPLETE_REQUIREMENTS.filter(([label]) => [
+  'Windows Setup executable', 'Windows full NuGet package', 'SHA256SUMS', 'release manifest',
+].includes(label));
 
-export async function verifyReleaseSet(directory) {
+export async function verifyReleaseSet(directory, options = {}) {
+  const profile = options.profile ?? 'complete';
+  const requirements = profile === 'complete'
+    ? COMPLETE_REQUIREMENTS
+    : profile === 'windows-x64'
+      ? WINDOWS_X64_REQUIREMENTS
+      : undefined;
+  if (!requirements) throw new Error(`unknown release verification profile: ${profile}`);
   const entries = await readdir(directory);
   const names = [];
   for (const name of entries) {
     if ((await stat(path.join(directory, name))).isFile()) names.push(name);
   }
 
-  const missing = REQUIREMENTS.filter(([, matches]) => !names.some(matches)).map(([label]) => label);
+  const missing = requirements.filter(([, matches]) => !names.some(matches)).map(([label]) => label);
   if (missing.length > 0) throw new Error(`incomplete release set; missing: ${missing.join(', ')}`);
 
   const manifest = JSON.parse(await readFile(path.join(directory, 'release-manifest.json'), 'utf8'));
@@ -35,10 +45,13 @@ export async function verifyReleaseSet(directory) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [directory] = process.argv.slice(2);
-  if (!directory) throw new Error('usage: node verify-release-set.mjs <directory>');
-  verifyReleaseSet(path.resolve(directory))
-    .then((names) => console.log(`Complete release set verified (${names.length} files).`))
+  const args = process.argv.slice(2);
+  const profileIndex = args.indexOf('--profile');
+  const profile = profileIndex >= 0 ? args[profileIndex + 1] : 'complete';
+  const directory = args.find((argument, index) => argument !== '--profile' && index !== profileIndex + 1);
+  if (!directory || !profile) throw new Error('usage: node verify-release-set.mjs [--profile complete|windows-x64] <directory>');
+  verifyReleaseSet(path.resolve(directory), { profile })
+    .then((names) => console.log(`${profile} release set verified (${names.length} files).`))
     .catch((error) => {
       console.error(error.message);
       process.exitCode = 1;

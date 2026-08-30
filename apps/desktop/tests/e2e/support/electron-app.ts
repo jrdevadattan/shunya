@@ -26,7 +26,12 @@ function testHarnessElectronPath(): string {
   return path.join(electronRoot, 'electron');
 }
 
-export async function launchPackagedApp() {
+export function createPackagedTestProfile(): { userDataPath: string; cleanup(): void } {
+  const userDataPath = mkdtempSync(path.join(tmpdir(), 'sih-recovery-e2e-user-data-'));
+  return { userDataPath, cleanup: () => rmSync(userDataPath, { recursive: true, force: true }) };
+}
+
+export async function launchPackagedApp(options: { userDataPath?: string } = {}) {
   const packagedExecutable = packagedExecutablePath();
   if (!existsSync(packagedExecutable)) throw new Error(`packaged application is missing: ${packagedExecutable}`);
   const packageRoot = path.dirname(packagedExecutable);
@@ -42,13 +47,14 @@ export async function launchPackagedApp() {
   const inheritedEnvironment = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   );
-  const userDataPath = mkdtempSync(path.join(tmpdir(), 'sih-recovery-e2e-user-data-'));
+  const ownedProfile = options.userDataPath ? undefined : createPackagedTestProfile();
+  const userDataPath = options.userDataPath ?? ownedProfile!.userDataPath;
   const electronApp = await electron.launch({
     executablePath: testHarnessElectronPath(),
     args: packagedLaunchArguments(appAsar, userDataPath),
     env: { ...inheritedEnvironment, ...daemonEnvironment, NODE_ENV: 'production', RECOVERY_RELEASE_BUILD: '1' },
   });
-  electronApp.process().once('exit', () => rmSync(userDataPath, { recursive: true, force: true }));
+  if (ownedProfile) electronApp.process().once('exit', ownedProfile.cleanup);
   try {
     const page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');

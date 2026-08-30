@@ -53,3 +53,39 @@ test('complete release verification rejects missing macOS artifacts', async () =
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('Windows x64 release verification accepts only the approved Windows asset set and manifest coverage', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'recovery-windows-release-set-'));
+  try {
+    await writeFile(path.join(directory, 'SIH-Recovery-Platform-Setup.exe'), 'windows installer');
+    await writeFile(path.join(directory, 'sih_recovery_platform-0.2.0-full.nupkg'), 'windows update');
+    await assembleRelease(directory, 'v0.2.0');
+
+    assert.deepEqual(await verifyReleaseSet(directory, { profile: 'windows-x64' }), [
+      'SHA256SUMS',
+      'SIH-Recovery-Platform-Setup.exe',
+      'release-manifest.json',
+      'sih_recovery_platform-0.2.0-full.nupkg',
+    ]);
+    await assert.rejects(verifyReleaseSet(directory), /Debian x64 package/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('Windows x64 release verification rejects an uncovered file', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'recovery-windows-release-uncovered-'));
+  try {
+    await writeFile(path.join(directory, 'SIH-Recovery-Platform-Setup.exe'), 'windows installer');
+    await writeFile(path.join(directory, 'sih_recovery_platform-0.2.0-full.nupkg'), 'windows update');
+    await assembleRelease(directory, 'v0.2.0');
+    await writeFile(path.join(directory, 'unexpected.txt'), 'not reviewed');
+
+    await assert.rejects(
+      verifyReleaseSet(directory, { profile: 'windows-x64' }),
+      /release manifest does not cover: unexpected\.txt/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

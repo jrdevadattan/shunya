@@ -92,11 +92,10 @@ struct ArtifactParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct ExportParams {
     artifact_ids: Vec<String>,
     destination_path: PathBuf,
-    #[serde(rename = "destinationPhysicalId")]
-    _destination_physical_id: String,
     #[serde(default)]
     acknowledge_unsafe: bool,
 }
@@ -121,6 +120,7 @@ struct CapabilityLimitation {
 struct DaemonState {
     current_case: Option<PathBuf>,
     sources: HashMap<String, ImageSource>,
+    latest_source: Option<String>,
     jobs: HashMap<Uuid, PathBuf>,
     latest_job: Option<Uuid>,
     controls: HashMap<Uuid, Arc<JobControl>>,
@@ -194,6 +194,7 @@ impl DaemonState {
             "runtime.get" => Ok(json!({ "mode": runtime_mode() })),
             "case.create" => self.create_case(request),
             "case.open" => self.open_case(request),
+            "case.state" => self.case_state(),
             "source.list" => self.list_sources(),
             "source.add_image" => self.add_image(request),
             "source.assess" => self.assess_source(request),
@@ -253,6 +254,7 @@ impl DaemonState {
             .map_err(|error| ("CASE_CREATE_FAILED", error.to_string()))?;
         self.current_case = Some(params.workspace_path);
         self.sources.clear();
+        self.latest_source = None;
         self.jobs.clear();
         self.latest_job = None;
         self.controls.clear();
@@ -273,7 +275,9 @@ impl DaemonState {
         let store = CaseStore::open(&params.case_path)
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))?;
         self.current_case = Some(params.case_path.clone());
-        self.sources = load_sources(&params.case_path);
+        let (sources, latest_source) = load_sources(&params.case_path);
+        self.sources = sources;
+        self.latest_source = latest_source;
         self.jobs = load_job_roots(&params.case_path);
         self.latest_job = self.jobs.keys().max().copied();
         self.controls.clear();
@@ -282,6 +286,22 @@ impl DaemonState {
             .map_err(|error| ("JOB_RECOVERY_FAILED", error.to_string()))?;
         serde_json::to_value(store.manifest())
             .map_err(|error| ("CASE_OPEN_FAILED", error.to_string()))
+    }
+
+    fn case_state(&self) -> RouteResult {
+        let source_id = if let Some(job_id) = self.latest_job {
+            let root = self.job_root(job_id, None)?;
+            let snapshot = JobEngine::open(&root)
+                .and_then(|engine| engine.snapshot(job_id))
+                .map_err(|error| ("CASE_STATE_FAILED", error.to_string()))?;
+            Some(snapshot.source_id)
+        } else {
+            self.latest_source.clone()
+        };
+        if let Some(source_id) = source_id.as_deref() {
+            self.source(source_id)?;
+        }
+        Ok(json!({ "sourceId": source_id, "latestJobId": self.latest_job }))
     }
 
     fn ensure_case_switch_allowed(&self) -> Result<(), (&'static str, String)> {
@@ -322,6 +342,7 @@ impl DaemonState {
         .map_err(|error| ("IMAGE_SOURCE_FAILED", error.to_string()))?;
         self.sources
             .insert(source.descriptor.source_id.clone(), source.clone());
+        self.latest_source = Some(source.descriptor.source_id.clone());
         serde_json::to_value(source.descriptor)
             .map_err(|error| ("IMAGE_SOURCE_FAILED", error.to_string()))
     }
@@ -1393,16 +1414,25 @@ fn run_export(request: ExportRequest) -> Result<Vec<exporter::ExportVerification
     .map_err(|_| "export worker panicked".to_owned())?
 }
 
-fn load_sources(root: &Path) -> HashMap<String, ImageSource> {
+fn load_sources(root: &Path) -> (HashMap<String, ImageSource>, Option<String>) {
     let mut sources = HashMap::new();
+    let mut latest = None;
     if let Ok(entries) = fs::read_dir(root.join("sources")) {
-        for entry in entries.flatten() {
+        let mut entries = entries.flatten().collect::<Vec<_>>();
+        entries.sort_by_key(|entry| {
+            entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok()
+        });
+        for entry in entries {
             if let Ok(source) = read_json::<ImageSource>(&entry.path()) {
+                latest = Some(source.descriptor.source_id.clone());
                 sources.insert(source.descriptor.source_id.clone(), source);
             }
         }
     }
-    sources
+    (sources, latest)
 }
 
 fn load_job_roots(root: &Path) -> HashMap<Uuid, PathBuf> {

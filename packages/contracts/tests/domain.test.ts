@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/source-descriptor.json' with { type: 'json' };
-import { ArtifactPageSchema, ArtifactQuerySchema, WorkspaceDirectoryEntrySchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
+import { ArtifactPageSchema, ArtifactQuerySchema, CaseStateSchema, ExportArtifactsInputSchema, WorkspaceDirectoryEntrySchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
 import { JobStageSchema, SourceDescriptorSchema } from '../src/domain.js';
 
 describe('SourceDescriptor', () => {
@@ -36,6 +36,24 @@ describe('ArtifactQuery', () => {
 
     expect(parsed).toEqual({ originalPathPrefix: 'Users/Maya', pageSize: 100 });
     expect(parsed.search).toBeUndefined();
+  });
+});
+
+describe('CaseState', () => {
+  it('represents a persisted source and latest job without inventing either', () => {
+    expect(CaseStateSchema.parse({ sourceId: 'source-live', latestJobId: 'job-live' })).toEqual({
+      sourceId: 'source-live', latestJobId: 'job-live',
+    });
+    expect(CaseStateSchema.parse({ sourceId: null, latestJobId: null })).toEqual({ sourceId: null, latestJobId: null });
+    expect(CaseStateSchema.safeParse({ sourceId: null, latestJobId: 'job-live' }).success).toBe(false);
+  });
+});
+
+describe('ExportArtifactsInput', () => {
+  it('accepts only the destination path and daemon-enforced unsafe acknowledgement', () => {
+    const input = { artifactIds: ['artifact-live'], destinationPath: 'D:/verified', acknowledgeUnsafe: false };
+    expect(ExportArtifactsInputSchema.parse(input)).toEqual(input);
+    expect(ExportArtifactsInputSchema.safeParse({ ...input, destinationPhysicalId: 'renderer-claim' }).success).toBe(false);
   });
 });
 

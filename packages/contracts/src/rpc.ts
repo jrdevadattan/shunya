@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const RpcMethodSchema = z.enum([
-  'runtime.get', 'case.create', 'case.open', 'source.list', 'source.add_image', 'source.assess',
+  'runtime.get', 'case.create', 'case.open', 'case.state', 'source.list', 'source.add_image', 'source.assess',
   'job.create', 'job.start', 'job.pause', 'job.resume', 'job.cancel', 'artifact.query',
   'job.status', 'job.events', 'artifact.get', 'artifact.preview', 'export.start', 'report.generate',
 ]);

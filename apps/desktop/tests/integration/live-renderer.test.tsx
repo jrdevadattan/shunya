@@ -3,7 +3,7 @@
 import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes, useParams } from 'react-router-dom';
+import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes, useLocation, useParams } from 'react-router-dom';
 import type { JobStatus, RecoveryArtifact } from '@recovery/contracts';
 import { SourceAssessmentPage } from '../../src/renderer/features/sources/SourceAssessmentPage.js';
 import { AddSourcePage } from '../../src/renderer/features/sources/AddSourcePage.js';
@@ -55,7 +55,7 @@ function api(overrides: Record<string, unknown> = {}) {
   return {
     getRuntimeInfo: vi.fn().mockResolvedValue({ mode: 'installed' }),
     chooseWorkspaceFolder: vi.fn().mockResolvedValue(null),
-    createCase: vi.fn(), openCase: vi.fn().mockResolvedValue({ caseId: 'case-live', title: 'Live case title', operator: 'operator', referenceNumber: null, organization: null, workspacePath: 'D:/case-live', notes: null, createdAt }), listSources: vi.fn().mockResolvedValue([source]), addImageSource: vi.fn(),
+    createCase: vi.fn(), openCase: vi.fn().mockResolvedValue({ caseId: 'case-live', title: 'Live case title', operator: 'operator', referenceNumber: null, organization: null, workspacePath: 'D:/case-live', notes: null, createdAt }), getCaseState: vi.fn().mockResolvedValue({ sourceId: source.sourceId, latestJobId: status.jobId }), listSources: vi.fn().mockResolvedValue([source]), addImageSource: vi.fn(),
     assessSource: vi.fn().mockResolvedValue({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [{ code: 'DAEMON_READY', level: 'supported', title: 'Live image ready', explanation: 'Daemon assessment completed.', recommendedAction: 'Continue.' }] }),
     createRecoveryJob: vi.fn(), startJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn(), cancelJob: vi.fn(),
     getJobStatus: vi.fn().mockResolvedValue(status), listJobEvents: vi.fn().mockResolvedValue([{ eventId: 'event-live', jobId: 'job-live', sequence: 9, stage: 'completed', occurredAt: createdAt, message: 'Recovery completed' }]),
@@ -129,6 +129,11 @@ function CaseArtifactProbe() {
   const { caseId = '' } = useParams();
   useEffect(() => { void window.recoveryApi.queryArtifacts({ pageSize: 100 }); }, [caseId]);
   return <p>Artifacts requested for {caseId}</p>;
+}
+
+function DestinationProbe() {
+  const location = useLocation();
+  return <p>{location.pathname}{location.search}</p>;
 }
 
 beforeEach(() => {
@@ -217,6 +222,35 @@ describe('live renderer pages', () => {
 
     expect(await findText('Recovery overview')).toBeTruthy();
     expect(openCase).toHaveBeenCalledOnce();
+  });
+
+  it('hydrates daemon-derived source and job identifiers before mounting a genuinely reopened case', async () => {
+    sessionStorage.removeItem('recovery:case-live:sourceId');
+    sessionStorage.removeItem('recovery:case-live:jobId');
+    const getCaseState = vi.fn().mockResolvedValue({ sourceId: 'source-persisted', latestJobId: 'job-persisted' });
+    Object.assign(window, { recoveryApi: api({ getCaseState }) });
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseArtifactProbe />} /></Route></Routes></MemoryRouter>));
+
+    expect(await findText('Artifacts requested for case-live')).toBeTruthy();
+    expect(getCaseState).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('recovery:case-live:sourceId')).toBe('source-persisted');
+    expect(sessionStorage.getItem('recovery:case-live:jobId')).toBe('job-persisted');
+  });
+
+  it('keeps a genuinely reopened no-job case truthful', async () => {
+    sessionStorage.removeItem('recovery:case-live:sourceId');
+    sessionStorage.removeItem('recovery:case-live:jobId');
+    Object.assign(window, { recoveryApi: api({
+      getCaseState: vi.fn().mockResolvedValue({ sourceId: null, latestJobId: null }),
+      listSources: vi.fn().mockResolvedValue([]),
+    }) });
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseOverviewPage />} /></Route></Routes></MemoryRouter>));
+
+    expect(await findText('No recovery job yet')).toBeTruthy();
+    expect(sessionStorage.getItem('recovery:case-live:sourceId')).toBeNull();
+    expect(sessionStorage.getItem('recovery:case-live:jobId')).toBeNull();
   });
 
   it('keeps the approved sidebar visible while creating a case', async () => {
@@ -422,6 +456,37 @@ describe('live renderer pages', () => {
     }]);
   });
 
+  it.each([
+    ['disk-image', '/cases/case-intent/sources/add-image'],
+    ['memory-image', '/cases/case-intent/memory'],
+    ['unsupported-value', '/cases/case-intent/sources'],
+  ])('routes supported quick-start intent %s to its post-creation workflow', async (intent, destination) => {
+    Object.assign(window, { recoveryApi: api({
+      chooseWorkspaceFolder: vi.fn().mockResolvedValue({
+        selectedPath: 'D:/intent-cases', rootPath: 'D:/', rootLabel: 'D:', totalBytes: '1000', freeBytes: '900', directories: [], truncated: false,
+      }),
+      createCase: vi.fn().mockResolvedValue({
+        caseId: 'case-intent', title: 'Intent recovery', operator: 'examiner', referenceNumber: null,
+        organization: null, workspacePath: 'D:/intent-cases/Intent recovery', notes: null, createdAt,
+      }),
+    }) });
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={[`/cases/new?source=${intent}`]}><Routes>
+      <Route path="/cases/new" element={<NewCasePage />} />
+      <Route path="/cases/:caseId/sources" element={<DestinationProbe />} />
+      <Route path="/cases/:caseId/sources/add-image" element={<DestinationProbe />} />
+      <Route path="/cases/:caseId/memory" element={<DestinationProbe />} />
+    </Routes></MemoryRouter>));
+    await change(input('Case title'), 'Intent recovery');
+    await change(input('Operator name or ID'), 'examiner');
+    await click(button('Continue to workspace'));
+    await click(button('Choose parent folder'));
+    await click(button('Continue to review'));
+    await click(button('Create case'));
+
+    expect(await findText(destination)).toBeTruthy();
+  });
+
   it('keeps the workspace step in place with an accessible error when inspection is denied', async () => {
     Object.assign(window, { recoveryApi: api({
       chooseWorkspaceFolder: vi.fn().mockRejectedValue(new Error(
@@ -533,6 +598,20 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.');
     expect(container?.querySelector('a[href="/cases/case-live/sources"]')?.textContent).toContain('Add source');
     expect(window.recoveryApi.createRecoveryJob).not.toHaveBeenCalled();
+    expect(queryArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('keeps a restored pre-index paused job reachable without inventing an artifact count', async () => {
+    const queryArtifacts = vi.fn().mockRejectedValue(new Error('ARTIFACT_QUERY_FAILED: results are not indexed'));
+    Object.assign(window, { recoveryApi: api({
+      getJobStatus: vi.fn().mockResolvedValue({ ...status, stage: 'paused' }),
+      queryArtifacts,
+    }) });
+    await renderRoute(<CaseOverviewPage />, '/cases/case-live/overview', '/cases/:caseId/overview');
+
+    expect(await findText('Recovery overview')).toBeTruthy();
+    expect(container?.textContent).toContain('Unavailable until indexing');
+    expect(container?.querySelector('a[href="/cases/case-live/jobs"]')?.textContent).toContain('View recovery job');
     expect(queryArtifacts).not.toHaveBeenCalled();
   });
 
@@ -1186,11 +1265,14 @@ describe('live renderer pages', () => {
   });
 
   it('renders export success and topology refusal from export.start', async () => {
+    const exportArtifacts = vi.fn().mockResolvedValue({ exportId: 'export-live', items: [{ artifactId: artifact.artifactId, outputPath: 'D:/verified/JPEG_live.jpg', sha256: artifact.sha256, verified: true }] });
+    Object.assign(window, { recoveryApi: api({ exportArtifacts }) });
     await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
     expect(await findText('JPEG_live.jpg')).toBeTruthy();
     await change(input('Export destination path'), 'D:/verified');
-    await change(input('Destination physical identity'), 'disk-9');
+    expect(container?.textContent).not.toContain('Destination physical identity');
     await click(button('Start verified export'));
+    expect(exportArtifacts).toHaveBeenCalledWith({ artifactIds: [artifact.artifactId], destinationPath: 'D:/verified', acknowledgeUnsafe: false });
     expect(await findText(/export-live/)).toBeTruthy();
     expect(await findText(/1 file exported and verified/i)).toBeTruthy();
 
@@ -1200,7 +1282,6 @@ describe('live renderer pages', () => {
     await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
     await findText('JPEG_live.jpg');
     await change(input('Export destination path'), 'D:/unknown');
-    await change(input('Destination physical identity'), 'unknown');
     await click(button('Start verified export'));
     expect((await findText(/physical topology could not be proven/)).getAttribute('role')).toBe('alert');
   });
@@ -1229,7 +1310,6 @@ describe('live renderer pages', () => {
     await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
     await findText('Artifact 501');
     await change(input('Export destination path'), 'D:/verified');
-    await change(input('Destination physical identity'), 'disk-9');
     await click(button('Start verified export'));
     expect(submittedIds).toHaveLength(501);
     expect(submittedIds.at(-1)).toBe('artifact-501');
@@ -1330,7 +1410,6 @@ describe('live renderer pages', () => {
     await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
     await findText('JPEG_live.jpg');
     await change(input('Export destination path'), 'D:/verified');
-    await change(input('Destination physical identity'), 'disk-9');
     await click(button('Start verified export'));
     expect((await findText(/Verification incomplete/)).closest('[role="alert"]')).toBeTruthy();
     expect(container?.textContent).not.toContain('Export complete');

@@ -9,6 +9,7 @@ const METHODS: &[&str] = &[
     "runtime.get",
     "case.create",
     "case.open",
+    "case.state",
     "source.list",
     "source.add_image",
     "source.assess",

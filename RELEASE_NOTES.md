@@ -10,6 +10,7 @@ This release delivers the redesigned Windows x64 recovery workstation and the co
 - Sandboxed Electron renderer with a typed preload boundary and a SHA-256-verified Rust recovery daemon.
 - Read-only RAW-image workflow with source revalidation, SHA-256 hashing, GPT/MBR discovery, bounded JPEG signature carving, deterministic validation, indexed review, verified export, and JSON/Markdown reporting.
 - Checkpointed recovery jobs with pause, resume, cancellation, event history, and recoverable restart behavior.
+- Fresh-process case reopening restores the daemon-derived persisted source and latest job link; cases without a job remain explicitly empty.
 - Isolated packaged E2E profiles so temporary test cases cannot enter a shared Electron profile.
 
 ## Windows assets
@@ -20,6 +21,8 @@ This release delivers the redesigned Windows x64 recovery workstation and the co
 - `release-manifest.json`: release metadata and asset hashes.
 
 The Windows artifacts are unsigned because no Authenticode certificate was supplied. Windows may display a SmartScreen warning.
+
+This Windows-only asset set is verified with `node packaging/scripts/verify-release-set.mjs --profile windows-x64 dist/release/v0.2.0`; the verifier requires both Windows packages, checksums, and complete manifest coverage without weakening the default multi-platform gate.
 
 ## Capability limits
 

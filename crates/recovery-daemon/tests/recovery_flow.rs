@@ -233,7 +233,6 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
         json!({
             "artifactIds": [artifact_id],
             "destinationPath": export_path,
-            "destinationPhysicalId": "integration-destination",
             "acknowledgeUnsafe": false
         }),
     );
@@ -345,6 +344,48 @@ fn interrupted_job_is_recovered_paused_and_resume_completes_it() {
     assert_eq!(
         wait_for_stage(&mut restarted, &job_id, "completed")["stage"],
         "completed"
+    );
+}
+
+#[test]
+fn reopened_case_exposes_persisted_source_and_latest_recoverable_job() {
+    let temporary = tempdir().unwrap();
+    let (mut daemon, case_path, _, source_id, job_id, _) =
+        setup_job(temporary.path(), 64 * 1024 * 1024);
+    daemon.rpc("job.start", json!({ "jobId": job_id }));
+    daemon.terminate();
+
+    let mut restarted = Daemon::start();
+    restarted.rpc("case.open", json!({ "casePath": case_path }));
+    let state = restarted.rpc("case.state", json!({}));
+    assert_eq!(state["sourceId"], source_id);
+    assert_eq!(state["latestJobId"], job_id);
+    assert_eq!(
+        restarted.rpc("job.status", json!({ "jobId": job_id }))["stage"],
+        "paused"
+    );
+}
+
+#[test]
+fn reopened_case_without_sources_or_jobs_exposes_truthful_empty_state() {
+    let temporary = tempdir().unwrap();
+    let case_path = temporary.path().join("empty-case");
+    let mut daemon = Daemon::start();
+    daemon.rpc(
+        "case.create",
+        json!({
+            "title": "Empty persisted case",
+            "operator": "Integration Test",
+            "workspacePath": case_path
+        }),
+    );
+    daemon.terminate();
+
+    let mut restarted = Daemon::start();
+    restarted.rpc("case.open", json!({ "casePath": case_path }));
+    assert_eq!(
+        restarted.rpc("case.state", json!({})),
+        json!({ "sourceId": null, "latestJobId": null })
     );
 }
 
@@ -570,11 +611,33 @@ fn renderer_cannot_bypass_same_device_export_check() {
         json!({
             "artifactIds": [artifact_id],
             "destinationPath": temporary.path().join("same-volume-export"),
-            "destinationPhysicalId": "renderer-lies-about-separation",
             "acknowledgeUnsafe": false
         }),
     );
     assert_eq!(error["code"], "EXPORT_DESTINATION_NOT_SEPARATE");
+}
+
+#[test]
+fn export_rejects_the_removed_renderer_physical_identity_field() {
+    let temporary = tempdir().unwrap();
+    let (mut daemon, _, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
+    daemon.rpc("job.start", json!({ "jobId": job_id }));
+    wait_for_stage(&mut daemon, &job_id, "completed");
+    let artifact_id =
+        daemon.rpc("artifact.query", json!({ "pageSize": 1 }))["items"][0]["artifactId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+    let error = daemon.rpc_error(
+        "export.start",
+        json!({
+            "artifactIds": [artifact_id],
+            "destinationPath": temporary.path().join("same-volume-export"),
+            "destinationPhysicalId": "renderer-claim",
+            "acknowledgeUnsafe": false
+        }),
+    );
+    assert_eq!(error["code"], "INVALID_EXPORT_INPUT");
 }
 
 #[test]
@@ -612,7 +675,6 @@ fn daemon_refuses_non_validated_and_mixed_export_selections_before_destination_c
             json!({
                 "artifactIds": [format!("artifact-{state}")],
                 "destinationPath": temporary.path().join("same-volume-export"),
-                "destinationPhysicalId": "renderer-lies-about-separation",
                 "acknowledgeUnsafe": true
             }),
         );
@@ -627,7 +689,6 @@ fn daemon_refuses_non_validated_and_mixed_export_selections_before_destination_c
         json!({
             "artifactIds": [validated_id, "artifact-complete_unverified"],
             "destinationPath": temporary.path().join("same-volume-export"),
-            "destinationPhysicalId": "renderer-lies-about-separation",
             "acknowledgeUnsafe": true
         }),
     );

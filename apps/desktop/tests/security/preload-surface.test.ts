@@ -32,6 +32,24 @@ describe('preload API surface', () => {
     ]);
   });
 
+  it('maps the daemon-derived current case state through a narrow typed method', async () => {
+    const invoke = vi.fn().mockResolvedValue({ sourceId: 'source-live', latestJobId: 'job-live' });
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+
+    await expect(api.getCaseState()).resolves.toEqual({ sourceId: 'source-live', latestJobId: 'job-live' });
+    expect(invoke).toHaveBeenCalledWith('case.state', {});
+  });
+
+  it('does not send a renderer-supplied physical identity for export', async () => {
+    const invoke = vi.fn().mockResolvedValue({ exportId: 'export-live', items: [] });
+    const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
+
+    await api.exportArtifacts({ artifactIds: ['artifact-live'], destinationPath: 'D:/verified', acknowledgeUnsafe: false });
+    expect(invoke).toHaveBeenCalledWith('export.start', {
+      artifactIds: ['artifact-live'], destinationPath: 'D:/verified', acknowledgeUnsafe: false,
+    });
+  });
+
   it('maps dialog-scoped workspace inspection through a narrow typed IPC method', async () => {
     const selection = {
       selectedPath: 'D:/recovery-cases', rootPath: 'D:/', rootLabel: 'D:',

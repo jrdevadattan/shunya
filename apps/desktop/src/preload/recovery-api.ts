@@ -1,5 +1,5 @@
 import {
-  AddImageSourceInputSchema, ArtifactPageSchema, ArtifactParamsSchema, ArtifactQuerySchema, CaseOpenParamsSchema,
+  AddImageSourceInputSchema, ArtifactPageSchema, ArtifactParamsSchema, ArtifactQuerySchema, CaseOpenParamsSchema, CaseStateSchema,
   CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportJobSchema, JobEventSchema,
   JobEventsParamsSchema, JobParamsSchema, JobStatusSchema, PreviewDescriptorSchema, RecoveryArtifactSchema,
   RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, RuntimeInfoSchema,
@@ -7,7 +7,7 @@ import {
 } from '@recovery/contracts';
 
 export const recoveryApiMethodNames = [
-  'getRuntimeInfo', 'chooseWorkspaceFolder', 'createCase', 'openCase', 'listSources', 'addImageSource', 'assessSource',
+  'getRuntimeInfo', 'chooseWorkspaceFolder', 'createCase', 'openCase', 'getCaseState', 'listSources', 'addImageSource', 'assessSource',
   'createRecoveryJob', 'startJob', 'pauseJob', 'resumeJob', 'cancelJob', 'queryArtifacts',
   'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'subscribeJobEvents',
 ] as const;
@@ -24,6 +24,7 @@ export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopA
     chooseWorkspaceFolder: async () => WorkspaceFolderResultSchema.parse(await invoke('dialog.choose_workspace', {})),
     createCase: async (input) => RecoveryCaseSchema.parse(await invoke('case.create', CreateCaseInputSchema.parse(input))),
     openCase: async (casePath) => RecoveryCaseSchema.parse(await invoke('case.open', CaseOpenParamsSchema.parse({ casePath }))),
+    getCaseState: async () => CaseStateSchema.parse(await invoke('case.state', {})),
     listSources: async () => SourceDescriptorSchema.array().parse(await invoke('source.list', {})),
     addImageSource: async (input) => SourceDescriptorSchema.parse(await invoke('source.add_image', AddImageSourceInputSchema.parse(input))),
     assessSource: async (sourceId) => SourceAssessmentSchema.parse(await invoke('source.assess', SourceParamsSchema.parse({ sourceId }))),

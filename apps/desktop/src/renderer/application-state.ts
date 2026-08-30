@@ -1,4 +1,4 @@
-import type { RecoveryCase } from '@recovery/contracts';
+import type { CaseState, RecoveryCase } from '@recovery/contracts';
 
 type CaseField = 'workspacePath' | 'sourceId' | 'jobId' | 'goal';
 const key = (caseId: string, field: CaseField) => `recovery:${caseId}:${field}`;
@@ -40,6 +40,13 @@ export function rememberSource(caseId: string, sourceId: string): void {
 
 export function rememberJob(caseId: string, jobId: string): void {
   sessionStorage.setItem(key(caseId, 'jobId'), jobId);
+}
+
+export function rememberCaseState(caseId: string, state: CaseState): void {
+  sessionStorage.removeItem(key(caseId, 'sourceId'));
+  sessionStorage.removeItem(key(caseId, 'jobId'));
+  if (state.sourceId) rememberSource(caseId, state.sourceId);
+  if (state.latestJobId) rememberJob(caseId, state.latestJobId);
 }
 
 export function activeWorkspace(caseId: string): string | null { return sessionStorage.getItem(key(caseId, 'workspacePath')); }

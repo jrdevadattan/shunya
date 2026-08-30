@@ -10,7 +10,7 @@ import type { DaemonSupervisor } from './daemon-supervisor.js';
 import { validateIpcSender } from './security.js';
 
 const requestChannels = [
-  'runtime.get', 'case.create', 'case.open', 'source.list', 'source.add_image', 'source.assess',
+  'runtime.get', 'case.create', 'case.open', 'case.state', 'source.list', 'source.add_image', 'source.assess',
   'job.create', 'job.start', 'job.pause', 'job.resume', 'job.cancel', 'job.status', 'job.events', 'artifact.query',
   'artifact.get', 'artifact.preview', 'export.start', 'report.generate',
 ] as const;

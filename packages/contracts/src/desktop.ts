@@ -117,6 +117,11 @@ export const ReportDescriptorSchema = z.object({
   caseId: z.string().min(1), jsonPath: z.string().min(1), markdownPath: z.string().min(1),
   limitations: z.array(CapabilityLimitationSchema),
 });
+export const CaseStateSchema = z.object({
+  sourceId: z.string().min(1).nullable(), latestJobId: z.string().min(1).nullable(),
+}).strict().superRefine((state, context) => {
+  if (state.latestJobId && !state.sourceId) context.addIssue({ code: 'custom', message: 'A persisted job must identify its source.' });
+});
 
 export const CreateCaseInputSchema = z.object({
   title: z.string().min(3).max(120), operator: z.string().min(1), referenceNumber: z.string().nullable(), organization: z.string().nullable(),
@@ -127,8 +132,8 @@ export const CreateRecoveryJobInputSchema = z.object({
   caseId: z.string().min(1), sourceId: z.string().min(1), goal: RecoveryGoalSchema, preset: ScanPresetSchema,
 });
 export const ExportArtifactsInputSchema = z.object({
-  artifactIds: z.array(z.string().min(1)).min(1), destinationPath: z.string().min(1), destinationPhysicalId: z.string().min(1), acknowledgeUnsafe: z.boolean(),
-});
+  artifactIds: z.array(z.string().min(1)).min(1), destinationPath: z.string().min(1), acknowledgeUnsafe: z.boolean(),
+}).strict();
 export const EmptyParamsSchema = z.object({}).strict();
 export const CaseOpenParamsSchema = z.object({ casePath: z.string().min(1) }).strict();
 export const SourceParamsSchema = z.object({ sourceId: z.string().min(1) }).strict();
@@ -153,12 +158,14 @@ export type ArtifactPage = z.infer<typeof ArtifactPageSchema>;
 export type PreviewDescriptor = z.infer<typeof PreviewDescriptorSchema>;
 export type ExportJob = z.infer<typeof ExportJobSchema>;
 export type ReportDescriptor = z.infer<typeof ReportDescriptorSchema>;
+export type CaseState = z.infer<typeof CaseStateSchema>;
 
 export interface RecoveryDesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
   chooseWorkspaceFolder(): Promise<WorkspaceSelection | null>;
   createCase(input: CreateCaseInput): Promise<z.infer<typeof RecoveryCaseSchema>>;
   openCase(casePath: string): Promise<z.infer<typeof RecoveryCaseSchema>>;
+  getCaseState(): Promise<CaseState>;
   listSources(): Promise<z.infer<typeof SourceDescriptorSchema>[]>;
   addImageSource(input: AddImageSourceInput): Promise<z.infer<typeof SourceDescriptorSchema>>;
   assessSource(sourceId: string): Promise<SourceAssessment>;
@@ -179,7 +186,7 @@ export interface RecoveryDesktopApi {
 
 export function parseDesktopRpcParams(method: string, params: unknown): Record<string, unknown> {
   switch (method) {
-    case 'runtime.get': case 'source.list': return EmptyParamsSchema.parse(params);
+    case 'runtime.get': case 'case.state': case 'source.list': return EmptyParamsSchema.parse(params);
     case 'case.create': return CreateCaseInputSchema.parse(params);
     case 'case.open': return CaseOpenParamsSchema.parse(params);
     case 'source.add_image': return AddImageSourceInputSchema.parse(params);
@@ -199,6 +206,7 @@ export function parseDesktopRpcResult(method: string, result: unknown): unknown 
   switch (method) {
     case 'runtime.get': return RuntimeInfoSchema.parse(result);
     case 'case.create': case 'case.open': return RecoveryCaseSchema.parse(result);
+    case 'case.state': return CaseStateSchema.parse(result);
     case 'source.list': return SourceDescriptorSchema.array().parse(result);
     case 'source.add_image': return SourceDescriptorSchema.parse(result);
     case 'source.assess': return SourceAssessmentSchema.parse(result);

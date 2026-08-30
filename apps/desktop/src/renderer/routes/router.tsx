@@ -35,6 +35,7 @@ export const router = createHashRouter([
       { index: true, element: <Navigate to="overview" replace /> },
       { path: 'overview', element: <CaseOverviewPage /> },
       { path: 'sources', element: <AddSourcePage /> },
+      { path: 'sources/add-image', element: <AddSourcePage /> },
       { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
       { path: 'recovery/destination', element: <DestinationPage /> },
       { path: 'recovery/acquisition', element: <AcquisitionOptions /> },
