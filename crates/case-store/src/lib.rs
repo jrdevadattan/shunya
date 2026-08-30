@@ -77,9 +77,18 @@ impl CaseStore {
         failure: FailurePoint,
     ) -> Result<Self, CaseStoreError> {
         validate_input(&input)?;
-        if root.exists() {
-            return Err(CaseStoreError::DestinationExists(root.to_path_buf()));
-        }
+        let replace_empty_destination = if root.exists() {
+            let metadata = fs::symlink_metadata(root)?;
+            if !metadata.is_dir()
+                || metadata.file_type().is_symlink()
+                || fs::read_dir(root)?.next().is_some()
+            {
+                return Err(CaseStoreError::DestinationExists(root.to_path_buf()));
+            }
+            true
+        } else {
+            false
+        };
         let parent = root.parent().unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(parent)?;
         let staging = parent.join(format!(
@@ -90,7 +99,13 @@ impl CaseStore {
             Uuid::now_v7()
         ));
 
-        let result = Self::create_staged(root, &staging, input, failure);
+        let result = Self::create_staged(
+            root,
+            &staging,
+            input,
+            failure,
+            replace_empty_destination,
+        );
         if result.is_err() && staging.exists() {
             let _ = fs::remove_dir_all(&staging);
         }
@@ -102,6 +117,7 @@ impl CaseStore {
         staging: &Path,
         input: CaseInput,
         failure: FailurePoint,
+        replace_empty_destination: bool,
     ) -> Result<Self, CaseStoreError> {
         fs::create_dir(staging)?;
         for directory in CASE_DIRECTORIES {
@@ -132,6 +148,12 @@ impl CaseStore {
         }
 
         write_manifest_atomic(staging, &manifest)?;
+        if replace_empty_destination {
+            // A native folder picker can only return an existing directory. Removing it
+            // succeeds only while it is still empty, so a concurrent writer cannot be
+            // overwritten before the staged case is atomically moved into place.
+            fs::remove_dir(root)?;
+        }
         fs::rename(staging, root)?;
         Self::open(root)
     }

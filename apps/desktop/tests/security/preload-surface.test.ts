@@ -37,6 +37,24 @@ describe('preload API surface', () => {
     expect(invoke).toHaveBeenCalledWith('dialog.choose_workspace', {});
   });
 
+  it('turns Electron IPC wrappers and daemon codes into a useful recovery message', async () => {
+    const api = createRecoveryApi({
+      invoke: vi.fn().mockRejectedValue(new Error(
+        "Error invoking remote method 'case.create': Error: CASE_CREATE_FAILED: destination already exists and will not be overwritten: D:\\case",
+      )),
+      subscribe: () => () => undefined,
+    });
+
+    await expect(api.createCase({
+      title: 'Laptop recovery',
+      operator: 'analyst-7',
+      referenceNumber: null,
+      organization: null,
+      workspacePath: 'D:\\case',
+      notes: null,
+    })).rejects.toThrow('That folder already contains files. Choose an empty folder so nothing is overwritten.');
+  });
+
   it('rejects malformed daemon responses instead of casting unknown values', async () => {
     const api = createRecoveryApi({
       invoke: async () => [],

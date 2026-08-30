@@ -60,3 +60,16 @@ fn refuses_to_overwrite_non_empty_destination() {
         "user data"
     );
 }
+
+#[test]
+fn initializes_an_existing_empty_destination_selected_by_a_folder_picker() {
+    let workspace = tempdir().unwrap();
+    let case_root = workspace.path().join("selected-empty-folder");
+    fs::create_dir(&case_root).unwrap();
+
+    let store = CaseStore::create(&case_root, input()).unwrap();
+
+    assert_eq!(store.manifest().workspace_path, case_root);
+    assert!(case_root.join("case.json").is_file());
+    assert!(case_root.join("case.sqlite").is_file());
+}
