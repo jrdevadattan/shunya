@@ -9,6 +9,8 @@ import { SourceAssessmentPage } from '../../src/renderer/features/sources/Source
 import { AddSourcePage } from '../../src/renderer/features/sources/AddSourcePage.js';
 import { PartitionList } from '../../src/renderer/features/sources/PartitionList.js';
 import { JobProgressPage } from '../../src/renderer/features/jobs/JobProgressPage.js';
+import { ReadErrorMap } from '../../src/renderer/features/jobs/ReadErrorMap.js';
+import { DamagedDeviceWizard } from '../../src/renderer/features/recovery/DamagedDeviceWizard.js';
 import { ResultsPage } from '../../src/renderer/features/results/ResultsPage.js';
 import { ExportWizard } from '../../src/renderer/features/export/ExportWizard.js';
 import { ReportsPage } from '../../src/renderer/features/reports/ReportsPage.js';
@@ -643,9 +645,84 @@ describe('live renderer pages', () => {
     await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
     expect(await findText('Recovery completed')).toBeTruthy();
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
-    expect(container?.querySelector('[role="progressbar"][aria-label="Recovery progress"]')).toBeTruthy();
-    expect(container?.querySelector('ol[aria-label="Recovery progress"]')).toBeTruthy();
+    expect(container?.querySelector('[role="progressbar"][aria-label="Stage-based workflow progress"]')).toBeTruthy();
+    expect(container?.querySelector('ol[aria-label="Recovery stage timeline"]')).toBeTruthy();
     expect(container?.querySelector('[aria-label="Recovery event log"]')).toBeTruthy();
+  });
+
+  it('presents the daemon stage as an honest stage-based timeline rather than measured completion', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({ ...status, stage: 'carving' }) }) });
+    await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
+    expect(await findText('Searching remaining disk space')).toBeTruthy();
+    const timeline = container?.querySelector('ol[aria-label="Recovery stage timeline"]');
+    expect(timeline?.querySelectorAll('li')).toHaveLength(5);
+    expect(timeline?.querySelector('li[data-status="running"]')?.textContent).toContain('Recover and validate files');
+    expect(container?.querySelector('[role="progressbar"][aria-label="Stage-based workflow progress"]')?.getAttribute('aria-valuenow')).toBe('68');
+    expect(container?.textContent).toContain('Stage-based position, not measured bytes');
+    expect(container?.textContent).not.toMatch(/MB\/s|minutes remaining|files found/i);
+  });
+
+  it('shows the live source-to-workspace relationship and append-only daemon event stream', async () => {
+    Object.assign(window, { recoveryApi: api({
+      getJobStatus: vi.fn().mockResolvedValue({ ...status, stage: 'metadata_scan' }),
+      listJobEvents: vi.fn().mockResolvedValue([
+        { eventId: 'event-3', jobId: 'job-live', sequence: 3, stage: 'partition_scan', occurredAt: createdAt, message: 'Partition table recorded' },
+        { eventId: 'event-4', jobId: 'job-live', sequence: 4, stage: 'metadata_scan', occurredAt: createdAt, message: 'Metadata scan entered' },
+      ]),
+    }) });
+    await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
+    const relationship = container?.querySelector('figure[aria-label="Recovery data path"]');
+    expect(relationship?.textContent).toContain('source-live');
+    expect(relationship?.textContent).toContain('D:/case-live');
+    expect(relationship?.textContent).toContain('Read-only source');
+    expect(relationship?.textContent).toContain('Case workspace');
+    const stream = container?.querySelector('ol[aria-label="Recovery event stream"]');
+    expect(stream?.textContent).toContain('Partition table recorded');
+    expect(stream?.textContent).toContain('Metadata scan entered');
+  });
+
+  it('keeps pause and cancel available while disclosing that checkpoint telemetry is absent', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({ ...status, stage: 'carving' }) }) });
+    await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
+    expect(await findText('Checkpoint detail unavailable')).toBeTruthy();
+    expect(container?.textContent).toContain('No checkpoint time or byte range is reported');
+    expect(button('Pause').disabled).toBe(false);
+    expect(button('Cancel scan').disabled).toBe(false);
+  });
+
+  it('does not assign a workflow percentage or timeline position to a paused state', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({ ...status, stage: 'paused' }) }) });
+    await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
+    expect(await findText('Recovery paused')).toBeTruthy();
+    expect(container?.textContent).toContain('Stage position unavailable');
+    expect(container?.textContent).not.toContain('50%');
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(Array.from(container?.querySelectorAll('ol[aria-label="Recovery stage timeline"] li') ?? []).every((item) => item.getAttribute('data-status') === 'pending')).toBe(true);
+  });
+
+  it('renders a complete read-error legend without manufacturing acquisition coverage', async () => {
+    await renderRoute(<ReadErrorMap />, '/read-map', '/read-map');
+    const map = container?.querySelector('figure[aria-label="Device read coverage"]');
+    expect(map?.textContent).toContain('Rescued');
+    expect(map?.textContent).toContain('Unreadable');
+    expect(map?.textContent).toContain('Pending');
+    expect(map?.textContent).toContain('Not reported by the daemon');
+    expect(map?.querySelector('[role="img"]')).toBeNull();
+    expect(map?.textContent).not.toMatch(/\d+%/);
+  });
+
+  it('renders damaged-media workflow slots as unavailable capability states', async () => {
+    await renderRoute(<DamagedDeviceWizard />, '/cases/case-live/recovery/damaged', '/cases/:caseId/recovery/damaged');
+    expect(await findText('Create a safe working image')).toBeTruthy();
+    expect(container?.textContent).toContain('DDRESCUE_UI_UNAVAILABLE');
+    expect(container?.textContent).toContain('Source device details unavailable');
+    expect(container?.textContent).toContain('Working image destination unavailable');
+    expect(container?.textContent).toContain('Live read rate unavailable');
+    expect(container?.textContent).toContain('Checkpoint detail unavailable');
+    expect(button('Start first pass').disabled).toBe(true);
+    expect(button('Pause safely').disabled).toBe(true);
+    expect(button('Stop imaging').disabled).toBe(true);
+    expect(container?.textContent).not.toMatch(/GB copied|MB\/s|minutes remaining|\d+%/i);
   });
 
   it('does not overlap job polls while a prior status request is unresolved', async () => {

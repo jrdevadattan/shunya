@@ -6,14 +6,13 @@ import path from 'node:path';
 export async function createLiveCase(page: Page, title: string) {
   const parent = await mkdtemp(path.join(tmpdir(), 'recovery-context-e2e-'));
   const workspace = path.join(parent, 'case');
-  await page.getByRole('link', { name: /New recovery case/ }).click();
-  await page.getByLabel('Case title').fill(title);
-  await page.getByLabel('Operator name or ID').fill('e2e-operator');
-  await page.getByLabel('Case workspace destination').fill(workspace);
-  await page.getByRole('button', { name: 'Create case' }).click();
-  await page.getByRole('heading', { name: 'Case overview' }).waitFor();
-  const hash = await page.evaluate(() => window.location.hash);
-  const caseId = hash.match(/^#\/cases\/([^/]+)/)?.[1];
-  if (!caseId) throw new Error(`Case id missing from route: ${hash}`);
-  return { caseId, cleanup: () => rm(parent, { recursive: true, force: true }) };
+  const recoveryCase = await page.evaluate(async ({ caseTitle, workspacePath }) => window.recoveryApi.createCase({
+    title: caseTitle, operator: 'e2e-operator', referenceNumber: null, organization: null, workspacePath, notes: null,
+  }), { caseTitle: title, workspacePath: workspace });
+  await page.evaluate(({ caseId, workspacePath }) => {
+    sessionStorage.setItem(`recovery:${caseId}:workspacePath`, workspacePath);
+    window.location.hash = `#/cases/${caseId}/overview`;
+  }, { caseId: recoveryCase.caseId, workspacePath: recoveryCase.workspacePath });
+  await page.locator('.case-header__case', { hasText: title }).waitFor();
+  return { caseId: recoveryCase.caseId, cleanup: () => rm(parent, { recursive: true, force: true }) };
 }

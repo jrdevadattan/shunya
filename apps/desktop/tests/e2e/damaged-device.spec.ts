@@ -12,6 +12,10 @@ test('damaged device flow refuses to simulate unavailable ddrescue progress', as
     await expect(page.getByRole('heading', { name: 'Damaged device recovery' })).toBeVisible();
     await expect(page.getByText('DDRESCUE_UI_UNAVAILABLE')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start first pass' })).toBeDisabled();
-    await expect(page.getByText(/No rescued, unreadable, or pending ranges are simulated/)).toBeVisible();
+    await expect(page.getByText(/No source details, rates, ranges, or capabilities are simulated/)).toBeVisible();
+    await expect(page.getByText('Live read rate unavailable')).toBeVisible();
+    await expect(page.getByText('Checkpoint detail unavailable')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pause safely' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Stop imaging' })).toBeDisabled();
   } finally { await electronApp.close(); await cleanup(); }
 });

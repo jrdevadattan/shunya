@@ -13,7 +13,9 @@ function packagedExecutablePath(): string {
 }
 
 function testHarnessElectronPath(): string {
-  const electronRoot = path.resolve('node_modules/electron/dist');
+  const electronRoot = [path.resolve('node_modules/electron/dist'), path.resolve('../../node_modules/electron/dist')]
+    .find((candidate) => existsSync(candidate));
+  if (!electronRoot) throw new Error('Electron test runtime is missing.');
   if (process.platform === 'win32') return path.join(electronRoot, 'electron.exe');
   if (process.platform === 'darwin') return path.join(electronRoot, 'Electron.app', 'Contents', 'MacOS', 'Electron');
   return path.join(electronRoot, 'electron');
