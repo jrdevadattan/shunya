@@ -816,6 +816,112 @@ describe('live renderer pages', () => {
     expect(await findText(/not scanned/i)).toBeTruthy();
   });
 
+  it('builds the approved result rail only from evidenced metadata paths and keeps carved results separate', async () => {
+    const metadataArtifact: RecoveryArtifact = {
+      ...artifact,
+      artifactId: 'artifact-metadata',
+      displayName: 'ledger.xlsx',
+      originalName: 'ledger.xlsx',
+      originalPath: 'Users/Maya/Documents/ledger.xlsx',
+      recoveryMethod: 'metadata',
+      threatStatus: 'no_rule_match',
+    };
+    const carvedWithUntrustedPath: RecoveryArtifact = {
+      ...artifact,
+      artifactId: 'artifact-carved',
+      displayName: 'JPEG_000184.jpg',
+      originalPath: 'Invented/Carved/JPEG_000184.jpg',
+      threatStatus: 'no_rule_match',
+    };
+    Object.assign(window, { recoveryApi: api({
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [metadataArtifact, carvedWithUntrustedPath], nextCursor: null, totalCount: 2 }),
+      requestPreview: vi.fn().mockResolvedValue({ artifactId: 'artifact-metadata', status: 'unsupported', policy: 'metadata_only', detectedMimeType: null, derivativePath: null }),
+    }) });
+
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    await findText('ledger.xlsx');
+
+    expect(container?.querySelector('nav[aria-label="Recovered artifact folders and filters"]')).toBeTruthy();
+    expect(container?.textContent).toContain('Original folders');
+    expect(container?.textContent).toContain('Users');
+    expect(container?.textContent).toContain('Content-signature recovery');
+    expect(container?.textContent).not.toContain('Invented');
+    expect(container?.querySelector('table[aria-label="Recovered artifacts"]')).toBeTruthy();
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] thead th')).toHaveLength(6);
+  });
+
+  it('shows selected artifact evidence and a truthful export selection summary', async () => {
+    const evidenced: RecoveryArtifact = {
+      ...artifact,
+      originalName: 'ledger.xlsx',
+      originalPath: 'Users/Maya/Documents/ledger.xlsx',
+      displayName: 'ledger.xlsx',
+      recoveryMethod: 'metadata',
+      threatStatus: 'no_rule_match',
+    };
+    Object.assign(window, { recoveryApi: api({
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [evidenced], nextCursor: null, totalCount: 1 }),
+      requestPreview: vi.fn().mockResolvedValue({ artifactId: evidenced.artifactId, status: 'unsupported', policy: 'metadata_only', detectedMimeType: evidenced.mimeType, derivativePath: null }),
+    }) });
+
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    await findText('ledger.xlsx');
+    expect(await findText('Evidence supporting recovery')).toBeTruthy();
+    expect(container?.textContent).toContain('Original path from a surviving file record');
+    expect(container?.textContent).toContain('Offset 4,096 · 42 bytes');
+
+    const select = container?.querySelector<HTMLInputElement>('input[aria-label="Select ledger.xlsx for export"]');
+    expect(select).toBeTruthy();
+    await click(select!);
+    expect(await findText('1 item selected')).toBeTruthy();
+    expect(container?.textContent).toContain('42 bytes selected');
+    expect(container?.querySelector('a[href="/cases/case-live/exports"]')?.textContent).toContain('Review export');
+  });
+
+  it('applies method filters through the typed artifact query', async () => {
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 1 });
+    Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    await findText('JPEG_live.jpg');
+
+    await click(button('Content-signature recovery'));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(queryArtifacts).toHaveBeenLastCalledWith({ search: undefined, method: 'carving', cursor: undefined, pageSize: 100 });
+  });
+
+  it('switches back to evidenced metadata when an original folder is selected after carving', async () => {
+    const metadataArtifact: RecoveryArtifact = { ...artifact, artifactId: 'artifact-metadata-folder', displayName: 'ledger.xlsx', originalPath: 'Users/Maya/ledger.xlsx', recoveryMethod: 'metadata', threatStatus: 'no_rule_match' };
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [metadataArtifact], nextCursor: null, totalCount: 1 });
+    Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    await findText('ledger.xlsx');
+    await click(button('Content-signature recovery'));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await click(button(/Users/));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(queryArtifacts).toHaveBeenLastCalledWith({ search: 'Users', method: 'metadata', cursor: undefined, pageSize: 100 });
+  });
+
+  it('enforces renderer preview refusal when active content is incorrectly advertised as safe', async () => {
+    const activeArtifact: RecoveryArtifact = {
+      ...artifact,
+      displayName: 'recovered-script.html',
+      extension: 'html',
+      mimeType: 'text/html',
+      threatStatus: 'no_rule_match',
+      previewStatus: 'safe_preview',
+    };
+    Object.assign(window, { recoveryApi: api({
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [activeArtifact], nextCursor: null, totalCount: 1 }),
+      requestPreview: vi.fn().mockResolvedValue({ artifactId: activeArtifact.artifactId, status: 'safe_preview', policy: 'incorrectly_allowed', detectedMimeType: activeArtifact.mimeType, derivativePath: 'D:/case/previews/unsafe.html' }),
+    }) });
+
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    expect(await findText('Protected preview blocked')).toBeTruthy();
+    expect(container?.textContent).toContain('Active content is never rendered or launched');
+    expect(container?.textContent).not.toContain('Sanitized derivative ready');
+  });
+
   it('sends changed result searches back through the typed daemon query', async () => {
     const queryArtifacts = vi.fn().mockResolvedValue({ items: [artifact], nextCursor: null, totalCount: 1 });
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
@@ -900,14 +1006,14 @@ describe('live renderer pages', () => {
     await act(async () => staleAppend.resolve({ items: [], nextCursor: null, totalCount: 1 }));
   });
 
-  it('offers only the live text search filter and uses complete ARIA grid cells', async () => {
+  it('offers live typed filters and uses a complete semantic artifact table', async () => {
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
-    expect(container?.querySelectorAll('[role="columnheader"]')).toHaveLength(4);
-    expect(container?.querySelectorAll('[role="gridcell"]')).toHaveLength(4);
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] th')).toHaveLength(6);
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] tbody td')).toHaveLength(6);
     expect(container?.querySelectorAll('.results-filters input[type="checkbox"]')).toHaveLength(0);
     expect(container?.textContent).not.toContain('Save filter');
-    expect(container?.textContent).toContain('Additional result filters are unavailable');
+    expect(container?.textContent).toContain('Content-signature recovery');
   });
 
   it('does not present unsupported file-family controls as active scan inputs', async () => {
@@ -936,6 +1042,15 @@ describe('live renderer pages', () => {
     expect((await findText(/physical topology could not be proven/)).getAttribute('role')).toBe('alert');
   });
 
+  it('keeps export source identity pending until live artifact traversal returns', async () => {
+    const pendingArtifacts = deferred<{ items: RecoveryArtifact[]; nextCursor: null; totalCount: number }>();
+    Object.assign(window, { recoveryApi: api({ queryArtifacts: vi.fn().mockReturnValue(pendingArtifacts.promise) }) });
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    expect(container?.textContent).toContain('Loading source identity…');
+    expect(container?.textContent).not.toContain('0 source identities');
+    await act(async () => pendingArtifacts.resolve({ items: [artifact], nextCursor: null, totalCount: 1 }));
+  });
+
   it('loads every artifact cursor before selecting files for export', async () => {
     const firstPage = Array.from({ length: 500 }, (_, index) => ({ ...artifact, artifactId: `artifact-${index + 1}`, displayName: `Artifact ${index + 1}` }));
     const lastArtifact = { ...artifact, artifactId: 'artifact-501', displayName: 'Artifact 501' };
@@ -959,6 +1074,23 @@ describe('live renderer pages', () => {
     expect(container?.textContent).not.toContain('Export complete');
   });
 
+  it('summarizes large complete-cursor export selections without rendering every artifact row', async () => {
+    const firstPage = Array.from({ length: 500 }, (_, index) => ({ ...artifact, artifactId: `artifact-a-${index}`, displayName: `Artifact A ${index}` }));
+    const secondPage = Array.from({ length: 500 }, (_, index) => ({ ...artifact, artifactId: `artifact-b-${index}`, displayName: `Artifact B ${index}` }));
+    const finalArtifact = { ...artifact, artifactId: 'artifact-final', displayName: 'Artifact final' };
+    const queryArtifacts = vi.fn()
+      .mockResolvedValueOnce({ items: firstPage, nextCursor: 'cursor-500', totalCount: 1001 })
+      .mockResolvedValueOnce({ items: secondPage, nextCursor: 'cursor-1000', totalCount: 1001 })
+      .mockResolvedValueOnce({ items: [finalArtifact], nextCursor: null, totalCount: 1001 });
+    Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
+
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    expect(await findText('1,001 items selected')).toBeTruthy();
+    expect(queryArtifacts).toHaveBeenCalledTimes(3);
+    expect(container?.querySelectorAll('.export-selection-list label').length).toBeLessThanOrEqual(50);
+    expect(container?.textContent).toContain('Complete cursor traversal');
+  });
+
   it('does not announce export completion when any returned item is unverified', async () => {
     Object.assign(window, { recoveryApi: api({ exportArtifacts: vi.fn().mockResolvedValue({
       exportId: 'export-mixed', items: [
@@ -980,6 +1112,10 @@ describe('live renderer pages', () => {
     await click(button('Generate report'));
     expect(await findText('D:/case/report.json')).toBeTruthy();
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
+    expect(container?.textContent).toContain('Report output ready');
+    expect(container?.textContent).toContain('JSON evidence record');
+    expect(container?.textContent).toContain('Markdown recovery summary');
+    expect(container?.textContent).toContain('Only daemon-recorded evidence is included');
   });
 
   it('removes simulated memory findings and shows typed live capability refusal', async () => {

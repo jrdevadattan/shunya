@@ -8,7 +8,11 @@ export type PreviewDecision =
   | { kind: 'blocked'; reason: 'active_content' | 'potential_threat' | 'corrupt' | 'scan_incomplete' }
   | { kind: 'sanitized_image' | 'bounded_text' | 'pdf_pages' | 'metadata_only' };
 
-const activeTypes = new Set(['application/x-msdownload', 'application/x-executable', 'application/javascript', 'text/html', 'application/x-sh']);
+const activeTypes = new Set([
+  'application/javascript', 'application/x-dosexec', 'application/x-executable', 'application/x-msdownload',
+  'application/x-msdos-program', 'application/x-sh', 'application/xhtml+xml', 'image/svg+xml', 'text/html',
+  'text/javascript', 'text/x-shellscript',
+]);
 
 export function decidePreview(input: PreviewInput): PreviewDecision {
   if (input.threat === 'potential_threat') return { kind: 'blocked', reason: 'potential_threat' };

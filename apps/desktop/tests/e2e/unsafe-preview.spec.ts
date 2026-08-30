@@ -9,7 +9,7 @@ test('results screen reports the daemon error instead of showing a static unsafe
     const page = await electronApp.firstWindow();
     const context = await createLiveCase(page, 'Unsafe preview context'); cleanup = context.cleanup;
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/results`; }, context.caseId);
-    await expect(page.getByRole('alert')).toContainText('JOB_NOT_FOUND');
+    await expect(page.getByRole('alert')).toContainText('No recovery job is active');
     await expect(page.getByText('script.exe')).toHaveCount(0);
     await expect(page.getByText('Open with system app')).toHaveCount(0);
   } finally { await electronApp.close(); await cleanup(); }
