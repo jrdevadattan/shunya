@@ -18,11 +18,15 @@ import { MemorySourcePage } from '../features/memory/MemorySourcePage.js';
 import { MemoryOptionsPage } from '../features/memory/MemoryOptionsPage.js';
 import { MemoryResultsPage } from '../features/memory/MemoryResultsPage.js';
 import { CaseOverviewPage } from './CaseOverviewPage.js';
+import { AboutPage, HelpPage, SettingsPage } from './SupportPages.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
   { path: '/cases/new', element: <NewCasePage /> },
   { path: '/cases/open', element: <NewCasePage /> },
+  { path: '/settings', element: <SettingsPage /> },
+  { path: '/help', element: <HelpPage /> },
+  { path: '/about', element: <AboutPage /> },
   {
     path: '/cases/:caseId',
     element: <CaseLayout />,

@@ -1,41 +1,44 @@
-import { CapabilityBanner, RuntimeModeBadge } from '@recovery/ui';
-import { BrainCircuit, FolderOpen, HardDrive, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowRight, BrainCircuit, FolderOpen, HardDrive, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { copy } from '../i18n/en.js';
+import { ApplicationShell } from './ApplicationShell.js';
 
-const cards = [
-  { title: copy.newCase, description: copy.newCaseDescription, to: '/cases/new', icon: Plus, label: 'Case' },
-  { title: copy.openCase, description: copy.openCaseDescription, to: '/cases/open', icon: FolderOpen, label: 'Workspace' },
-  { title: copy.diskImage, description: copy.diskImageDescription, to: '/cases/new?source=disk-image', icon: HardDrive, label: 'Evidence' },
-  { title: copy.memoryImage, description: copy.memoryImageDescription, to: '/cases/new?source=memory-image', icon: BrainCircuit, label: 'Analysis' },
+const recoveryPaths = [
+  { title: 'Recover from a device', description: 'Create a case, then add a supported read-only source.', to: '/cases/new', icon: HardDrive },
+  { title: 'Analyze a disk image', description: 'Create a case for an existing RAW image.', to: '/cases/new?source=disk-image', icon: FolderOpen },
+  { title: 'Analyze a memory image', description: 'Review the verified memory-analysis capability before starting.', to: '/cases/new?source=memory-image', icon: BrainCircuit },
 ];
 
 export function WelcomePage() {
   return (
-    <main className="welcome-page">
-      <header className="welcome-topbar">
-        <div className="welcome-brand"><span aria-hidden="true"><ShieldCheck /></span><strong>SHUNYA Recovery</strong></div>
-        <RuntimeModeBadge mode="installed" />
-      </header>
-      <section className="welcome-hero">
-        <p className="eyebrow">Digital recovery workspace</p>
-        <h1>{copy.welcomeTitle}</h1>
-        <p>{copy.welcomeSubtitle}</p>
-      </section>
-      <section aria-labelledby="start-recovery-title">
-        <div className="section-heading"><div><p className="eyebrow">Get started</p><h2 id="start-recovery-title">Choose a recovery path</h2></div></div>
-        <div className="start-grid">
-          {cards.map((card) => (
-            <Link className="start-card" to={card.to} key={card.title}>
-              <span className="start-card__icon" aria-hidden="true"><card.icon /></span>
-              <small>{card.label}</small>
-              <strong>{card.title}</strong>
-              <span>{card.description}</span>
+    <ApplicationShell title="Cases">
+      <div className="welcome-page welcome-cases-home">
+        <header className="page-heading welcome-cases-home__heading">
+          <div>
+            <h1>Your recovery cases</h1>
+            <p className="page-heading__description">Start a new recovery or open a workspace you already know.</p>
+          </div>
+          <Link className="button button--primary button--icon" to="/cases/new"><Plus aria-hidden="true" />New recovery</Link>
+        </header>
+
+        <section className="recovery-paths" aria-label="Start a recovery">
+          {recoveryPaths.map((path) => (
+            <Link key={path.title} className="recovery-path" to={path.to}>
+              <path.icon aria-hidden="true" />
+              <span><strong>{path.title}</strong><small>{path.description}</small></span>
+              <ArrowRight aria-hidden="true" />
             </Link>
           ))}
-        </div>
-      </section>
-      <CapabilityBanner level="info" title="Installed Mode" explanation={copy.installedNotice} />
-    </main>
+        </section>
+
+        <section className="recent-cases-unavailable" aria-labelledby="recent-cases-title">
+          <div>
+            <h2 id="recent-cases-title">Recent cases</h2>
+            <p>Recent cases are unavailable because the recovery service does not expose a case index.</p>
+            <p>Open a known workspace folder to continue a case without displaying invented history.</p>
+          </div>
+          <Link className="button button--secondary button--icon" to="/cases/open"><FolderOpen aria-hidden="true" />Open existing case</Link>
+        </section>
+      </div>
+    </ApplicationShell>
   );
 }

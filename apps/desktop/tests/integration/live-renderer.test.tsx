@@ -3,7 +3,7 @@
 import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Link, MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
+import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes, useParams } from 'react-router-dom';
 import type { JobStatus, RecoveryArtifact } from '@recovery/contracts';
 import { SourceAssessmentPage } from '../../src/renderer/features/sources/SourceAssessmentPage.js';
 import { PartitionList } from '../../src/renderer/features/sources/PartitionList.js';
@@ -18,6 +18,9 @@ import { CaseOverviewPage } from '../../src/renderer/routes/CaseOverviewPage.js'
 import { WorkflowFrame } from '../../src/renderer/components/WorkflowFrame.js';
 import { CapabilityBanner } from '@recovery/ui';
 import { NewCaseForm } from '../../src/renderer/features/cases/NewCaseForm.js';
+import { WelcomePage } from '../../src/renderer/routes/WelcomePage.js';
+import { router } from '../../src/renderer/routes/router.js';
+import { NewCasePage } from '../../src/renderer/routes/NewCasePage.js';
 
 const createdAt = '2026-08-29T12:00:00Z';
 const source = {
@@ -136,6 +139,52 @@ afterEach(() => {
 });
 
 describe('live renderer pages', () => {
+  it('renders the approved cases home without invented recent cases or device state', async () => {
+    await renderRoute(<WelcomePage />, '/', '/');
+
+    expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
+    expect(await findText('Your recovery cases')).toBeTruthy();
+    expect(container?.querySelector('a[href="/cases/new"]')?.textContent).toContain('New recovery');
+    expect(container?.textContent).toContain('Recent cases are unavailable because the recovery service does not expose a case index.');
+    expect(container?.textContent).toContain('Source writes blocked');
+    expect(container?.textContent).not.toContain('Device connected');
+    expect(container?.textContent).not.toContain('Finance Laptop Recovery');
+  });
+
+  it('keeps the approved sidebar visible while creating a case', async () => {
+    await renderRoute(<NewCasePage />, '/cases/new', '/cases/new');
+
+    expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
+    expect(container?.querySelector('a[aria-current="page"]')?.textContent).toContain('New case');
+    expect(await findText('Create recovery case')).toBeTruthy();
+  });
+
+  it('routes Settings, Help, and About to truthful support surfaces', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    let memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/settings'] });
+    await act(async () => {
+      root?.render(<RouterProvider router={memoryRouter} />);
+    });
+    expect(await findText('Settings')).toBeTruthy();
+    expect(container.textContent).toContain('Theme and sidebar choices are stored on this device.');
+
+    act(() => root?.unmount());
+    root = createRoot(container);
+    memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/help'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+    expect(await findText('Help')).toBeTruthy();
+    expect(container.textContent).toContain('Open or create a case before using case recovery tools.');
+
+    act(() => root?.unmount());
+    root = createRoot(container);
+    memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/about'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+    expect(await findText('About SHUNYA Recovery')).toBeTruthy();
+    expect(container.textContent).toContain('Offline-first, read-only recovery workspace');
+  });
+
   it('renders a semantic recovery workflow frame with current and completed steps', async () => {
     await renderRoute(
       <WorkflowFrame
@@ -180,14 +229,28 @@ describe('live renderer pages', () => {
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/overview']}><Routes><Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<p>Overview loaded</p>} /></Route></Routes></MemoryRouter>));
     await findText('Overview loaded');
 
-    expect(container.querySelectorAll('.navigation-group')).toHaveLength(3);
-    expect(container.querySelector('a[aria-current="page"]')?.textContent).toContain('Overview');
-    expect(container.textContent).toContain('Volatility is unavailable');
+    expect(Array.from(container.querySelectorAll('.navigation-item')).map((item) => item.textContent?.trim())).toEqual([
+      'Cases',
+      'New case',
+      'Case setup',
+      'Recovery',
+      'Verify',
+      'Reports',
+      'Settings',
+      'Help',
+      'About',
+    ]);
+    expect(container.querySelector('a[aria-current="page"]')?.textContent).toContain('Case setup');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Source writes blocked');
     const trigger = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.getAttribute('aria-label') === 'Search screens and actions');
     expect(trigger).toBeTruthy();
 
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
     expect(container.querySelector('[role="dialog"][aria-label="Command search"]')).toBeTruthy();
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Sources');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Recovery Jobs');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Recovered Files');
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('Exports');
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);

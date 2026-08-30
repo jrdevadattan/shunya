@@ -1,6 +1,6 @@
-import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
 export interface NavigationItem {
   id: string;
@@ -29,18 +29,49 @@ export interface AppShellProps {
 }
 
 export function AppShell({ brand, collapsed, onCollapsedChange, header, navigation, footer, children }: AppShellProps) {
-  const collapseLabel = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-  const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const [responsiveCollapsed, setResponsiveCollapsed] = useState(() => compactViewport().matches);
+  const effectiveCollapsed = collapsed || responsiveCollapsed;
+  const collapseLabel = responsiveCollapsed
+    ? 'Sidebar collapsed for this window width'
+    : collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  const [wordmark = brand, ...subtitleParts] = brand.split(' ');
+  const subtitle = subtitleParts.join(' ');
+  const approvedTokens = {
+    '--accent-primary': '#f56600',
+    '--status-success': '#2da44e',
+  } as CSSProperties;
+
+  useEffect(() => {
+    const query = compactViewport();
+    const onChange = (event: MediaQueryListEvent) => setResponsiveCollapsed(event.matches);
+    setResponsiveCollapsed(query.matches);
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, []);
 
   return (
-    <div className="app-shell" data-collapsed={String(collapsed)} data-testid="app-shell">
+    <div className="app-shell" data-collapsed={String(effectiveCollapsed)} data-responsive-collapsed={String(responsiveCollapsed)} data-testid="app-shell" style={approvedTokens}>
       <aside className="app-shell__sidebar" aria-label="Application sidebar">
         <div className="app-shell__brand">
-          <span className="app-shell__brand-mark" aria-hidden="true"><ShieldCheck /></span>
-          <strong className="app-shell__brand-label">{brand}</strong>
+          <span className="app-shell__brand-wordmark" aria-label={brand}>
+            <strong>{wordmark}</strong>
+            {subtitle ? <small>{subtitle}</small> : null}
+          </span>
+          <button
+            type="button"
+            className="app-shell__collapse"
+            aria-label={collapseLabel}
+            aria-controls="app-sidebar-navigation"
+            aria-expanded={!effectiveCollapsed}
+            disabled={responsiveCollapsed}
+            title={collapseLabel}
+            onClick={() => onCollapsedChange(!collapsed)}
+          >
+            <Menu aria-hidden="true" />
+          </button>
         </div>
 
-        <nav className="app-shell__navigation" aria-label="Case navigation">
+        <nav id="app-sidebar-navigation" className="app-shell__navigation" aria-label="Case navigation">
           {navigation.map((group) => (
             <section className="navigation-group" key={group.id} aria-labelledby={`navigation-${group.id}`}>
               <h2 id={`navigation-${group.id}`}>{group.label}</h2>
@@ -59,13 +90,13 @@ export function AppShell({ brand, collapsed, onCollapsedChange, header, navigati
                     <li key={item.id}>
                       {item.disabledReason ? (
                         <div className="navigation-item__disabled">
-                          <button type="button" className="navigation-item" aria-disabled="true" title={`${item.label}: ${item.disabledReason}`}>
+                          <button type="button" className="navigation-item" aria-label={item.label} aria-disabled="true" title={`${item.label}: ${item.disabledReason}`}>
                             {content}
                           </button>
                           <span className="navigation-item__disabled-reason">{item.disabledReason}</span>
                         </div>
                       ) : (
-                        <a className="navigation-item" href={item.href} aria-current={item.active ? 'page' : undefined} title={collapsed ? item.label : undefined}>
+                        <a className="navigation-item" href={item.href} aria-label={item.label} aria-current={item.active ? 'page' : undefined} title={effectiveCollapsed ? item.label : undefined}>
                           {content}
                         </a>
                       )}
@@ -78,14 +109,15 @@ export function AppShell({ brand, collapsed, onCollapsedChange, header, navigati
         </nav>
 
         <div className="app-shell__sidebar-footer">{footer}</div>
-        <button type="button" className="app-shell__collapse" aria-label={collapseLabel} title={collapseLabel} onClick={() => onCollapsedChange(!collapsed)}>
-          <CollapseIcon aria-hidden="true" />
-          <span className="app-shell__collapse-label">{collapseLabel}</span>
-        </button>
       </aside>
 
       <header className="app-shell__header" data-height="48">{header}</header>
       <main className="app-shell__content">{children}</main>
     </div>
   );
+}
+
+function compactViewport(): Pick<MediaQueryList, 'matches' | 'addEventListener' | 'removeEventListener'> {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') return window.matchMedia('(max-width: 760px)');
+  return { matches: false, addEventListener: () => undefined, removeEventListener: () => undefined };
 }

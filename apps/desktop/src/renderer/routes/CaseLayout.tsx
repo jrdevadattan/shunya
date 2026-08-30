@@ -1,6 +1,6 @@
 import { AppShell, IconButton, RuntimeModeBadge } from '@recovery/ui';
 import { RecoveryCaseSchema, RuntimeInfoSchema, type RecoveryCase } from '@recovery/contracts';
-import { Search } from 'lucide-react';
+import { CircleCheck, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
 import { activeWorkspace, forgetCase } from '../application-state.js';
@@ -11,7 +11,7 @@ import {
   saveUiPreferences,
   type UiPreferences,
 } from '../features/preferences/ui-preferences.js';
-import { activeNavigationItem, caseNavigation } from './case-navigation.js';
+import { activeNavigationItem, caseCommandNavigation, caseNavigation } from './case-navigation.js';
 
 export function CaseLayout() {
   const { caseId = 'case' } = useParams();
@@ -23,6 +23,7 @@ export function CaseLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const navigation = caseNavigation(caseId, location.pathname);
+  const commandNavigation = caseCommandNavigation(caseId, location.pathname);
   const activeItem = activeNavigationItem(navigation);
 
   useEffect(() => applyTheme(preferences.theme), [preferences.theme]);
@@ -83,6 +84,7 @@ export function CaseLayout() {
           <div className="case-header">
             <div className="case-header__title">
               <strong>{activeItem?.label ?? 'Recovery workspace'}</strong>
+              {recoveryCase ? <span className="case-header__case">{recoveryCase.title}</span> : null}
               {error ? <span role="alert">{error}</span> : null}
             </div>
             <div className="case-header__actions">
@@ -102,9 +104,9 @@ export function CaseLayout() {
           </div>
         )}
         footer={(
-          <div className="case-identity">
-            <strong>{recoveryCase?.title ?? 'Recovery case'}</strong>
-            <span>{caseId}</span>
+          <div className="sidebar-safety-status" role="status">
+            <CircleCheck aria-hidden="true" />
+            <span><strong>Source writes blocked</strong><small>Read-only recovery safeguards</small></span>
           </div>
         )}
       >
@@ -112,7 +114,7 @@ export function CaseLayout() {
           ? <Outlet />
           : <p role="status">{error ? 'Case content is unavailable.' : 'Opening case…'}</p>}
       </AppShell>
-      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} navigation={navigation} restoreFocusRef={searchTriggerRef} />
+      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} navigation={commandNavigation} restoreFocusRef={searchTriggerRef} />
     </>
   );
 }

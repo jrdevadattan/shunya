@@ -1,18 +1,18 @@
 :root {
   color-scheme: light;
-  --surface-app: oklch(0.985 0 0);
+  --surface-app: #fbfaf7;
   --surface-panel: oklch(1 0 0);
-  --surface-muted: oklch(0.97 0 0);
-  --surface-hover: oklch(0.955 0 0);
+  --surface-muted: #fff5ec;
+  --surface-hover: #f8ede4;
   --text-primary: oklch(0.145 0 0);
   --text-secondary: oklch(0.48 0 0);
   --text-tertiary: oklch(0.62 0 0);
-  --border-subtle: oklch(0.922 0 0);
-  --accent-primary: oklch(0.205 0 0);
-  --accent-hover: oklch(0.269 0 0);
-  --accent-contrast: oklch(0.985 0 0);
-  --focus-ring: oklch(0.488 0.243 264.376);
-  --status-success: oklch(0.527 0.154 150.069);
+  --border-subtle: #dfddd8;
+  --accent-primary: #f56600;
+  --accent-hover: #dc4f00;
+  --accent-contrast: #ffffff;
+  --focus-ring: #d94f00;
+  --status-success: #2da44e;
   --status-warning: oklch(0.666 0.179 58.318);
   --status-danger: oklch(0.577 0.245 27.325);
   --status-info: oklch(0.546 0.245 262.881);
@@ -29,8 +29,9 @@
   --text-secondary: oklch(0.74 0 0);
   --text-tertiary: oklch(0.62 0 0);
   --border-subtle: oklch(1 0 0 / 10%);
-  --accent-primary: oklch(0.922 0 0);
-  --accent-hover: oklch(0.87 0 0);
-  --accent-contrast: oklch(0.205 0 0);
-  --focus-ring: oklch(0.707 0.165 254.624);
+  --accent-primary: #ff7a1a;
+  --accent-hover: #ff934d;
+  --accent-contrast: #1f1712;
+  --focus-ring: #ff9b57;
+  --status-success: #46b969;
 }
