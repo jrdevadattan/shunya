@@ -54,6 +54,9 @@ async function invokeRecovery(transport: PreloadTransport, channel: string, ...a
 }
 
 function userFacingRecoveryError(message: string): string {
+  if (message.includes('WORKSPACE_PERMISSION_DENIED')) {
+    return 'The selected folder could not be inspected. Choose a folder you have permission to read.';
+  }
   if (message.includes('destination already exists and will not be overwritten')) {
     return 'That folder already contains files. Choose an empty folder so nothing is overwritten.';
   }

@@ -45,6 +45,7 @@ const artifact: RecoveryArtifact = {
 function api(overrides: Record<string, unknown> = {}) {
   return {
     getRuntimeInfo: vi.fn().mockResolvedValue({ mode: 'installed' }),
+    chooseWorkspaceFolder: vi.fn().mockResolvedValue(null),
     createCase: vi.fn(), openCase: vi.fn().mockResolvedValue({ caseId: 'case-live', title: 'Live case title', operator: 'operator', referenceNumber: null, organization: null, workspacePath: 'D:/case-live', notes: null, createdAt }), listSources: vi.fn().mockResolvedValue([source]), addImageSource: vi.fn(),
     assessSource: vi.fn().mockResolvedValue({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [{ code: 'DAEMON_READY', level: 'supported', title: 'Live image ready', explanation: 'Daemon assessment completed.', recommendedAction: 'Continue.' }] }),
     createRecoveryJob: vi.fn(), startJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn(), cancelJob: vi.fn(),
@@ -66,7 +67,7 @@ async function renderRoute(element: ReactNode, path: string, route: string) {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /></Routes></MemoryRouter>);
+    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /><Route path="/cases/:caseId/overview" element={<p>Created case overview</p>} /></Routes></MemoryRouter>);
   });
 }
 
@@ -156,7 +157,7 @@ describe('live renderer pages', () => {
 
     expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
     expect(container?.querySelector('a[aria-current="page"]')?.textContent).toContain('New case');
-    expect(await findText('Create recovery case')).toBeTruthy();
+    expect(await findText('Start a new recovery case')).toBeTruthy();
   });
 
   it('marks Cases as current while opening an existing case workspace', async () => {
@@ -216,13 +217,84 @@ describe('live renderer pages', () => {
     expect(await findText('Mounted source')).toBeTruthy();
   });
 
-  it('selects a case workspace with the native folder picker', async () => {
-    const chooseWorkspaceFolder = vi.fn().mockResolvedValue('D:/recovery-cases/friendly-case');
-    Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder }) });
+  it('guides case intake through Details, Workspace, and Review using live selection data', async () => {
+    const chooseWorkspaceFolder = vi.fn().mockResolvedValue({
+      selectedPath: 'D:/recovery-cases', rootPath: 'D:/', rootLabel: 'D:',
+      totalBytes: '2000000000000', freeBytes: '800000000000',
+      directories: [{
+        name: 'Prior Cases', relativePath: 'Prior Cases', childrenOmitted: false,
+        children: [{ name: 'Case 004', relativePath: 'Prior Cases/Case 004', children: [], childrenOmitted: false }],
+      }],
+      truncated: false,
+    });
+    const createCase = vi.fn().mockResolvedValue({
+      caseId: 'case-created', title: 'Finance laptop recovery', operator: 'examiner-7',
+      referenceNumber: 'FIN-2026-08-30', organization: 'Digital Lab',
+      workspacePath: 'D:/recovery-cases/Finance Case', notes: 'Priority recovery', createdAt,
+    });
+    Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder, createCase }) });
     await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
-    await click(button('Browse'));
+
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Details');
+    await change(input('Case title'), 'Finance laptop recovery');
+    await change(input('Operator name or ID'), 'examiner-7');
+    await change(input('Reference number'), 'FIN-2026-08-30');
+    await change(input('Organization or unit'), 'Digital Lab');
+    const notes = container?.querySelector<HTMLTextAreaElement>('textarea[name="notes"]');
+    expect(notes).toBeTruthy();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(notes, 'Priority recovery');
+      notes?.dispatchEvent(new Event('input', { bubbles: true }));
+      notes?.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await click(button('Continue to workspace'));
+
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
+    await click(button('Choose parent folder'));
     expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(input('Case workspace destination').value).toBe('D:/recovery-cases/friendly-case');
+    expect(await findText('Prior Cases')).toBeTruthy();
+    expect(await findText('Case 004')).toBeTruthy();
+    expect(container?.textContent).toContain('800 GB free');
+    expect(container?.textContent).toContain('2 TB total');
+    expect(container?.textContent).not.toMatch(/estimated needed|required space|headroom/i);
+    await change(input('Case folder name'), 'Finance Case');
+    expect(container?.textContent).toContain('D:/recovery-cases/Finance Case');
+    await click(button('Continue to review'));
+
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Review');
+    expect(container?.textContent).toContain('Finance laptop recovery');
+    expect(container?.textContent).toContain('examiner-7');
+    expect(container?.textContent).toContain('FIN-2026-08-30');
+    expect(container?.textContent).toContain('Digital Lab');
+    expect(container?.textContent).toContain('Priority recovery');
+    expect(container?.textContent).toContain('D:/recovery-cases/Finance Case');
+    await click(button('Create case'));
+
+    expect(createCase).toHaveBeenCalledWith({
+      title: 'Finance laptop recovery',
+      operator: 'examiner-7',
+      referenceNumber: 'FIN-2026-08-30',
+      organization: 'Digital Lab',
+      workspacePath: 'D:/recovery-cases/Finance Case',
+      notes: 'Priority recovery',
+    });
+  });
+
+  it('keeps the workspace step in place with an accessible error when inspection is denied', async () => {
+    Object.assign(window, { recoveryApi: api({
+      chooseWorkspaceFolder: vi.fn().mockRejectedValue(new Error(
+        'The selected folder could not be inspected. Choose a folder you have permission to read.',
+      )),
+    }) });
+    await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
+    await change(input('Case title'), 'Permission test case');
+    await change(input('Operator name or ID'), 'examiner-7');
+    await click(button('Continue to workspace'));
+    await click(button('Choose parent folder'));
+
+    const alert = await findText('The selected folder could not be inspected. Choose a folder you have permission to read.');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
   });
 
   it('opens the persisted case and renders the daemon case title', async () => {

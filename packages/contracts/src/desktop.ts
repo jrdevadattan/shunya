@@ -14,7 +14,46 @@ import {
 import { JobEventSchema } from './events.js';
 
 export const RuntimeInfoSchema = z.object({ mode: RuntimeModeSchema });
-export const WorkspaceFolderResultSchema = z.string().min(1).nullable();
+export const WORKSPACE_TREE_MAX_DEPTH = 3;
+export const WORKSPACE_TREE_MAX_ENTRIES = 200;
+export interface WorkspaceDirectoryEntry {
+  name: string;
+  relativePath: string;
+  children: WorkspaceDirectoryEntry[];
+  childrenOmitted: boolean;
+}
+export const WorkspaceDirectoryEntrySchema: z.ZodType<WorkspaceDirectoryEntry> = z.lazy(() => z.object({
+  name: z.string().min(1),
+  relativePath: z.string().min(1),
+  children: z.array(WorkspaceDirectoryEntrySchema),
+  childrenOmitted: z.boolean(),
+}).strict());
+export const WorkspaceSelectionSchema = z.object({
+  selectedPath: z.string().min(1),
+  rootPath: z.string().min(1),
+  rootLabel: z.string().min(1),
+  totalBytes: DecimalByteStringSchema,
+  freeBytes: DecimalByteStringSchema,
+  directories: z.array(WorkspaceDirectoryEntrySchema),
+  truncated: z.boolean(),
+}).strict().superRefine((selection, context) => {
+  let count = 0;
+  const visit = (entries: WorkspaceDirectoryEntry[], depth: number): void => {
+    for (const entry of entries) {
+      count += 1;
+      if (depth > WORKSPACE_TREE_MAX_DEPTH) {
+        context.addIssue({ code: 'custom', message: `Workspace directory tree exceeds depth ${WORKSPACE_TREE_MAX_DEPTH}.` });
+        return;
+      }
+      visit(entry.children, depth + 1);
+    }
+  };
+  visit(selection.directories, 1);
+  if (count > WORKSPACE_TREE_MAX_ENTRIES) {
+    context.addIssue({ code: 'custom', message: `Workspace directory tree exceeds ${WORKSPACE_TREE_MAX_ENTRIES} entries.` });
+  }
+});
+export const WorkspaceFolderResultSchema = WorkspaceSelectionSchema.nullable();
 export const SourceAssessmentSchema = z.object({
   sourceId: z.string().min(1),
   decision: z.enum(['ready', 'warning', 'blocked']),
@@ -96,6 +135,7 @@ export type CreateRecoveryJobInput = z.infer<typeof CreateRecoveryJobInputSchema
 export type ArtifactQuery = z.infer<typeof ArtifactQuerySchema>;
 export type ExportArtifactsInput = z.infer<typeof ExportArtifactsInputSchema>;
 export type RuntimeInfo = z.infer<typeof RuntimeInfoSchema>;
+export type WorkspaceSelection = z.infer<typeof WorkspaceSelectionSchema>;
 export type SourceAssessment = z.infer<typeof SourceAssessmentSchema>;
 export type CapabilityLimitation = z.infer<typeof CapabilityLimitationSchema>;
 export type PartitionDescriptor = z.infer<typeof PartitionDescriptorSchema>;
@@ -109,7 +149,7 @@ export type ReportDescriptor = z.infer<typeof ReportDescriptorSchema>;
 
 export interface RecoveryDesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
-  chooseWorkspaceFolder(): Promise<string | null>;
+  chooseWorkspaceFolder(): Promise<WorkspaceSelection | null>;
   createCase(input: CreateCaseInput): Promise<z.infer<typeof RecoveryCaseSchema>>;
   openCase(casePath: string): Promise<z.infer<typeof RecoveryCaseSchema>>;
   listSources(): Promise<z.infer<typeof SourceDescriptorSchema>[]>;

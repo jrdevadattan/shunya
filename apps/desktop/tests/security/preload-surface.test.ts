@@ -8,6 +8,8 @@ describe('preload API surface', () => {
     expect(recoveryApiMethodNames).not.toContain('writeFile');
     expect(recoveryApiMethodNames).not.toContain('runCommand');
     expect(recoveryApiMethodNames).not.toContain('openPath');
+    expect(recoveryApiMethodNames).not.toContain('inspectPath');
+    expect(recoveryApiMethodNames).not.toContain('listDirectory');
   });
 
   it('maps typed job status and event requests without exposing raw IPC', async () => {
@@ -30,11 +32,36 @@ describe('preload API surface', () => {
     ]);
   });
 
-  it('maps workspace folder selection through a narrow typed IPC method', async () => {
-    const invoke = vi.fn().mockResolvedValue('D:/recovery-cases/case-1');
+  it('maps dialog-scoped workspace inspection through a narrow typed IPC method', async () => {
+    const selection = {
+      selectedPath: 'D:/recovery-cases', rootPath: 'D:/', rootLabel: 'D:',
+      totalBytes: '2000000000000', freeBytes: '800000000000',
+      directories: [{ name: 'Prior Cases', relativePath: 'Prior Cases', children: [], childrenOmitted: false }],
+      truncated: false,
+    };
+    const invoke = vi.fn().mockResolvedValue(selection);
     const api = createRecoveryApi({ invoke, subscribe: () => () => undefined });
-    await expect(api.chooseWorkspaceFolder()).resolves.toBe('D:/recovery-cases/case-1');
+    await expect(api.chooseWorkspaceFolder()).resolves.toEqual(selection);
     expect(invoke).toHaveBeenCalledWith('dialog.choose_workspace', {});
+  });
+
+  it('preserves native folder-picker cancellation as null', async () => {
+    const api = createRecoveryApi({ invoke: vi.fn().mockResolvedValue(null), subscribe: () => () => undefined });
+
+    await expect(api.chooseWorkspaceFolder()).resolves.toBeNull();
+  });
+
+  it('turns workspace inspection permission failures into useful guidance', async () => {
+    const api = createRecoveryApi({
+      invoke: vi.fn().mockRejectedValue(new Error(
+        "Error invoking remote method 'dialog.choose_workspace': Error: WORKSPACE_PERMISSION_DENIED: selected folder cannot be inspected",
+      )),
+      subscribe: () => () => undefined,
+    });
+
+    await expect(api.chooseWorkspaceFolder()).rejects.toThrow(
+      'The selected folder could not be inspected. Choose a folder you have permission to read.',
+    );
   });
 
   it('turns Electron IPC wrappers and daemon codes into a useful recovery message', async () => {

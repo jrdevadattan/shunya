@@ -9,7 +9,7 @@ export function NewCasePage() {
       <div className="form-page">
         <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Back to workspace</Link>
         <header className="page-heading">
-          <div><p className="eyebrow">Case intake</p><h1>Create recovery case</h1><p className="page-heading__description">Set up a clean workspace first. You will select the recovery source on the next screen.</p></div>
+          <div><p className="eyebrow">Case intake</p><h1>Start a new recovery case</h1><p className="page-heading__description">Add the case details, inspect a parent folder, and review everything before creating the workspace.</p></div>
         </header>
         <NewCaseForm />
       </div>
