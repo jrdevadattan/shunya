@@ -437,6 +437,22 @@ describe('live renderer pages', () => {
     expect(relationship?.textContent).toContain('Read-only analysis path');
   });
 
+  it('clears source assessment state when the case route changes with the same source id', async () => {
+    const nextAssessment = deferred<Awaited<ReturnType<typeof window.recoveryApi.assessSource>>>();
+    const assessSource = vi.fn()
+      .mockResolvedValueOnce({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [{ code: 'CASE_A_READY', level: 'supported', title: 'Case A source ready', explanation: 'First case assessment.', recommendedAction: null }] })
+      .mockReturnValueOnce(nextAssessment.promise);
+    Object.assign(window, { recoveryApi: api({ assessSource }) });
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-a/sources/source-live/assessment']}><Routes><Route path="/cases/:caseId/sources/:sourceId/assessment" element={<><SourceAssessmentPage /><Link to="/cases/case-b/sources/source-live/assessment">Open case B assessment</Link></>} /></Routes></MemoryRouter>));
+    expect(await findText('Case A source ready')).toBeTruthy();
+
+    await click(Array.from(container.querySelectorAll('a')).find((item) => item.textContent === 'Open case B assessment')!);
+    expect(await findText('Assessing source…')).toBeTruthy();
+    expect(container.textContent).not.toContain('Case A source ready');
+    await act(async () => nextAssessment.resolve({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [] }));
+  });
+
   it('persists an explicit recovery goal selection before continuing to scan options', async () => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes><Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} /><Route path="/cases/:caseId/recovery/scan-options" element={<p>Scan options destination</p>} /></Routes></MemoryRouter>));
@@ -448,6 +464,23 @@ describe('live renderer pages', () => {
     expect(sessionStorage.getItem('recovery:case-live:goal')).toBe('recover_everything');
     await click(button('Continue to scan options'));
     expect(await findText('Scan options destination')).toBeTruthy();
+  });
+
+  it.each([
+    ['Damaged or failing device', 'Damaged-device workflow', '/cases/case-live/recovery/damaged'],
+    ['Memory analysis', 'Memory-analysis workflow', '/cases/case-live/memory'],
+  ] as const)('routes %s to its specialized recovery workflow', async (goalLabel, destination, destinationPath) => {
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes>
+      <Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} />
+      <Route path="/cases/:caseId/recovery/scan-options" element={<p>Generic scan workflow</p>} />
+      <Route path={destinationPath} element={<p>{destination}</p>} />
+    </Routes></MemoryRouter>));
+
+    await click(button(new RegExp(goalLabel)));
+    await click(button('Continue to scan options'));
+    expect(await findText(destination)).toBeTruthy();
+    expect(container.textContent).not.toContain('Generic scan workflow');
   });
 
   it('compares scan presets without invented timing and locks unsupported file-family controls', async () => {
@@ -474,6 +507,17 @@ describe('live renderer pages', () => {
     expect(button('Continue').disabled).toBe(true);
   });
 
+  it('clears a destination source when the next case has no active source', async () => {
+    sessionStorage.setItem('recovery:case-a:sourceId', 'source-live');
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-a/recovery/destination']}><Routes><Route path="/cases/:caseId/recovery/destination" element={<><DestinationPage /><Link to="/cases/case-b/recovery/destination">Open case B destination</Link></>} /></Routes></MemoryRouter>));
+    expect(await findText('live-evidence.raw')).toBeTruthy();
+
+    await click(Array.from(container.querySelectorAll('a')).find((item) => item.textContent === 'Open case B destination')!);
+    expect(await findText('No active source')).toBeTruthy();
+    expect(container.textContent).not.toContain('live-evidence.raw');
+  });
+
   it('keeps acquisition controls disabled while typed acquisition support is unavailable', async () => {
     await renderRoute(<AcquisitionOptions />, '/cases/case-live/recovery/acquisition', '/cases/:caseId/recovery/acquisition');
 
@@ -491,6 +535,53 @@ describe('live renderer pages', () => {
     expect(container?.querySelector('[aria-label="Detected partition tree"]')?.textContent).toContain('Evidence volume');
     expect(button('Choose partition scan scope').disabled).toBe(true);
     expect(container?.textContent).toContain('The typed recovery job API does not accept partition selections.');
+  });
+
+  it('includes candidate layouts in the main partition tree and map without inventing a length', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({
+      ...status,
+      goal: 'partition_loss',
+      partitions: {
+        sectorSize: 512,
+        partitions: [],
+        candidates: [{ startSector: '2048', startOffsetBytes: '1048576', filesystem: 'NTFS', confidence: 'high', source: 'filesystem signature' }],
+        gaps: [], rawToolOutput: null, toolVersion: null,
+      },
+    }) }) });
+    await renderRoute(<PartitionList />, '/cases/case-live/recovery/partitions', '/cases/:caseId/recovery/partitions');
+
+    const tree = container?.querySelector('[aria-label="Detected partition tree"]');
+    expect(tree?.textContent).toContain('0 reported partitions · 1 candidate layout');
+    expect(tree?.textContent).toContain('Candidate NTFS');
+    const map = container?.querySelector('figure[aria-label="Partition map"]');
+    expect(map?.textContent).toContain('Candidate NTFS');
+    expect(map?.querySelector('[aria-label="Candidate NTFS at byte 1,048,576, high confidence"]')).toBeTruthy();
+  });
+
+  it('formats partition byte labels beyond Number precision with exact BigInt arithmetic', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({
+      ...status,
+      partitions: {
+        sectorSize: 512,
+        partitions: [{ partitionId: 'partition-large', index: 1, startSector: '0', sectorCount: '37778931862957163680890', startOffsetBytes: '0', lengthBytes: '19342813113834067804616130', partitionType: 'data', filesystem: null, label: 'Large volume' }],
+        candidates: [], gaps: [], rawToolOutput: null, toolVersion: null,
+      },
+    }) }) });
+    await renderRoute(<PartitionList />, '/cases/case-live/recovery/partitions', '/cases/:caseId/recovery/partitions');
+
+    expect(container?.querySelector('figure[aria-label="Partition map"] [role="listitem"]')?.getAttribute('aria-label')).toBe('Large volume, 18014398509481984.9 GiB');
+  });
+
+  it('clears persisted partition results when the next case has no active job', async () => {
+    sessionStorage.setItem('recovery:case-a:jobId', 'job-live');
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-a/recovery/partitions']}><Routes><Route path="/cases/:caseId/recovery/partitions" element={<><PartitionList /><Link to="/cases/case-b/recovery/partitions">Open case B partitions</Link></>} /></Routes></MemoryRouter>));
+    expect(await findText('Evidence volume')).toBeTruthy();
+
+    await click(Array.from(container.querySelectorAll('a')).find((item) => item.textContent === 'Open case B partitions')!);
+    expect(await findText('No recovery job is active for this case.')).toBeTruthy();
+    expect(container.querySelector('figure[aria-label="Partition map"]')).toBeNull();
+    expect(container.textContent).not.toContain('Evidence volume');
   });
 
   it('creates and starts a daemon job before showing partition results', async () => {

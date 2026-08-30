@@ -444,10 +444,12 @@
 .partition-map__track { position: relative; height: 52px; margin: var(--space-5) 0; overflow: hidden; border-radius: 5px; background: var(--surface-muted); }
 .partition-map__track > span { position: absolute; top: 0; bottom: 0; min-width: 2px; border-right: 2px solid var(--surface-panel); background: var(--status-success); }
 .partition-map__track > span.is-gap { border: 1px dashed var(--text-tertiary); background: var(--surface-muted); }
+.partition-map__track > span.is-candidate { z-index: 2; width: 4px; transform: translateX(-100%); border: 1px solid var(--surface-panel); background: var(--accent-primary); }
 .partition-map > ul { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .partition-map > ul li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; align-items: start; }
 .partition-map > ul i { width: 10px; height: 10px; margin-top: 2px; background: var(--status-success); }
 .partition-map > ul i.is-gap { border: 1px solid var(--border-subtle); background: var(--surface-muted); }
+.partition-map > ul i.is-candidate { border: 2px solid var(--accent-primary); background: transparent; }
 .partition-map > ul span { display: grid; gap: 2px; }
 .partition-map > ul strong { font-size: 11px; }
 .partition-map > ul small { color: var(--text-secondary); font-size: 10px; }
@@ -468,6 +470,7 @@
 .partition-tree-card li small { color: var(--text-secondary); font-size: 10px; }
 .partition-tree__source > svg { width: 24px; height: 24px; }
 .partition-swatch { width: 12px; height: 26px; border-radius: 3px; background: var(--status-success); }
+.partition-swatch--candidate { border: 2px solid var(--accent-primary); background: transparent; }
 .partition-scope { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: var(--space-3); align-content: start; }
 .partition-scope > svg { width: 25px; height: 25px; color: var(--text-secondary); }
 .partition-scope .button { grid-column: 1 / -1; margin-top: var(--space-3); }

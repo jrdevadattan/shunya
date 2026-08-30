@@ -14,6 +14,10 @@ export function SourceAssessmentPage() {
   const [error, setError] = useState<string>();
   useEffect(() => {
     let active = true;
+    setSource(undefined);
+    setAssessment(undefined);
+    setRuntimeMode('installed');
+    setError(undefined);
     void window.recoveryApi.assessSource(sourceId)
       .then((result) => active && setAssessment(SourceAssessmentSchema.parse(result)))
       .catch((cause) => active && setError(message(cause)));
@@ -26,7 +30,7 @@ export function SourceAssessmentPage() {
       .then((runtime) => active && setRuntimeMode(RuntimeInfoSchema.parse(runtime).mode))
       .catch(() => undefined);
     return () => { active = false; };
-  }, [sourceId]);
+  }, [caseId, sourceId]);
   return <WorkflowFrame
     eyebrow="Source assessment"
     title={source?.displayName ?? 'Source safety assessment'}

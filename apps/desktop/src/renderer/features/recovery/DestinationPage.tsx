@@ -11,6 +11,7 @@ export function DestinationPage() {
   const [source, setSource] = useState<SourceDescriptor>();
   useEffect(() => {
     let active = true;
+    setSource(undefined);
     const sourceId = activeSourceId(caseId);
     if (!sourceId) return () => { active = false; };
     void window.recoveryApi.listSources().then((items) => {

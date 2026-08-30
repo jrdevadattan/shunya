@@ -29,9 +29,15 @@ export function GoalPage() {
     description="Choose the outcome that best matches the evidence. This changes the recovery strategy, never the source."
     steps={[{ id: 'source', label: 'Source', state: 'complete' }, { id: 'goal', label: 'Recovery goal', state: 'current' }, { id: 'scan', label: 'Scan options', state: 'upcoming' }]}
     aside={<div className="workflow-truth workflow-truth--safe"><ShieldCheck aria-hidden="true" /><span><strong>Source stays read-only</strong><small>Every goal uses recovery analysis only.</small></span></div>}
-    actions={<button className="button button--primary button--icon" type="button" disabled={!selected} onClick={() => void navigate(`/cases/${caseId}/recovery/scan-options`)}>Continue to scan options<ArrowRight aria-hidden="true" /></button>}
+    actions={<button className="button button--primary button--icon" type="button" disabled={!selected} onClick={() => void navigate(nextRoute(caseId, selected))}>Continue to scan options<ArrowRight aria-hidden="true" /></button>}
   >
     <div className="goal-selection" role="group" aria-label="Choose your recovery goal">{goals.map(([title, description, goal, Icon]) => <button className="goal-card" key={title} type="button" aria-pressed={selected === goal} onClick={() => choose(goal satisfies RecoveryGoal)}><span aria-hidden="true"><Icon /></span><span><strong>{title}</strong><small>{description}</small></span><i aria-hidden="true" /></button>)}</div>
     <p className="workflow-note">A surviving file record may restore the original name and folder. Content-only recovery may not preserve either.</p>
   </WorkflowFrame>;
+}
+
+function nextRoute(caseId: string, goal: RecoveryGoal | null): string {
+  if (goal === 'memory_analysis') return `/cases/${caseId}/memory`;
+  if (goal === 'damaged_device') return `/cases/${caseId}/recovery/damaged`;
+  return `/cases/${caseId}/recovery/scan-options`;
 }
