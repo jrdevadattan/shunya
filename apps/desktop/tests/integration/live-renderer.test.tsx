@@ -437,6 +437,15 @@ describe('live renderer pages', () => {
     expect(relationship?.textContent).toContain('Read-only analysis path');
   });
 
+  it('formats source sizes beyond Number precision with exact BigInt arithmetic', async () => {
+    const largeSource = { ...source, sizeBytes: '19342813113834067804616130' };
+    Object.assign(window, { recoveryApi: api({ listSources: vi.fn().mockResolvedValue([largeSource]) }) });
+
+    await renderRoute(<SourceAssessmentPage />, '/cases/case-live/sources/source-live/assessment', '/cases/:caseId/sources/:sourceId/assessment');
+
+    expect(await findText('18014398509481984.9 GiB · raw image')).toBeTruthy();
+  });
+
   it('clears source assessment state when the case route changes with the same source id', async () => {
     const nextAssessment = deferred<Awaited<ReturnType<typeof window.recoveryApi.assessSource>>>();
     const assessSource = vi.fn()
@@ -467,9 +476,9 @@ describe('live renderer pages', () => {
   });
 
   it.each([
-    ['Damaged or failing device', 'Damaged-device workflow', '/cases/case-live/recovery/damaged'],
-    ['Memory analysis', 'Memory-analysis workflow', '/cases/case-live/memory'],
-  ] as const)('routes %s to its specialized recovery workflow', async (goalLabel, destination, destinationPath) => {
+    ['Damaged or failing device', 'Continue to damaged-device recovery', 'Damaged-device workflow', '/cases/case-live/recovery/damaged'],
+    ['Memory analysis', 'Continue to memory analysis', 'Memory-analysis workflow', '/cases/case-live/memory'],
+  ] as const)('routes %s to its specialized recovery workflow', async (goalLabel, actionLabel, destination, destinationPath) => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes>
       <Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} />
@@ -478,7 +487,8 @@ describe('live renderer pages', () => {
     </Routes></MemoryRouter>));
 
     await click(button(new RegExp(goalLabel)));
-    await click(button('Continue to scan options'));
+    expect(container.textContent).not.toContain('Continue to scan options');
+    await click(button(actionLabel));
     expect(await findText(destination)).toBeTruthy();
     expect(container.textContent).not.toContain('Generic scan workflow');
   });
@@ -556,6 +566,31 @@ describe('live renderer pages', () => {
     const map = container?.querySelector('figure[aria-label="Partition map"]');
     expect(map?.textContent).toContain('Candidate NTFS');
     expect(map?.querySelector('[aria-label="Candidate NTFS at byte 1,048,576, high confidence"]')).toBeTruthy();
+  });
+
+  it('keeps partition candidates at both map boundaries inside the track', async () => {
+    Object.assign(window, { recoveryApi: api({ getJobStatus: vi.fn().mockResolvedValue({
+      ...status,
+      goal: 'partition_loss',
+      partitions: {
+        sectorSize: 512,
+        partitions: [{ partitionId: 'partition-edge', index: 1, startSector: '0', sectorCount: '2048', startOffsetBytes: '0', lengthBytes: '1048576', partitionType: 'data', filesystem: null, label: 'Extent' }],
+        candidates: [
+          { startSector: '0', startOffsetBytes: '0', filesystem: 'FAT32', confidence: 'high', source: 'boot signature' },
+          { startSector: '2048', startOffsetBytes: '1048576', filesystem: 'NTFS', confidence: 'medium', source: 'filesystem signature' },
+        ],
+        gaps: [], rawToolOutput: null, toolVersion: null,
+      },
+    }) }) });
+    await renderRoute(<PartitionList />, '/cases/case-live/recovery/partitions', '/cases/:caseId/recovery/partitions');
+
+    const map = container?.querySelector('figure[aria-label="Partition map"]');
+    const start = map?.querySelector<HTMLElement>('[aria-label="Candidate FAT32 at byte 0, high confidence"]');
+    const end = map?.querySelector<HTMLElement>('[aria-label="Candidate NTFS at byte 1,048,576, medium confidence"]');
+    expect(start?.style.left).toBe('0%');
+    expect(start?.classList.contains('is-candidate--start')).toBe(true);
+    expect(end?.style.left).toBe('100%');
+    expect(end?.classList.contains('is-candidate--end')).toBe(true);
   });
 
   it('formats partition byte labels beyond Number precision with exact BigInt arithmetic', async () => {

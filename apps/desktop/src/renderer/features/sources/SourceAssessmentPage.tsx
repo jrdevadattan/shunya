@@ -56,6 +56,14 @@ export function SourceAssessmentPage() {
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Source assessment failed.'; }
 function formatBytes(value: string): string {
-  const bytes = Number(value);
-  return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GiB` : `${bytes.toLocaleString()} bytes`;
+  const bytes = BigInt(value);
+  const gibibyte = 1024n ** 3n;
+  return bytes >= gibibyte ? `${formatUnit(bytes, gibibyte)} GiB` : `${formatInteger(value)} bytes`;
 }
+
+function formatUnit(value: bigint, unit: bigint): string {
+  const tenths = ((value * 10n) + (unit / 2n)) / unit;
+  return `${tenths / 10n}.${tenths % 10n}`;
+}
+
+function formatInteger(value: string): string { return value.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }

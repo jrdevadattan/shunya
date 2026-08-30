@@ -73,7 +73,7 @@ function PartitionMap({ result }: { result: NonNullable<JobStatus['partitions']>
   const extent = candidateMarkers.reduce((maximum, candidate) => candidate.start > maximum ? candidate.start : maximum, rangeExtent);
   return <figure className="partition-map" aria-label="Partition map">
     <figcaption><HardDrive aria-hidden="true" /><span><strong>Detected layout</strong><small>Bars use daemon-reported lengths; candidate markers show only reported starting offsets.</small></span></figcaption>
-    <div className="partition-map__track" role="list" aria-label="Detected layout segments">{ranges.map((range) => <span key={range.id} role="listitem" className={range.kind === 'gap' ? 'is-gap' : 'is-partition'} style={{ left: percent(range.start, extent), width: percent(range.length, extent) }} aria-label={`${range.label}, ${formatBytes(range.length.toString())}`} />)}{candidateMarkers.map((candidate) => <span key={candidate.id} role="listitem" className="is-candidate" style={{ left: percent(candidate.start, extent) }} aria-label={`${candidate.label} at byte ${formatInteger(candidate.start.toString())}, ${candidate.confidence} confidence`} />)}</div>
+    <div className="partition-map__track" role="list" aria-label="Detected layout segments">{ranges.map((range) => <span key={range.id} role="listitem" className={range.kind === 'gap' ? 'is-gap' : 'is-partition'} style={{ left: percent(range.start, extent), width: percent(range.length, extent) }} aria-label={`${range.label}, ${formatBytes(range.length.toString())}`} />)}{candidateMarkers.map((candidate) => <span key={candidate.id} role="listitem" className={`is-candidate ${candidateEdgeClass(candidate.start, extent)}`.trim()} style={{ left: percent(candidate.start, extent) }} aria-label={`${candidate.label} at byte ${formatInteger(candidate.start.toString())}, ${candidate.confidence} confidence`} />)}</div>
     <ul>{ranges.map((range) => <li key={range.id}><i className={range.kind === 'gap' ? 'is-gap' : 'is-partition'} aria-hidden="true" /><span><strong>{range.label}</strong><small>{formatBytes(range.length.toString())}</small></span></li>)}{candidateMarkers.map((candidate) => <li key={candidate.id}><i className="is-candidate" aria-hidden="true" /><span><strong>{candidate.label}</strong><small>Starts at byte {formatInteger(candidate.start.toString())} · {candidate.confidence} confidence · {candidate.source}</small></span></li>)}</ul>
   </figure>;
 }
@@ -81,6 +81,12 @@ function PartitionMap({ result }: { result: NonNullable<JobStatus['partitions']>
 function percent(value: bigint, total: bigint): string {
   if (total === 0n) return '0%';
   return `${Number((value * 10_000n) / total) / 100}%`;
+}
+
+function candidateEdgeClass(start: bigint, extent: bigint): string {
+  if (start === 0n) return 'is-candidate--start';
+  if (start >= extent) return 'is-candidate--end';
+  return '';
 }
 
 function formatBytes(value: string): string {
