@@ -58,3 +58,24 @@ The relevant packaged E2E tests initially could not reach Task 4 assertions beca
 
 - Throughput, ETA, measured byte progress, recovered item count, sector/range maps, device health, checkpoint/mapfile details, and damaged-media acquisition controls remain unavailable because the typed desktop API does not expose them.
 - The UI intentionally reserves those visual slots with explanatory unavailable states. Adding real values requires a separately specified and tested daemon/contract extension.
+
+## Fix Round 1/5
+
+Review findings addressed:
+
+- The damaged-media workspace now explicitly states `Rescue Mode only` for the MVP and tells Installed Mode operators: `In Installed Mode, stop using the source and restart SHUNYA in Rescue Mode.` The unavailable typed acquisition telemetry and all start/pause/stop controls remain disabled.
+- The inert `aria-label` on a generic event-log `div` was removed. The event stream is now exposed directly through `SurfaceCard`'s semantic `section`, whose `aria-labelledby` references its real `Event stream` heading; the ordered list remains independently labelled.
+
+RED evidence:
+
+- `corepack pnpm --filter @recovery/desktop exec vitest run tests/integration/live-renderer.test.tsx -t "semantic section|damaged-media workflow slots"` — 2/2 focused tests failed before production edits: the inert wrapper remained and the Rescue Mode statement/guidance was absent.
+- `corepack pnpm --filter @recovery/desktop exec playwright test tests/e2e/damaged-device.spec.ts` — failed against the packaged pre-fix app because `Rescue Mode only` was absent.
+
+GREEN evidence:
+
+- Focused renderer tests — 2/2 passed.
+- Full desktop tests — 87/87 passed across 9 files.
+- Desktop typecheck — passed.
+- Windows x64 Electron Forge package — passed.
+- Packaged `job-resume`, `active-job-reload`, and `damaged-device` E2E tests — 3/3 passed.
+- `git diff --check` — passed with only the repository's LF-to-CRLF notices.

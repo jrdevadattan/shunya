@@ -647,7 +647,7 @@ describe('live renderer pages', () => {
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
     expect(container?.querySelector('[role="progressbar"][aria-label="Stage-based workflow progress"]')).toBeTruthy();
     expect(container?.querySelector('ol[aria-label="Recovery stage timeline"]')).toBeTruthy();
-    expect(container?.querySelector('[aria-label="Recovery event log"]')).toBeTruthy();
+    expect(container?.querySelector('section.job-progress__log')).toBeTruthy();
   });
 
   it('presents the daemon stage as an honest stage-based timeline rather than measured completion', async () => {
@@ -679,6 +679,17 @@ describe('live renderer pages', () => {
     const stream = container?.querySelector('ol[aria-label="Recovery event stream"]');
     expect(stream?.textContent).toContain('Partition table recorded');
     expect(stream?.textContent).toContain('Metadata scan entered');
+  });
+
+  it('exposes the event stream as a heading-labelled semantic section without an inert div label', async () => {
+    await renderRoute(<JobProgressPage />, '/cases/case-live/jobs', '/cases/:caseId/jobs');
+    const region = container?.querySelector<HTMLElement>('section.job-progress__log[aria-labelledby]');
+    const heading = region?.querySelector<HTMLHeadingElement>('h2');
+    expect(region).toBeTruthy();
+    expect(heading?.textContent).toBe('Event stream');
+    expect(heading?.id).toBe(region?.getAttribute('aria-labelledby'));
+    expect(region?.querySelector('ol[aria-label="Recovery event stream"]')).toBeTruthy();
+    expect(container?.querySelector('div[aria-label="Recovery event log"]')).toBeNull();
   });
 
   it('keeps pause and cancel available while disclosing that checkpoint telemetry is absent', async () => {
@@ -719,6 +730,8 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Working image destination unavailable');
     expect(container?.textContent).toContain('Live read rate unavailable');
     expect(container?.textContent).toContain('Checkpoint detail unavailable');
+    expect(container?.textContent).toContain('Rescue Mode only');
+    expect(container?.textContent).toContain('In Installed Mode, stop using the source and restart SHUNYA in Rescue Mode.');
     expect(button('Start first pass').disabled).toBe(true);
     expect(button('Pause safely').disabled).toBe(true);
     expect(button('Stop imaging').disabled).toBe(true);

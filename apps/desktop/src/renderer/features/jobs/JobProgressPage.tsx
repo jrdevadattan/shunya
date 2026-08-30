@@ -130,10 +130,10 @@ export function JobProgressPage() {
       </div>
       {status.limitations.length ? <div className="job-progress__limitations">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={limitation.code} explanation={limitation.explanation} />)}</div> : null}
     </> : null}
-    <div aria-label="Recovery event log"><SurfaceCard title="Event stream" description="Append-only events returned by the recovery daemon." className="job-progress__log">
+    <SurfaceCard title="Event stream" description="Append-only events returned by the recovery daemon." className="job-progress__log">
       <ol aria-label="Recovery event stream">{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
       {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
-    </SurfaceCard></div>
+    </SurfaceCard>
   </section>;
 }
 

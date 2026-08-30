@@ -7,6 +7,7 @@ export function DamagedDeviceWizard() {
   return <WorkflowFrame eyebrow="Damaged-media recovery" title="Create a safe working image" description="For unstable or damaged media, copy readable areas first and retry difficult areas later." steps={[{ id: 'source', label: 'Source', state: 'complete' }, { id: 'workspace', label: 'Workspace', state: 'current' }, { id: 'review', label: 'Review', state: 'upcoming' }]}>
     <div className="damaged-workspace">
       <h2>Damaged device recovery</h2>
+      <CapabilityBanner level="info" title="Rescue Mode only" explanation="In Installed Mode, stop using the source and restart SHUNYA in Rescue Mode." />
       <CapabilityBanner level="warning" title="Damaged-device workflow unavailable" explanation="The current daemon does not expose a typed acquisition request, ddrescue telemetry, mapfile, or controls. No source details, rates, ranges, or capabilities are simulated." />
       <code>DDRESCUE_UI_UNAVAILABLE</code>
       <figure className="damaged-workspace__relationship" aria-label="Unavailable damaged-media data path">
