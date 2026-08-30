@@ -899,7 +899,7 @@ describe('live renderer pages', () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     await click(button(/Users/));
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-    expect(queryArtifacts).toHaveBeenLastCalledWith({ search: 'Users', method: 'metadata', cursor: undefined, pageSize: 100 });
+    expect(queryArtifacts).toHaveBeenLastCalledWith({ search: undefined, method: 'metadata', originalPathPrefix: 'Users', cursor: undefined, pageSize: 100 });
   });
 
   it('enforces renderer preview refusal when active content is incorrectly advertised as safe', async () => {
@@ -1087,8 +1087,74 @@ describe('live renderer pages', () => {
     await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
     expect(await findText('1,001 items selected')).toBeTruthy();
     expect(queryArtifacts).toHaveBeenCalledTimes(3);
-    expect(container?.querySelectorAll('.export-selection-list label').length).toBeLessThanOrEqual(50);
+    expect(container?.querySelectorAll('.export-selection-list > li')).toHaveLength(50);
     expect(container?.textContent).toContain('Complete cursor traversal');
+  });
+
+  it.each(['complete_unverified', 'partial_validated', 'partial_unverified', 'corrupt'] as const)(
+    'refuses %s artifacts before verified export submission',
+    async (recoveryState) => {
+      const ineligible = { ...artifact, artifactId: `artifact-${recoveryState}`, displayName: `${recoveryState}.bin`, recoveryState };
+      const exportArtifacts = vi.fn();
+      Object.assign(window, { recoveryApi: api({
+        queryArtifacts: vi.fn().mockResolvedValue({ items: [ineligible], nextCursor: null, totalCount: 1 }),
+        exportArtifacts,
+      }) });
+
+      await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+      expect(await findText(/Verified export requires every selected artifact to be complete and validated/)).toBeTruthy();
+      expect(button('Start verified export').disabled).toBe(true);
+      expect(exportArtifacts).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses mixed validated and unverified selections before submission', async () => {
+    const unverified = { ...artifact, artifactId: 'artifact-unverified', displayName: 'unverified.bin', recoveryState: 'complete_unverified' as const };
+    const exportArtifacts = vi.fn();
+    Object.assign(window, { recoveryApi: api({
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [artifact, unverified], nextCursor: null, totalCount: 2 }),
+      exportArtifacts,
+    }) });
+
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    expect(await findText(/1 of 2 selected artifacts is not eligible/)).toBeTruthy();
+    expect(button('Start verified export').disabled).toBe(true);
+    expect(exportArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a persisted explicit selection contains a missing artifact', async () => {
+    sessionStorage.setItem('recovery:case-live:exportArtifactIds', JSON.stringify([artifact.artifactId, 'artifact-stale']));
+    const exportArtifacts = vi.fn();
+    Object.assign(window, { recoveryApi: api({ exportArtifacts }) });
+
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    const failure = await findText(/Export selection is stale: 1 of 2 requested artifacts could not be found/);
+    expect(failure.closest('[role="alert"]')).toBeTruthy();
+    expect(container?.textContent).toContain('Return to Results and review the selection');
+    expect(exportArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a persisted explicit selection contains duplicate artifact IDs', async () => {
+    sessionStorage.setItem('recovery:case-live:exportArtifactIds', JSON.stringify([artifact.artifactId, artifact.artifactId]));
+    const exportArtifacts = vi.fn();
+    Object.assign(window, { recoveryApi: api({ exportArtifacts }) });
+
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    expect(await findText(/Export selection contains duplicate artifact identifiers/)).toBeTruthy();
+    expect(container?.textContent).toContain('Return to Results and review the selection');
+    expect(exportArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when complete export traversal repeats a cursor', async () => {
+    const queryArtifacts = vi.fn()
+      .mockResolvedValueOnce({ items: [artifact], nextCursor: 'cursor-repeat', totalCount: 3 })
+      .mockResolvedValueOnce({ items: [{ ...artifact, artifactId: 'artifact-two' }], nextCursor: 'cursor-repeat', totalCount: 3 });
+    const exportArtifacts = vi.fn();
+    Object.assign(window, { recoveryApi: api({ queryArtifacts, exportArtifacts }) });
+
+    await renderRoute(<ExportWizard />, '/cases/case-live/exports', '/cases/:caseId/exports');
+    expect(await findText(/Artifact pagination did not advance/)).toBeTruthy();
+    expect(exportArtifacts).not.toHaveBeenCalled();
   });
 
   it('does not announce export completion when any returned item is unverified', async () => {

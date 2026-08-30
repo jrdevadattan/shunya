@@ -10,6 +10,7 @@ export function ResultsPage() {
   const { caseId = '' } = useParams();
   const [search, setSearch] = useState('');
   const [method, setMethod] = useState<string>();
+  const [originalPathPrefix, setOriginalPathPrefix] = useState<string>();
   const [page, setPage] = useState<ArtifactPage>({ items: [], nextCursor: null, totalCount: 0 });
   const [selected, setSelected] = useState<string>();
   const [exportSelection, setExportSelection] = useState<Map<string, RecoveryArtifact>>(() => new Map());
@@ -28,7 +29,7 @@ export function ResultsPage() {
     const expectedGeneration = generation.current;
     const expectedAppendToken = ++appendToken.current;
     try {
-      const result = ArtifactPageSchema.parse(await window.recoveryApi.queryArtifacts({ search: search || undefined, method, cursor, pageSize: 100 }));
+      const result = ArtifactPageSchema.parse(await window.recoveryApi.queryArtifacts({ search: search || undefined, method, originalPathPrefix, cursor, pageSize: 100 }));
       if (generation.current === expectedGeneration) {
         setPage((current) => current.nextCursor === cursor ? { items: [...current.items, ...result.items], nextCursor: result.nextCursor, totalCount: result.totalCount } : current);
         setError(undefined);
@@ -45,11 +46,11 @@ export function ResultsPage() {
     const expectedGeneration = generation.current + 1;
     generation.current = expectedGeneration; appendToken.current += 1; appendInFlight.current = false;
     setLoadingMore(false); setPage({ items: [], nextCursor: null, totalCount: 0 }); setSelected(undefined); setPreview(undefined); setPreviewError(undefined); setError(undefined);
-    void window.recoveryApi.queryArtifacts({ search: search || undefined, method, cursor: undefined, pageSize: 100 })
+    void window.recoveryApi.queryArtifacts({ search: search || undefined, method, originalPathPrefix, cursor: undefined, pageSize: 100 })
       .then((value) => { const result = ArtifactPageSchema.parse(value); if (!active || generation.current !== expectedGeneration) return; setPage(result); setSelected(result.items[0]?.artifactId); })
       .catch((cause) => { if (active && generation.current === expectedGeneration) setError(message(cause)); });
     return () => { active = false; };
-  }, [search, method]);
+  }, [search, method, originalPathPrefix]);
 
   useEffect(() => {
     if (!selected) { setPreview(undefined); return; }
@@ -69,7 +70,7 @@ export function ResultsPage() {
     <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovery results</h1><p className="page-heading__description">Review indexed artifacts, their provenance, and protected preview status without launching recovered originals.</p></div><div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Daemon-indexed evidence</small></span></div></header>
     {error ? <p role="alert" className="form-error">{error}</p> : null}
     <div className="results-workspace" aria-label="Recovery result browser">
-      <ResultFilters artifacts={page.items} search={search} method={method} onSearch={setSearch} onMethod={setMethod} onFolder={(path) => { setMethod('metadata'); setSearch(path); }} />
+      <ResultFilters artifacts={page.items} search={search} method={method} originalPathPrefix={originalPathPrefix} onSearch={setSearch} onMethod={(value) => { setMethod(value); setOriginalPathPrefix(undefined); }} onFolder={(path) => { setMethod('metadata'); setOriginalPathPrefix(path); setSearch(''); }} />
       <main className="results-browser" aria-label="Recovered artifact table"><header><div><Files aria-hidden="true" /><span><h2>Recovered artifacts</h2><p>{page.items.length.toLocaleString('en-US')} loaded of {artifactLabel}</p></span></div><span><ShieldCheck aria-hidden="true" />Protected review</span></header>
         {page.items.length ? <ArtifactTable artifacts={page.items} selected={selected} exportSelection={exportSelection} onSelect={setSelected} onToggleExport={toggleExport} /> : <p className="empty-state">{error ? 'Results unavailable.' : 'No recovered artifacts were returned.'}</p>}
         {page.nextCursor ? <button className="button button--secondary results-browser__more" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading more results…' : 'Load more results'}</button> : null}

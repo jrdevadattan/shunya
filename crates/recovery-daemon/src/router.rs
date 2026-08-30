@@ -5,8 +5,8 @@ use image_io::RawImageReader;
 use job_engine::{CheckpointStatus, JobEngine, JobSnapshot, JobStage};
 use partition_scan::{PartitionScanResult, PartitionScanner};
 use recovery_domain::{
-    CapabilityLevel, PreviewStatus, RecoveryArtifact, RecoveryGoal, RuntimeMode, ScanPreset,
-    SourceRange, ThreatStatus,
+    CapabilityLevel, PreviewStatus, RecoveryArtifact, RecoveryGoal, RecoveryState, RuntimeMode,
+    ScanPreset, SourceRange, ThreatStatus,
 };
 use recovery_ipc::{RpcErrorBody, RpcFrame, RpcRequest};
 use reporting::{ExportRecord, RecoveryReportManifest, ToolRecord, generate_report};
@@ -570,6 +570,15 @@ impl DaemonState {
                     "ARTIFACT_NOT_FOUND",
                     format!("artifact not found: {artifact_id}"),
                 ))?;
+            if artifact.recovery_state != RecoveryState::CompleteValidated {
+                return Err((
+                    "EXPORT_SELECTION_NOT_VERIFIED",
+                    format!(
+                        "verified export requires complete_validated artifacts; {} is {:?}",
+                        artifact.artifact_id, artifact.recovery_state
+                    ),
+                ));
+            }
             items.push(ExportItem {
                 artifact_id: artifact.artifact_id.clone(),
                 source_path: artifact_payload_path(&root, artifact),

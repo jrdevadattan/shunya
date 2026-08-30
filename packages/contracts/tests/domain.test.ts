@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './fixtures/source-descriptor.json' with { type: 'json' };
-import { ArtifactPageSchema, WorkspaceDirectoryEntrySchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
+import { ArtifactPageSchema, ArtifactQuerySchema, WorkspaceDirectoryEntrySchema, WorkspaceFolderResultSchema, WorkspaceSelectionSchema } from '../src/desktop.js';
 import { JobStageSchema, SourceDescriptorSchema } from '../src/domain.js';
 
 describe('SourceDescriptor', () => {
@@ -27,6 +27,15 @@ describe('ArtifactPage', () => {
   it('requires and preserves the daemon-computed filtered total', () => {
     expect(ArtifactPageSchema.parse({ items: [], nextCursor: null, totalCount: 501 }).totalCount).toBe(501);
     expect(ArtifactPageSchema.safeParse({ items: [], nextCursor: null }).success).toBe(false);
+  });
+});
+
+describe('ArtifactQuery', () => {
+  it('normalizes an original-path folder prefix without turning it into free-text search', () => {
+    const parsed = ArtifactQuerySchema.parse({ originalPathPrefix: '\\Users\\Maya\\', pageSize: 100 });
+
+    expect(parsed).toEqual({ originalPathPrefix: 'Users/Maya', pageSize: 100 });
+    expect(parsed.search).toBeUndefined();
   });
 });
 

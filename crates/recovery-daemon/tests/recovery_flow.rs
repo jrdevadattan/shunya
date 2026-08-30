@@ -575,6 +575,63 @@ fn renderer_cannot_bypass_same_device_export_check() {
 }
 
 #[test]
+fn daemon_refuses_non_validated_and_mixed_export_selections_before_destination_checks() {
+    let temporary = tempdir().unwrap();
+    let (mut daemon, case_path, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
+    daemon.rpc("job.start", json!({ "jobId": job_id }));
+    let status = wait_for_stage(&mut daemon, &job_id, "completed");
+    let validated_id =
+        daemon.rpc("artifact.query", json!({ "pageSize": 1 }))["items"][0]["artifactId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+    let artifacts_path = case_path.join("work").join(&job_id).join("artifacts.json");
+    let mut stored: Vec<Value> =
+        serde_json::from_slice(&std::fs::read(&artifacts_path).unwrap()).unwrap();
+    let disallowed = [
+        "complete_unverified",
+        "partial_validated",
+        "partial_unverified",
+        "corrupt",
+    ];
+    for state in disallowed {
+        let mut fixture = active_artifact_fixture(&status["sourceId"]);
+        fixture["artifactId"] = json!(format!("artifact-{state}"));
+        fixture["displayName"] = json!(format!("{state}.bin"));
+        fixture["recoveryState"] = json!(state);
+        stored.push(fixture);
+    }
+    std::fs::write(&artifacts_path, serde_json::to_vec_pretty(&stored).unwrap()).unwrap();
+
+    for state in disallowed {
+        let error = daemon.rpc_error(
+            "export.start",
+            json!({
+                "artifactIds": [format!("artifact-{state}")],
+                "destinationPath": temporary.path().join("same-volume-export"),
+                "destinationPhysicalId": "renderer-lies-about-separation",
+                "acknowledgeUnsafe": true
+            }),
+        );
+        assert_eq!(
+            error["code"], "EXPORT_SELECTION_NOT_VERIFIED",
+            "state {state}"
+        );
+    }
+
+    let mixed_error = daemon.rpc_error(
+        "export.start",
+        json!({
+            "artifactIds": [validated_id, "artifact-complete_unverified"],
+            "destinationPath": temporary.path().join("same-volume-export"),
+            "destinationPhysicalId": "renderer-lies-about-separation",
+            "acknowledgeUnsafe": true
+        }),
+    );
+    assert_eq!(mixed_error["code"], "EXPORT_SELECTION_NOT_VERIFIED");
+}
+
+#[test]
 fn preview_requires_evidenced_derivative_and_blocks_active_formats() {
     let temporary = tempdir().unwrap();
     let (mut daemon, case_path, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
