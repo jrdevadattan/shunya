@@ -1,6 +1,7 @@
 import type { RecoveryGoal } from '@recovery/contracts';
-import { Link, useParams } from 'react-router-dom';
-import { Cpu, Files, LocateFixed, ScanSearch, ShieldAlert, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowRight, Cpu, Files, LocateFixed, ScanSearch, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { WorkflowFrame } from '../../components/WorkflowFrame.js';
 
 const goals = [
@@ -14,13 +15,23 @@ const goals = [
 
 export function GoalPage() {
   const { caseId = '' } = useParams();
+  const navigate = useNavigate();
+  const [selected, setSelected] = useState<RecoveryGoal | null>(() => sessionStorage.getItem(`recovery:${caseId}:goal`) as RecoveryGoal | null);
+
+  function choose(goal: RecoveryGoal) {
+    sessionStorage.setItem(`recovery:${caseId}:goal`, goal);
+    setSelected(goal);
+  }
+
   return <WorkflowFrame
     eyebrow="Recovery setup"
     title="What do you want to recover?"
-    description="Choose the outcome that best matches the evidence and incident."
+    description="Choose the outcome that best matches the evidence. This changes the recovery strategy, never the source."
     steps={[{ id: 'source', label: 'Source', state: 'complete' }, { id: 'goal', label: 'Recovery goal', state: 'current' }, { id: 'scan', label: 'Scan options', state: 'upcoming' }]}
+    aside={<div className="workflow-truth workflow-truth--safe"><ShieldCheck aria-hidden="true" /><span><strong>Source stays read-only</strong><small>Every goal uses recovery analysis only.</small></span></div>}
+    actions={<button className="button button--primary button--icon" type="button" disabled={!selected} onClick={() => void navigate(`/cases/${caseId}/recovery/scan-options`)}>Continue to scan options<ArrowRight aria-hidden="true" /></button>}
   >
-    <div className="selection-grid selection-grid--goals">{goals.map(([title, description, goal, Icon]) => <Link className="selection-card selection-card--link" key={title} to={`/cases/${caseId}/recovery/scan-options`} onClick={() => sessionStorage.setItem(`recovery:${caseId}:goal`, goal satisfies RecoveryGoal)}><span aria-hidden="true"><Icon /></span><strong>{title}</strong><p>{description}</p></Link>)}</div>
+    <div className="goal-selection" role="group" aria-label="Choose your recovery goal">{goals.map(([title, description, goal, Icon]) => <button className="goal-card" key={title} type="button" aria-pressed={selected === goal} onClick={() => choose(goal satisfies RecoveryGoal)}><span aria-hidden="true"><Icon /></span><span><strong>{title}</strong><small>{description}</small></span><i aria-hidden="true" /></button>)}</div>
     <p className="workflow-note">A surviving file record may restore the original name and folder. Content-only recovery may not preserve either.</p>
   </WorkflowFrame>;
 }

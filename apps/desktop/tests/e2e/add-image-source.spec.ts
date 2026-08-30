@@ -18,10 +18,12 @@ test('add image source identifies a RAW image without modifying it', async () =>
     await page.getByLabel('Case workspace destination').fill(path.join(directory, 'case'));
     await page.getByRole('button', { name: 'Create case' }).click();
     await page.getByRole('link', { name: 'Sources' }).click();
+    await expect(page.getByRole('button', { name: 'Discover physical devices' })).toBeDisabled();
     await page.getByLabel('Disk image path').fill(imagePath);
     await page.getByRole('button', { name: 'Add image source' }).click();
     await expect(page.getByRole('heading', { name: 'evidence.raw' })).toBeVisible();
     await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Read-only source relationship' })).toContainText('Read-only analysis path');
     expect(await (await import('node:fs/promises')).readFile(imagePath)).toEqual(original);
   } finally {
     await electronApp.close();

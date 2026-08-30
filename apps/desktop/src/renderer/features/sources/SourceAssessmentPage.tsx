@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AssessmentFinding } from './AssessmentFinding.js';
 import { WorkflowFrame } from '../../components/WorkflowFrame.js';
+import { ArrowRight, FileImage, FolderLock, HardDrive, ShieldCheck } from 'lucide-react';
 
 export function SourceAssessmentPage() {
   const { caseId = '', sourceId = '' } = useParams();
@@ -36,8 +37,21 @@ export function SourceAssessmentPage() {
   >
     {error ? <p className="form-error" role="alert">{error}</p> : null}
     {!assessment && !error ? <p role="status">Assessing source…</p> : null}
+    {source && assessment ? <figure className="safety-relationship" aria-label="Read-only source relationship">
+      <div className="safety-relationship__node safety-relationship__node--source">
+        {source.kind === 'physical_device' ? <HardDrive aria-hidden="true" /> : <FileImage aria-hidden="true" />}
+        <span><strong>{source.displayName}</strong><small>{formatBytes(source.sizeBytes)} · {source.kind.replaceAll('_', ' ')}</small><em>Read-only source</em></span>
+      </div>
+      <div className="safety-relationship__path"><ShieldCheck aria-hidden="true" /><strong>Read-only analysis path</strong><ArrowRight aria-hidden="true" /></div>
+      <div className="safety-relationship__node"><FolderLock aria-hidden="true" /><span><strong>Recovery workspace</strong><small>Case records and recovered output only</small><em>No writes to source</em></span></div>
+      <figcaption>{assessment.decision === 'ready' ? 'The daemon reports this source ready for recovery.' : assessment.decision === 'warning' ? 'Review every daemon warning before continuing.' : 'Recovery is blocked by the daemon assessment.'}</figcaption>
+    </figure> : null}
     <div className="finding-list">{assessment?.findings.map((finding) => <AssessmentFinding key={finding.code} finding={finding} />)}</div>
   </WorkflowFrame>;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Source assessment failed.'; }
+function formatBytes(value: string): string {
+  const bytes = Number(value);
+  return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GiB` : `${bytes.toLocaleString()} bytes`;
+}

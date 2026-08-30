@@ -1,4 +1,4 @@
-import { Check, Circle } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { SurfaceCard } from '@recovery/ui';
 import { useId, type ReactNode } from 'react';
 
@@ -28,9 +28,14 @@ export function WorkflowFrame({ eyebrow, title, description, steps, aside, actio
         <p>{description}</p>
       </header>
       <ol className="workflow-frame__steps" aria-label="Recovery workflow progress">
-        {steps.map((step) => (
-          <li key={step.id} data-state={step.state} aria-current={step.state === 'current' ? 'step' : undefined}>
-            <span className="workflow-frame__step-icon" aria-hidden="true">{step.state === 'complete' ? <Check /> : <Circle />}</span>
+        {steps.map((step, index) => (
+          <li
+            key={step.id}
+            data-state={step.state}
+            aria-current={step.state === 'current' ? 'step' : undefined}
+            aria-label={`${step.label} — ${step.state === 'current' ? 'current step' : step.state}`}
+          >
+            <span className="workflow-frame__step-icon" aria-hidden="true">{step.state === 'complete' ? <Check /> : index + 1}</span>
             <span><strong>{step.label}</strong><small>{step.state === 'complete' ? 'Complete' : step.state === 'current' ? 'Current' : 'Upcoming'}</small></span>
           </li>
         ))}

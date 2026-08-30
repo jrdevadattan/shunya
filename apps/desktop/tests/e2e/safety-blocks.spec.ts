@@ -10,6 +10,8 @@ test('destination screen does not invent topology safety evidence', async () => 
     const context = await createLiveCase(page, 'Destination safety context'); cleanup = context.cleanup;
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/recovery/destination`; }, context.caseId);
     await expect(page.getByText('Destination assessment unavailable')).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Source and destination safety relationship' })).toContainText('Destination not assessed');
+    await expect(page.getByRole('button', { name: 'Choose destination drive' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await expect(page.getByText(/No free-space or physical-separation result is assumed/)).toBeVisible();
   } finally {

@@ -32,11 +32,14 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await page.getByRole('button', { name: 'Add image source' }).click();
     await expect(page.getByText('Ready', { exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Choose recovery goal' }).click();
-    await page.getByRole('link', { name: /Recover everything/ }).click();
+    await page.getByRole('button', { name: /Recover everything/ }).click();
+    await page.getByRole('button', { name: 'Continue to scan options' }).click();
     await page.getByText('Full Scan', { exact: true }).locator('..').getByRole('button', { name: 'Use this preset' }).click();
     await expect(page.getByRole('heading', { name: 'Partitions found' })).toBeVisible();
     await expect(page.getByText('partition-1')).toBeVisible();
     await expect(page.getByText('FAT32', { exact: true })).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Partition map' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Detected partition tree' })).toContainText('partition-1');
     await page.getByRole('link', { name: 'Recovery Jobs' }).click();
     await expect(page.getByRole('heading', { name: 'Recovery completed' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/recovered content was not threat-scanned/i)).toBeVisible();

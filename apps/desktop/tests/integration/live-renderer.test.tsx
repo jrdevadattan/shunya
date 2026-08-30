@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, Link, MemoryRouter, Route, RouterProvider, Routes, useParams } from 'react-router-dom';
 import type { JobStatus, RecoveryArtifact } from '@recovery/contracts';
 import { SourceAssessmentPage } from '../../src/renderer/features/sources/SourceAssessmentPage.js';
+import { AddSourcePage } from '../../src/renderer/features/sources/AddSourcePage.js';
 import { PartitionList } from '../../src/renderer/features/sources/PartitionList.js';
 import { JobProgressPage } from '../../src/renderer/features/jobs/JobProgressPage.js';
 import { ResultsPage } from '../../src/renderer/features/results/ResultsPage.js';
@@ -14,6 +15,9 @@ import { ReportsPage } from '../../src/renderer/features/reports/ReportsPage.js'
 import { MemoryResultsPage } from '../../src/renderer/features/memory/MemoryResultsPage.js';
 import { CaseLayout } from '../../src/renderer/routes/CaseLayout.js';
 import { ScanOptionsPage } from '../../src/renderer/features/recovery/ScanOptionsPage.js';
+import { GoalPage } from '../../src/renderer/features/recovery/GoalPage.js';
+import { DestinationPage } from '../../src/renderer/features/recovery/DestinationPage.js';
+import { AcquisitionOptions } from '../../src/renderer/features/recovery/AcquisitionOptions.js';
 import { CaseOverviewPage } from '../../src/renderer/routes/CaseOverviewPage.js';
 import { WorkflowFrame } from '../../src/renderer/components/WorkflowFrame.js';
 import { CapabilityBanner } from '@recovery/ui';
@@ -212,9 +216,21 @@ describe('live renderer pages', () => {
       '/cases/:caseId/sources',
     );
     expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Assessment');
+    expect(container?.querySelector('[data-state="complete"]')?.getAttribute('aria-label')).toBe('Source — complete');
+    expect(container?.querySelector('[data-state="current"]')?.getAttribute('aria-label')).toBe('Assessment — current step');
     expect(container?.textContent).toContain('Complete');
     expect(container?.querySelector('section[aria-labelledby]')).toBeTruthy();
     expect(await findText('Mounted source')).toBeTruthy();
+  });
+
+  it('renders daemon inventory as live source cards and keeps unsupported physical discovery disabled', async () => {
+    await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
+
+    expect(await findText('live-evidence.raw')).toBeTruthy();
+    expect(container?.querySelector('[aria-label="Available recovery sources"]')).toBeTruthy();
+    const physicalDiscovery = button('Discover physical devices');
+    expect(physicalDiscovery.disabled).toBe(true);
+    expect(container?.textContent).toContain('Physical-device discovery is unavailable because the typed desktop API exposes image sources only.');
   });
 
   it('guides case intake through Details, Workspace, and Review using live selection data', async () => {
@@ -415,6 +431,55 @@ describe('live renderer pages', () => {
     await renderRoute(<SourceAssessmentPage />, '/cases/case-live/sources/source-live/assessment', '/cases/:caseId/sources/:sourceId/assessment');
     expect(await findText('Live image ready')).toBeTruthy();
     expect(await findText('live-evidence.raw')).toBeTruthy();
+    const relationship = container?.querySelector('figure[aria-label="Read-only source relationship"]');
+    expect(relationship).toBeTruthy();
+    expect(relationship?.textContent).toContain('Recovery workspace');
+    expect(relationship?.textContent).toContain('Read-only analysis path');
+  });
+
+  it('persists an explicit recovery goal selection before continuing to scan options', async () => {
+    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes><Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} /><Route path="/cases/:caseId/recovery/scan-options" element={<p>Scan options destination</p>} /></Routes></MemoryRouter>));
+
+    const goal = button(/Recover everything/);
+    expect(goal.getAttribute('aria-pressed')).toBe('false');
+    await click(goal);
+    expect(goal.getAttribute('aria-pressed')).toBe('true');
+    expect(sessionStorage.getItem('recovery:case-live:goal')).toBe('recover_everything');
+    await click(button('Continue to scan options'));
+    expect(await findText('Scan options destination')).toBeTruthy();
+  });
+
+  it('compares scan presets without invented timing and locks unsupported file-family controls', async () => {
+    await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
+
+    const comparison = container?.querySelector('table[aria-label="Scan preset comparison"]');
+    expect(comparison).toBeTruthy();
+    expect(comparison?.textContent).toContain('Quick Scan');
+    expect(comparison?.textContent).toContain('Full Scan');
+    expect(comparison?.textContent).toContain('Advanced');
+    expect(comparison?.textContent).toContain('No duration estimate available');
+    expect(button('Choose file families').disabled).toBe(true);
+  });
+
+  it('shows destination topology as unverified and keeps assessment controls disabled', async () => {
+    sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
+    await renderRoute(<DestinationPage />, '/cases/case-live/recovery/destination', '/cases/:caseId/recovery/destination');
+
+    const relationship = container?.querySelector('figure[aria-label="Source and destination safety relationship"]');
+    expect(relationship).toBeTruthy();
+    expect(relationship?.textContent).toContain('live-evidence.raw');
+    expect(relationship?.textContent).toContain('Destination not assessed');
+    expect(button('Choose destination drive').disabled).toBe(true);
+    expect(button('Continue').disabled).toBe(true);
+  });
+
+  it('keeps acquisition controls disabled while typed acquisition support is unavailable', async () => {
+    await renderRoute(<AcquisitionOptions />, '/cases/case-live/recovery/acquisition', '/cases/:caseId/recovery/acquisition');
+
+    expect(button('Create verified image').disabled).toBe(true);
+    expect(button('Choose block size').disabled).toBe(true);
+    expect(container?.textContent).toContain('No source size, required space, block size, or completion state is simulated.');
   });
 
   it('renders persisted partition results returned by job.status', async () => {
@@ -422,6 +487,10 @@ describe('live renderer pages', () => {
     expect(await findText('Evidence volume')).toBeTruthy();
     expect(await findText('512')).toBeTruthy();
     expect(await findText('2096640')).toBeTruthy();
+    expect(container?.querySelector('figure[aria-label="Partition map"]')).toBeTruthy();
+    expect(container?.querySelector('[aria-label="Detected partition tree"]')?.textContent).toContain('Evidence volume');
+    expect(button('Choose partition scan scope').disabled).toBe(true);
+    expect(container?.textContent).toContain('The typed recovery job API does not accept partition selections.');
   });
 
   it('creates and starts a daemon job before showing partition results', async () => {
