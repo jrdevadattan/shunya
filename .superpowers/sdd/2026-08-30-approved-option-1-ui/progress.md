@@ -58,3 +58,7 @@ Task 6: complete (commits 790d8b5..e3c0d93, review clean)
 Task 7: fix round 1/5 (folder-picker rapid activation, recent-case persistence/reopen, truthful no-job flow, current `/cases/open`, source pending feedback with same-tick action latches, stale packaged locators; 0 open)
 Task 7: Product Design QA passed at 1440 × 1024 with no P0/P1/P2 differences after documented typed-truth exclusions.
 Task 7: complete (full TypeScript, focused Rust, package/security, Forge Windows package, and 18/18 packaged E2E green; fresh executable launched visibly)
+
+## Release handoff
+
+- Ruling: Publish `v0.2.0` as a Windows x64 release because the user explicitly deferred Linux/BOSS and macOS verification — cost if wrong: GitHub will show a newer stable release without the cross-platform asset set required by the repository's full native release checklist.

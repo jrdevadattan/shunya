@@ -18,7 +18,10 @@ impl Daemon {
     fn start() -> Self {
         let executable = std::env::var_os("RECOVERY_DAEMON_UNDER_TEST")
             .unwrap_or_else(|| env!("CARGO_BIN_EXE_recoveryd").into());
-        println!("recovery daemon under test: {}", Path::new(&executable).display());
+        println!(
+            "recovery daemon under test: {}",
+            Path::new(&executable).display()
+        );
         let mut child = Command::new(executable)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

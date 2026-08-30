@@ -101,7 +101,9 @@ fn create_directory_symlink(target: &std::path::Path, link: &std::path::Path) ->
     match std::os::windows::fs::symlink_dir(target, link) {
         Ok(()) => true,
         Err(error) if error.kind() == ErrorKind::PermissionDenied => {
-            eprintln!("skipping broken symlink test because Windows symlink creation is not permitted: {error}");
+            eprintln!(
+                "skipping broken symlink test because Windows symlink creation is not permitted: {error}"
+            );
             false
         }
         Err(error) => panic!("failed to create directory symlink: {error}"),

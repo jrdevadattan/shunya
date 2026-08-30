@@ -1,7 +1,12 @@
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { _electron as electron } from '@playwright/test';
+
+export function packagedLaunchArguments(appAsar: string, userDataPath: string): string[] {
+  return [appAsar, `--user-data-dir=${userDataPath}`];
+}
 
 function packagedExecutablePath(): string {
   const packageRoot = path.resolve(`out/SIH Recovery Platform-${process.platform}-${process.arch}`);
@@ -37,11 +42,13 @@ export async function launchPackagedApp() {
   const inheritedEnvironment = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   );
+  const userDataPath = mkdtempSync(path.join(tmpdir(), 'sih-recovery-e2e-user-data-'));
   const electronApp = await electron.launch({
     executablePath: testHarnessElectronPath(),
-    args: [appAsar],
+    args: packagedLaunchArguments(appAsar, userDataPath),
     env: { ...inheritedEnvironment, ...daemonEnvironment, NODE_ENV: 'production', RECOVERY_RELEASE_BUILD: '1' },
   });
+  electronApp.process().once('exit', () => rmSync(userDataPath, { recursive: true, force: true }));
   try {
     const page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');

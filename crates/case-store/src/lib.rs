@@ -100,13 +100,7 @@ impl CaseStore {
             Uuid::now_v7()
         ));
 
-        let result = Self::create_staged(
-            root,
-            &staging,
-            input,
-            failure,
-            replace_empty_destination,
-        );
+        let result = Self::create_staged(root, &staging, input, failure, replace_empty_destination);
         if result.is_err() && staging.exists() {
             let _ = fs::remove_dir_all(&staging);
         }

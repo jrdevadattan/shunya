@@ -1,9 +1,28 @@
-# SIH Recovery Platform 0.1.0
+# SHUNYA Recovery 0.2.0
 
-First release-candidate implementation of the SIH 26149 offline recovery workstation.
+This release delivers the redesigned Windows x64 recovery workstation and the completed case lifecycle.
 
-Highlights include read-only RAW/split/E01 evidence access, MBR/GPT discovery, metadata recovery and carving, safe validation/quarantine/previews, million-row indexed review, verified exports/reports, resumable acquisition and jobs, damaged-media ddrescue workflow, typed Volatility memory analysis, and Debian-based Rescue Mode.
+## Highlights
 
-Artifacts are built manually on native Windows, Linux, and macOS hosts. `SHA256SUMS` and `release-manifest.json` cover every published file. Code signing is applied only when the release operator securely supplies the required identity on that host; checksum verification remains mandatory. A draft must not be published until Windows x64, Debian x64, macOS x64/arm64, and Rescue x64 assets all pass the release-set check.
+- Approved SHUNYA interface across case intake, source assessment, recovery setup, live activity, results, export, reporting, memory analysis, settings, and support.
+- Native workspace selection with a bounded folder tree, real storage data, overwrite protection, and immediate duplicate-dialog protection.
+- Persistent Recent cases list with validated case reopening and clear guidance before the first recovery job exists.
+- Sandboxed Electron renderer with a typed preload boundary and a SHA-256-verified Rust recovery daemon.
+- Read-only RAW-image workflow with source revalidation, SHA-256 hashing, GPT/MBR discovery, bounded JPEG signature carving, deterministic validation, indexed review, verified export, and JSON/Markdown reporting.
+- Checkpointed recovery jobs with pause, resume, cancellation, event history, and recoverable restart behavior.
+- Isolated packaged E2E profiles so temporary test cases cannot enter a shared Electron profile.
 
-Important: SSD TRIM, overwriting, encryption without authorized keys, and physical damage can make recovery impossible. Carved files normally lack original names/folders. Installed Mode is not equivalent to a trusted Rescue environment. Review `docs/operations/recovery-limitations.md` before use.
+## Windows assets
+
+- `SIH-Recovery-Platform-Setup.exe`: Windows x64 installer.
+- `sih_recovery_platform-0.2.0-full.nupkg`: Windows x64 Squirrel update package.
+- `SHA256SUMS`: cryptographic checksums for the published assets.
+- `release-manifest.json`: release metadata and asset hashes.
+
+The Windows artifacts are unsigned because no Authenticode certificate was supplied. Windows may display a SmartScreen warning.
+
+## Capability limits
+
+The packaged vertical slice includes bounded JPEG content-signature recovery. It reports The Sleuth Kit, PhotoRec, and YARA-X as unavailable unless approved, hash-verified binaries are present. It does not claim original names or folders for carved data, and it marks content as not threat-scanned when YARA-X is unavailable.
+
+SSD TRIM, overwriting, missing encryption keys, and physical damage can make recovery impossible. Installed Mode is not equivalent to a clean Rescue Mode environment. Linux, macOS, and Rescue ISO artifacts are not part of this Windows release.
