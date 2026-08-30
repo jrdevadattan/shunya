@@ -94,6 +94,7 @@ export const JobStatusSchema = RecoveryJobSchema.extend({
 export const ArtifactQuerySchema = z.object({
   search: z.string().optional(), method: z.string().optional(), status: z.string().optional(),
   threat: z.string().optional(), mimeType: z.string().optional(), partitionId: z.string().optional(),
+  // Source filesystem sensitivity is not typed, so folder prefixes use SQLite NOCASE segment semantics on every platform to support the approved Windows flow.
   originalPathPrefix: z.string().transform((value) => value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/{2,}/g, '/')).pipe(z.string().min(1)).optional(),
   minSize: z.number().int().nonnegative().optional(), maxSize: z.number().int().nonnegative().optional(),
   cursor: z.string().optional(), pageSize: z.number().int().min(1).max(500),

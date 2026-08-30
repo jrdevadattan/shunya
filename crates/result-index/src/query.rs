@@ -48,10 +48,9 @@ pub(crate) fn append_filters(
         .map(normalize_path_prefix)
         .filter(|prefix| !prefix.is_empty())
     {
-        let normalized_path =
-            format!("ltrim(replace({table}.original_path, char(92), '/'), '/')");
+        let normalized_path = format!("ltrim(replace({table}.original_path, char(92), '/'), '/')");
         clauses.push(format!(
-            "{table}.method = 'metadata' AND {table}.original_path IS NOT NULL AND substr({normalized_path}, 1, length(?)) = ? AND substr({normalized_path}, length(?) + 1, 1) = '/'"
+            "{table}.method = 'metadata' AND {table}.original_path IS NOT NULL AND substr({normalized_path}, 1, length(?)) = ? COLLATE NOCASE AND substr({normalized_path}, length(?) + 1, 1) = '/'"
         ));
         parameters.push(prefix.clone().into());
         parameters.push(prefix.clone().into());

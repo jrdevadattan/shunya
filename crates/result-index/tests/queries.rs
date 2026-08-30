@@ -168,3 +168,49 @@ fn original_path_prefix_uses_normalized_folder_boundaries_and_preserves_paginati
     );
     assert!(second.next_cursor.is_none());
 }
+
+#[test]
+fn original_path_prefix_matches_windows_paths_case_insensitively_without_crossing_boundaries() {
+    let directory = tempdir().unwrap();
+    let mut index = ArtifactIndex::open(&directory.path().join("results.sqlite")).unwrap();
+    index
+        .insert_batch(&[
+            ArtifactRow::fixture(
+                "a",
+                "file.txt",
+                "Users/Maya/file.txt",
+                "metadata",
+                "complete_validated",
+                "no_rule_match",
+                1,
+            ),
+            ArtifactRow::fixture(
+                "b",
+                "other.txt",
+                "Users2/Maya/other.txt",
+                "metadata",
+                "complete_validated",
+                "no_rule_match",
+                1,
+            ),
+        ])
+        .unwrap();
+
+    let query = ArtifactQuery {
+        original_path_prefix: Some("users\\Maya".into()),
+        page_size: 10,
+        ..Default::default()
+    };
+
+    assert_eq!(index.count(&query).unwrap(), 1);
+    assert_eq!(
+        index
+            .query(&query)
+            .unwrap()
+            .items
+            .iter()
+            .map(|row| row.artifact_id.as_str())
+            .collect::<Vec<_>>(),
+        ["a"]
+    );
+}

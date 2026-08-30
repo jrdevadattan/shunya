@@ -106,3 +106,15 @@ The initial report overstated the phrase “refuses incomplete/mixed verificatio
 - Persisted explicit selections fail closed when IDs are duplicated or absent after full cursor traversal, with guidance to return to Results. A stale selection is never silently reduced and submitted.
 
 The workspace-wide formatter check continues to report formatting drift in pre-existing case-store and platform files outside Task 5. Touched Rust hunks were formatted, targeted Clippy passes, and unrelated files were preserved.
+
+## Fix Round 2 — case-insensitive Windows path families
+
+RED was captured with a focused result-index regression: selecting `users\\Maya` returned zero rows for the stored path `Users/Maya/file.txt`. The test also included `Users2/Maya/other.txt` to retain the segment-boundary refusal.
+
+The normalized predicate now applies bound SQLite `NOCASE` comparison to the prefix segment while retaining the separate `/` boundary check. No `LIKE` expression is constructed, so `%` and `_` remain literal path characters rather than wildcards. Metadata-only and non-null-path constraints, separator normalization, filtered count parity, and cursor pagination are unchanged.
+
+Because source filesystem case sensitivity is not represented in the typed contract, `originalPathPrefix` deliberately uses the same SQLite `NOCASE` segment semantics on every platform. This satisfies the approved Windows flow (`users/Maya` and `Users/Maya` are the same path family). SQLite `NOCASE` is ASCII-oriented; broader Unicode filesystem case folding is not claimed.
+
+Focused GREEN passed, followed by contracts typecheck/tests (13), full desktop typecheck/tests (104), relevant daemon and result-index suites including the one-million-row test, and targeted Clippy with warnings denied.
+
+The normalized `ltrim(replace(...))` path predicate is not currently index-backed and can require a full scan for filtered count and page queries. That is a recorded future optimization risk; no speculative generated column or schema migration was added without a focused measurement demonstrating the need.
