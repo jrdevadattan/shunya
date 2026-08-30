@@ -32,7 +32,7 @@ export function caseNavigation(caseId: string | null, pathname: string): Navigat
       id: 'cases',
       label: 'Cases',
       items: [
-        item({ id: 'cases', label: 'Cases', href: '#/', icon: Folder }, ['/']),
+        item({ id: 'cases', label: 'Cases', href: '#/', icon: Folder }, ['/', '/cases/open']),
         item({ id: 'new-case', label: 'New case', href: '#/cases/new', icon: CirclePlus }, ['/cases/new']),
         item(caseOnly({ id: 'case-setup', label: 'Case setup', href: `${base}/overview`, icon: SlidersHorizontal }), [route('overview')]),
       ],

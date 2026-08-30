@@ -79,7 +79,7 @@ describe('Studio Admin visual foundation', () => {
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: /Memory Analysis/ })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText('Volatility is unavailable.')).toBeVisible();
-    expect(screen.getByRole('banner')).toHaveAttribute('data-height', '48');
+    expect(screen.getByRole('banner')).toHaveAttribute('data-height', '64');
     expect(screen.getByText('Case content')).toBeVisible();
     expect(screen.getByText('Case 1')).toBeVisible();
 

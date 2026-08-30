@@ -159,6 +159,14 @@ describe('live renderer pages', () => {
     expect(await findText('Create recovery case')).toBeTruthy();
   });
 
+  it('marks Cases as current while opening an existing case workspace', async () => {
+    await renderRoute(<NewCasePage />, '/cases/open', '/cases/open');
+
+    const current = container?.querySelector('a[aria-current="page"]');
+    expect(current).toBeTruthy();
+    expect(current?.textContent).toContain('Cases');
+  });
+
   it('routes Settings, Help, and About to truthful support surfaces', async () => {
     container = document.createElement('div');
     document.body.append(container);

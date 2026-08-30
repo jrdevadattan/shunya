@@ -111,7 +111,7 @@ export function AppShell({ brand, collapsed, onCollapsedChange, header, navigati
         <div className="app-shell__sidebar-footer">{footer}</div>
       </aside>
 
-      <header className="app-shell__header" data-height="48">{header}</header>
+      <header className="app-shell__header" data-height="64">{header}</header>
       <main className="app-shell__content">{children}</main>
     </div>
   );
