@@ -19,6 +19,7 @@ import { MemoryOptionsPage } from '../features/memory/MemoryOptionsPage.js';
 import { MemoryResultsPage } from '../features/memory/MemoryResultsPage.js';
 import { CaseOverviewPage } from './CaseOverviewPage.js';
 import { AboutPage, HelpPage, SettingsPage } from './SupportPages.js';
+import { CaseActivityPage } from '../features/activity/CaseActivityPage.js';
 
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
@@ -48,11 +49,7 @@ export const router = createHashRouter([
       { path: 'memory/results', element: <MemoryResultsPage /> },
       { path: 'exports', element: <ExportWizard /> },
       { path: 'reports', element: <ReportsPage /> },
-      { path: 'activity', element: <RoutePlaceholder title="Case activity" description="Review the append-only audit trail." /> },
+      { path: 'activity', element: <CaseActivityPage /> },
     ],
   },
 ]);
-
-function RoutePlaceholder({ title, description }: { title: string; description: string }) {
-  return <section><h1>{title}</h1><p>{description}</p></section>;
-}

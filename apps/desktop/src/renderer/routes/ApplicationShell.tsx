@@ -1,6 +1,6 @@
 import { AppShell, IconButton } from '@recovery/ui';
 import { CircleCheck, Search } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CommandPalette } from '../components/CommandPalette.js';
 import {
@@ -10,6 +10,19 @@ import {
   type UiPreferences,
 } from '../features/preferences/ui-preferences.js';
 import { caseNavigation } from './case-navigation.js';
+
+interface ApplicationPreferencesValue {
+  preferences: UiPreferences;
+  updatePreferences(next: UiPreferences): void;
+}
+
+const ApplicationPreferencesContext = createContext<ApplicationPreferencesValue | null>(null);
+
+export function useApplicationPreferences(): ApplicationPreferencesValue {
+  const value = useContext(ApplicationPreferencesContext);
+  if (!value) throw new Error('Application preferences must be used inside ApplicationShell.');
+  return value;
+}
 
 export function ApplicationShell({ title, children }: { title: string; children: ReactNode }) {
   const location = useLocation();
@@ -36,7 +49,7 @@ export function ApplicationShell({ title, children }: { title: string; children:
   };
 
   return (
-    <>
+    <ApplicationPreferencesContext.Provider value={{ preferences, updatePreferences }}>
       <AppShell
         brand="SHUNYA Recovery"
         collapsed={preferences.sidebarCollapsed}
@@ -69,6 +82,6 @@ export function ApplicationShell({ title, children }: { title: string; children:
         {children}
       </AppShell>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} navigation={navigation} restoreFocusRef={searchTriggerRef} />
-    </>
+    </ApplicationPreferencesContext.Provider>
   );
 }

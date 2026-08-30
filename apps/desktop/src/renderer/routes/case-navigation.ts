@@ -83,9 +83,9 @@ export function caseCommandNavigation(caseId: string, pathname: string): Navigat
         command('sources', 'Sources', 'sources', HardDrive),
         command('jobs', 'Recovery Jobs', 'jobs', History),
         command('results', 'Recovered Files', 'results', FolderSearch),
-        command('memory', 'Memory Analysis', 'memory', Cpu, 'Volatility is unavailable.'),
+        command('memory', 'Memory Analysis', 'memory', Cpu),
         command('exports', 'Exports', 'exports', FileOutput),
-        command('activity', 'Case Activity', 'activity', BriefcaseBusiness, 'Case activity is not exposed by this daemon.'),
+        command('activity', 'Case Activity', 'activity', BriefcaseBusiness),
       ],
     },
   ];

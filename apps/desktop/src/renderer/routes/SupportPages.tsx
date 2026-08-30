@@ -1,24 +1,39 @@
-import { CircleHelp, Info, MonitorCog, ShieldCheck } from 'lucide-react';
+import { Check, CircleHelp, Info, LockKeyhole, PanelLeftClose, RotateCcw, ShieldCheck, SunMoon } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ApplicationShell } from './ApplicationShell.js';
+import { ApplicationShell, useApplicationPreferences } from './ApplicationShell.js';
 
 export function SettingsPage() {
   return (
     <ApplicationShell title="Settings">
-      <section className="support-page" aria-labelledby="settings-title">
-        <header><h1 id="settings-title">Settings</h1><p>Available application preferences and recovery safety boundaries.</p></header>
-        <div className="support-page__grid">
-          <article>
-            <MonitorCog aria-hidden="true" />
-            <div><h2>Appearance</h2><p>Theme and sidebar choices are stored on this device. Use the theme control in the application header and the menu button beside the SHUNYA wordmark.</p></div>
-          </article>
-          <article>
-            <ShieldCheck aria-hidden="true" />
-            <div><h2>Recovery safety</h2><p>Sources remain read-only and source writes are blocked. Additional persisted recovery defaults are not available in this build.</p></div>
-          </article>
-        </div>
-      </section>
+      <SettingsWorkspace />
     </ApplicationShell>
+  );
+}
+
+function SettingsWorkspace() {
+  const { preferences, updatePreferences } = useApplicationPreferences();
+  return (
+    <section className="settings-page" aria-labelledby="settings-title">
+      <header><p className="eyebrow">Application preferences</p><h1 id="settings-title">Settings</h1><p>Configure persisted appearance choices and review recovery safeguards that this build enforces.</p></header>
+      <div className="settings-grid">
+        <section className="settings-panel" aria-labelledby="appearance-title">
+          <header><SunMoon aria-hidden="true" /><span><h2 id="appearance-title">Appearance</h2><p>Theme and sidebar choices are stored on this device. Changes apply immediately.</p></span></header>
+          <fieldset className="settings-theme"><legend>Theme</legend>{(['light', 'system', 'dark'] as const).map((theme) => <label key={theme}><input type="radio" name="settings-theme" checked={preferences.theme === theme} onChange={() => updatePreferences({ ...preferences, theme })} />{theme === 'system' ? 'System theme' : `${theme.charAt(0).toUpperCase()}${theme.slice(1)} theme`}<Check aria-hidden="true" /></label>)}</fieldset>
+          <label className="settings-sidebar"><input type="checkbox" checked={preferences.sidebarCollapsed} onChange={(event) => updatePreferences({ ...preferences, sidebarCollapsed: event.target.checked })} /><PanelLeftClose aria-hidden="true" /><span><strong>Collapse navigation sidebar</strong><small>Keep the compact sidebar between application launches.</small></span></label>
+          <button className="button button--secondary button--icon" type="button" onClick={() => updatePreferences({ theme: 'system', sidebarCollapsed: false })}><RotateCcw aria-hidden="true" />Restore appearance defaults</button>
+        </section>
+
+        <section className="settings-panel" aria-labelledby="safety-title">
+          <header><ShieldCheck aria-hidden="true" /><span><h2 id="safety-title">Recovery safety invariants</h2><p>These are application boundaries, not optional preferences.</p></span></header>
+          <div className="settings-invariants">
+            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Always open evidence sources read-only</strong><small>Source-write and in-place repair operations are not exposed.</small></span><em>Enforced and cannot be changed</em></article>
+            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Require a separate export destination</strong><small>Topology checks fail closed when separation cannot be proven.</small></span><em>Enforced and cannot be changed</em></article>
+            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Keep active-content preview protected</strong><small>Unsafe or unsupported previews remain blocked.</small></span><em>Enforced and cannot be changed</em></article>
+          </div>
+        </section>
+      </div>
+      <section className="settings-locked" aria-labelledby="settings-locked-title"><LockKeyhole aria-hidden="true" /><span><h2 id="settings-locked-title">Additional recovery defaults unavailable</h2><p>Additional recovery defaults are unavailable because the daemon has no persisted settings API. Checkpoint cadence, verification policy, storage headroom, and tool runtimes therefore have no editable controls here.</p></span></section>
+    </section>
   );
 }
 

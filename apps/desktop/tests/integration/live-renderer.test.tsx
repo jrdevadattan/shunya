@@ -15,6 +15,8 @@ import { ResultsPage } from '../../src/renderer/features/results/ResultsPage.js'
 import { ExportWizard } from '../../src/renderer/features/export/ExportWizard.js';
 import { ReportsPage } from '../../src/renderer/features/reports/ReportsPage.js';
 import { MemoryResultsPage } from '../../src/renderer/features/memory/MemoryResultsPage.js';
+import { MemorySourcePage } from '../../src/renderer/features/memory/MemorySourcePage.js';
+import { MemoryOptionsPage } from '../../src/renderer/features/memory/MemoryOptionsPage.js';
 import { CaseLayout } from '../../src/renderer/routes/CaseLayout.js';
 import { ScanOptionsPage } from '../../src/renderer/features/recovery/ScanOptionsPage.js';
 import { GoalPage } from '../../src/renderer/features/recovery/GoalPage.js';
@@ -1197,5 +1199,69 @@ describe('live renderer pages', () => {
     await renderRoute(<MemoryResultsPage />, '/cases/case-live/memory/results', '/cases/:caseId/memory/results');
     expect(await findText(/No memory-analysis job is active/)).toBeTruthy();
     expect(container?.textContent).not.toContain('Live job state');
+  });
+
+  it('shows registered memory-image identity while keeping unsupported Volatility findings locked', async () => {
+    Object.assign(window, { recoveryApi: api({ listSources: vi.fn().mockResolvedValue([{ ...source, kind: 'memory_image', displayName: 'authorized-capture.raw', sizeBytes: '16777216' }]) }) });
+    await renderRoute(<MemorySourcePage />, '/cases/case-live/memory', '/cases/:caseId/memory');
+
+    expect(await findText('authorized-capture.raw')).toBeTruthy();
+    expect(container?.textContent).toContain('16 MiB');
+    expect(container?.textContent).toContain('Advanced analysis unavailable');
+    expect(container?.textContent).toContain('The desktop API does not expose a verified Volatility runtime');
+    expect(container?.textContent).not.toContain('SHA-256 verified');
+    expect(container?.textContent).not.toContain('Python runtime Available');
+  });
+
+  it('labels memory analysis choices as unavailable instead of presenting runnable fake controls', async () => {
+    await renderRoute(<MemoryOptionsPage />, '/cases/case-live/memory/options', '/cases/:caseId/memory/options');
+
+    expect(await findText('What advanced analysis would provide')).toBeTruthy();
+    expect(container?.textContent).toContain('Process tree');
+    expect(container?.textContent).toContain('Network connections');
+    expect(container?.textContent).toContain('Loaded modules');
+    expect(container?.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(container?.textContent).toContain('Unavailable until the daemon exposes a verified runtime capability');
+  });
+
+  it('assembles case activity only from case identity and ordered daemon job events', async () => {
+    Object.assign(window, { recoveryApi: api({
+      listJobEvents: vi.fn().mockResolvedValue([
+        { eventId: 'event-later', jobId: 'job-live', sequence: 9, stage: 'completed', occurredAt: '2026-08-29T12:09:00Z', message: 'Recovery completed' },
+        { eventId: 'event-earlier', jobId: 'job-live', sequence: 2, stage: 'metadata_scan', occurredAt: '2026-08-29T12:02:00Z', message: 'Metadata scan started' },
+      ]),
+    }) });
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/cases/case-live/activity'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+
+    expect(await findText('Case created')).toBeTruthy();
+    expect(container.textContent).toContain('Metadata scan started');
+    expect(container.textContent).toContain('Recovery completed');
+    const rows = Array.from(container.querySelectorAll('[data-activity-sequence]'));
+    expect(rows.map((row) => row.getAttribute('data-activity-sequence'))).toEqual(['case', '2', '9']);
+    expect(container.textContent).toContain('Audit hash-chain and integrity verification details are unavailable');
+    expect(container.textContent).not.toContain('Chain verified');
+  });
+
+  it('persists supported appearance settings while rendering recovery safety as immutable', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/settings'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+
+    await click(input('Dark theme'));
+    await click(input('Collapse navigation sidebar'));
+
+    expect(JSON.parse(localStorage.getItem('recovery:ui-preferences')!)).toEqual({ theme: 'dark', sidebarCollapsed: true });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(container.querySelector('[data-testid="app-shell"]')?.getAttribute('data-collapsed')).toBe('true');
+    expect(container.textContent).toContain('Always open evidence sources read-only');
+    expect(container.textContent).toContain('Enforced and cannot be changed');
+    expect(container.textContent).toContain('Additional recovery defaults are unavailable because the daemon has no persisted settings API.');
+    expect(container.querySelectorAll('.settings-invariant input')).toHaveLength(0);
   });
 });
