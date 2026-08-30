@@ -1,5 +1,9 @@
-import { ArrowRight, BrainCircuit, FolderOpen, HardDrive, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { RecoveryCaseSchema } from '@recovery/contracts';
+import { ArrowRight, BrainCircuit, CalendarDays, FolderOpen, HardDrive, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { rememberValidatedCase } from '../application-state.js';
+import { loadRecentCases, rememberRecentCase, type RecentRecoveryCase } from '../features/cases/recent-cases.js';
 import { ApplicationShell } from './ApplicationShell.js';
 
 const recoveryPaths = [
@@ -9,6 +13,27 @@ const recoveryPaths = [
 ];
 
 export function WelcomePage() {
+  const navigate = useNavigate();
+  const [recentCases, setRecentCases] = useState(loadRecentCases);
+  const [openingCaseId, setOpeningCaseId] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  async function continueCase(recentCase: RecentRecoveryCase) {
+    if (openingCaseId) return;
+    setOpeningCaseId(recentCase.caseId);
+    setError(undefined);
+    try {
+      const opened = RecoveryCaseSchema.parse(await window.recoveryApi.openCase(recentCase.workspacePath));
+      rememberValidatedCase(opened);
+      setRecentCases(rememberRecentCase(opened));
+      await navigate(`/cases/${opened.caseId}/overview`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The recent case could not be opened.');
+    } finally {
+      setOpeningCaseId(undefined);
+    }
+  }
+
   return (
     <ApplicationShell title="Cases">
       <div className="welcome-page welcome-cases-home">
@@ -30,15 +55,28 @@ export function WelcomePage() {
           ))}
         </section>
 
-        <section className="recent-cases-unavailable" aria-labelledby="recent-cases-title">
-          <div>
-            <h2 id="recent-cases-title">Recent cases</h2>
-            <p>Recent cases are unavailable because the recovery service does not expose a case index.</p>
-            <p>Open a known workspace folder to continue a case without displaying invented history.</p>
-          </div>
-          <Link className="button button--secondary button--icon" to="/cases/open"><FolderOpen aria-hidden="true" />Open existing case</Link>
+        <section className="recent-cases" aria-labelledby="recent-cases-title">
+          <header>
+            <div><h2 id="recent-cases-title">Recent cases</h2><p>Cases successfully created or opened on this device.</p></div>
+            <Link className="button button--secondary button--icon" to="/cases/open"><FolderOpen aria-hidden="true" />Open existing case</Link>
+          </header>
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {recentCases.length ? <ul className="recent-cases__list">
+            {recentCases.map((recentCase) => <li key={recentCase.caseId}>
+              <div className="recent-case__identity"><strong>{recentCase.title}</strong><small>{recentCase.workspacePath}</small></div>
+              <div className="recent-case__details"><span>{recentCase.operator}</span><span><CalendarDays aria-hidden="true" />{formatDate(recentCase.createdAt)}</span></div>
+              <button className="button button--secondary" type="button" disabled={Boolean(openingCaseId)} onClick={() => void continueCase(recentCase)}>{openingCaseId === recentCase.caseId ? 'Opening case…' : 'Continue case'}</button>
+            </li>)}
+          </ul> : <div className="recent-cases__empty">
+            <p>No recent cases are stored on this device yet.</p>
+            <p>The recovery service does not expose a global case index. Open a known workspace to add it here.</p>
+          </div>}
         </section>
       </div>
     </ApplicationShell>
   );
+}
+
+function formatDate(createdAt: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(createdAt));
 }

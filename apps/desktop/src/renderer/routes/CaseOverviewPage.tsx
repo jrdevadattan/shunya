@@ -23,12 +23,14 @@ export function CaseOverviewPage() {
     setError(undefined);
     void Promise.all([
       window.recoveryApi.listSources().then((value) => SourceDescriptorSchema.array().parse(value)),
-      window.recoveryApi.queryArtifacts({ pageSize: 1 }).then((value) => ArtifactPageSchema.parse(value)),
+      jobId
+        ? window.recoveryApi.queryArtifacts({ pageSize: 1 }).then((value) => ArtifactPageSchema.parse(value).totalCount)
+        : Promise.resolve(0),
       jobId
         ? window.recoveryApi.getJobStatus(jobId).then((value) => JobStatusSchema.parse(value))
         : Promise.resolve(null),
-    ]).then(([sources, artifacts, job]) => {
-      if (active) setData({ sources, totalArtifacts: artifacts.totalCount, job });
+    ]).then(([sources, totalArtifacts, job]) => {
+      if (active) setData({ sources, totalArtifacts, job });
     }).catch((cause) => {
       if (active) setError(message(cause));
     });
@@ -48,6 +50,12 @@ export function CaseOverviewPage() {
         <Link className="button button--primary" to={next.to}>{next.label}</Link>
       </header>
       <p className="page-heading__description">Live case state from the recovery daemon. No evidence or recovery values are estimated in the renderer.</p>
+
+      {!data.job ? <section className="overview-job-empty" aria-labelledby="overview-job-empty-title">
+        <Activity aria-hidden="true" />
+        <div><h2 id="overview-job-empty-title">No recovery job yet</h2><p>Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.</p></div>
+        <Link className="button button--secondary" to={next.to}>{next.label}</Link>
+      </section> : null}
 
       <div className="metric-grid metric-grid--overview">
         <MetricCard label="Sources" value={data.sources.length} detail="Evidence sources in this case" icon={HardDrive} />

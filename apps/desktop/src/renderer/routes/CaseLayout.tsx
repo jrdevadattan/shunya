@@ -3,7 +3,7 @@ import { RecoveryCaseSchema, RuntimeInfoSchema, type RecoveryCase } from '@recov
 import { CircleCheck, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
-import { activeWorkspace, forgetCase } from '../application-state.js';
+import { activeWorkspace, forgetCase, rememberValidatedCase, validatedCase } from '../application-state.js';
 import { CommandPalette } from '../components/CommandPalette.js';
 import {
   applyTheme,
@@ -12,6 +12,7 @@ import {
   type UiPreferences,
 } from '../features/preferences/ui-preferences.js';
 import { activeNavigationItem, caseCommandNavigation, caseNavigation } from './case-navigation.js';
+import { rememberRecentCase } from '../features/cases/recent-cases.js';
 
 export function CaseLayout() {
   const { caseId = 'case' } = useParams();
@@ -49,6 +50,8 @@ export function CaseLayout() {
     if (!workspace) {
       forgetCase(caseId);
       setError('Case context is unavailable. Open or create the case again.');
+    } else if (validatedCase(caseId, workspace)) {
+      setRecoveryCase(validatedCase(caseId, workspace) ?? undefined);
     } else {
       void window.recoveryApi.openCase(workspace).then((value) => {
         if (!active) return;
@@ -58,6 +61,8 @@ export function CaseLayout() {
           setError('The opened case does not match the requested case. Open the intended case again.');
           return;
         }
+        rememberValidatedCase(opened);
+        rememberRecentCase(opened);
         setRecoveryCase(opened);
       }).catch((cause) => {
         if (!active) return;

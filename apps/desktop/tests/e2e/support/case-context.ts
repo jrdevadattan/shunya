@@ -14,5 +14,5 @@ export async function createLiveCase(page: Page, title: string) {
     window.location.hash = `#/cases/${caseId}/overview`;
   }, { caseId: recoveryCase.caseId, workspacePath: recoveryCase.workspacePath });
   await page.locator('.case-header__case', { hasText: title }).waitFor();
-  return { caseId: recoveryCase.caseId, cleanup: () => rm(parent, { recursive: true, force: true }) };
+  return { caseId: recoveryCase.caseId, workspacePath: recoveryCase.workspacePath, cleanup: () => rm(parent, { recursive: true, force: true }) };
 }

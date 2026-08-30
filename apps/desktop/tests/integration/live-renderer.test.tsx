@@ -29,6 +29,7 @@ import { NewCaseForm } from '../../src/renderer/features/cases/NewCaseForm.js';
 import { WelcomePage } from '../../src/renderer/routes/WelcomePage.js';
 import { router } from '../../src/renderer/routes/router.js';
 import { NewCasePage } from '../../src/renderer/routes/NewCasePage.js';
+import { RECENT_CASES_STORAGE_KEY } from '../../src/renderer/features/cases/recent-cases.js';
 
 const createdAt = '2026-08-29T12:00:00Z';
 const source = {
@@ -75,7 +76,7 @@ async function renderRoute(element: ReactNode, path: string, route: string) {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /><Route path="/cases/:caseId/overview" element={<p>Created case overview</p>} /></Routes></MemoryRouter>);
+    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /><Route path="/cases/:caseId/overview" element={<p>Created case overview</p>} /><Route path="/cases/:caseId/sources" element={<p>Source setup</p>} /><Route path="/cases/:caseId/sources/:sourceId/assessment" element={<p>Source assessment</p>} /></Routes></MemoryRouter>);
   });
 }
 
@@ -133,6 +134,7 @@ function CaseArtifactProbe() {
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sessionStorage.clear();
+  localStorage.clear();
   sessionStorage.setItem('recovery:case-live:jobId', 'job-live');
   sessionStorage.setItem('recovery:case-live:workspacePath', 'D:/case-live');
   Object.assign(window, { recoveryApi: api() });
@@ -154,10 +156,67 @@ describe('live renderer pages', () => {
     expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
     expect(await findText('Your recovery cases')).toBeTruthy();
     expect(container?.querySelector('a[href="/cases/new"]')?.textContent).toContain('New recovery');
-    expect(container?.textContent).toContain('Recent cases are unavailable because the recovery service does not expose a case index.');
+    expect(container?.textContent).toContain('No recent cases are stored on this device yet.');
+    expect(container?.textContent).toContain('The recovery service does not expose a global case index.');
     expect(container?.textContent).toContain('Source writes blocked');
     expect(container?.textContent).not.toContain('Device connected');
     expect(container?.textContent).not.toContain('Finance Laptop Recovery');
+  });
+
+  it('reopens a persisted recent case before navigating and refreshes its truthful registry data', async () => {
+    localStorage.setItem(RECENT_CASES_STORAGE_KEY, JSON.stringify([{
+      caseId: 'case-recent', title: 'Finance laptop recovery', operator: 'examiner-7',
+      workspacePath: 'D:/cases/finance', createdAt,
+    }]));
+    const openCase = vi.fn().mockResolvedValue({
+      caseId: 'case-recent', title: 'Finance laptop recovery (verified)', operator: 'examiner-8',
+      referenceNumber: null, organization: null, workspacePath: 'D:/cases/finance', notes: 'must stay private', createdAt,
+    });
+    Object.assign(window, { recoveryApi: api({ openCase }) });
+    await renderRoute(<WelcomePage />, '/', '/');
+
+    expect(await findText('Finance laptop recovery')).toBeTruthy();
+    expect(container?.textContent).toContain('examiner-7');
+    expect(container?.textContent).toContain('D:/cases/finance');
+    await click(button('Continue case'));
+
+    expect(openCase).toHaveBeenCalledWith('D:/cases/finance');
+    expect(await findText('Created case overview')).toBeTruthy();
+    expect(sessionStorage.getItem('recovery:case-recent:workspacePath')).toBe('D:/cases/finance');
+    expect(JSON.parse(localStorage.getItem(RECENT_CASES_STORAGE_KEY)!)).toEqual([{
+      caseId: 'case-recent', title: 'Finance laptop recovery (verified)', operator: 'examiner-8',
+      workspacePath: 'D:/cases/finance', createdAt,
+    }]);
+    expect(localStorage.getItem(RECENT_CASES_STORAGE_KEY)).not.toContain('must stay private');
+  });
+
+  it('hands a validated recent case to its layout without opening the same workspace twice', async () => {
+    localStorage.setItem(RECENT_CASES_STORAGE_KEY, JSON.stringify([{
+      caseId: 'case-recent', title: 'Recent recovery', operator: 'examiner-7',
+      workspacePath: 'D:/cases/recent', createdAt,
+    }]));
+    const opened = {
+      caseId: 'case-recent', title: 'Recent recovery', operator: 'examiner-7', referenceNumber: null,
+      organization: null, workspacePath: 'D:/cases/recent', notes: null, createdAt,
+    };
+    const openCase = vi.fn().mockResolvedValueOnce(opened).mockReturnValueOnce(new Promise(() => undefined));
+    Object.assign(window, { recoveryApi: api({
+      openCase,
+      listSources: vi.fn().mockResolvedValue([]),
+      queryArtifacts: vi.fn().mockResolvedValue({ items: [], nextCursor: null, totalCount: 0 }),
+    }) });
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/']}><Routes>
+      <Route path="/" element={<WelcomePage />} />
+      <Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseOverviewPage />} /></Route>
+    </Routes></MemoryRouter>));
+
+    await click(button('Continue case'));
+
+    expect(await findText('Recovery overview')).toBeTruthy();
+    expect(openCase).toHaveBeenCalledOnce();
   });
 
   it('keeps the approved sidebar visible while creating a case', async () => {
@@ -174,6 +233,31 @@ describe('live renderer pages', () => {
     const current = container?.querySelector('a[aria-current="page"]');
     expect(current).toBeTruthy();
     expect(current?.textContent).toContain('Cases');
+    expect(await findText('Open an existing recovery case')).toBeTruthy();
+    expect(button('Choose case workspace')).toBeTruthy();
+  });
+
+  it('opens a selected case workspace and records it only after daemon validation', async () => {
+    const chooseWorkspaceFolder = vi.fn().mockResolvedValue({
+      selectedPath: 'D:/cases/existing', rootPath: 'D:/', rootLabel: 'D:',
+      totalBytes: '1000', freeBytes: '500', directories: [], truncated: false,
+    });
+    const openCase = vi.fn().mockResolvedValue({
+      caseId: 'case-existing', title: 'Existing recovery', operator: 'examiner-9',
+      referenceNumber: null, organization: null, workspacePath: 'D:/cases/existing', notes: null, createdAt,
+    });
+    Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder, openCase }) });
+    await renderRoute(<NewCasePage />, '/cases/open', '/cases/open');
+
+    await click(button('Choose case workspace'));
+
+    expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
+    expect(openCase).toHaveBeenCalledWith('D:/cases/existing');
+    expect(await findText('Created case overview')).toBeTruthy();
+    expect(sessionStorage.getItem('recovery:case-existing:workspacePath')).toBe('D:/cases/existing');
+    expect(JSON.parse(localStorage.getItem(RECENT_CASES_STORAGE_KEY)!)[0]).toMatchObject({
+      caseId: 'case-existing', title: 'Existing recovery', operator: 'examiner-9', workspacePath: 'D:/cases/existing',
+    });
   });
 
   it('routes Settings, Help, and About to truthful support surfaces', async () => {
@@ -237,6 +321,37 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Physical-device discovery is unavailable because the typed desktop API exposes image sources only.');
   });
 
+  it('shows immediate pending feedback while source inventory and image actions run', async () => {
+    const inventory = deferred<readonly []>();
+    const added = deferred<typeof source>();
+    const listSources = vi.fn().mockReturnValueOnce(inventory.promise).mockResolvedValue([]);
+    const addImageSource = vi.fn().mockReturnValue(added.promise);
+    Object.assign(window, { recoveryApi: api({
+      listSources,
+      addImageSource,
+    }) });
+    await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
+
+    expect(button('Refreshing…').disabled).toBe(true);
+    await act(async () => inventory.resolve([]));
+    expect(button('Refresh').disabled).toBe(false);
+    await act(async () => {
+      button('Refresh').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      button('Refresh').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(listSources).toHaveBeenCalledTimes(2);
+    await change(input('Disk image path'), 'D:/evidence/action.raw');
+    await act(async () => {
+      button('Add image source').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      button('Add image source').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(button('Adding image…').disabled).toBe(true);
+    expect(addImageSource).toHaveBeenCalledOnce();
+
+    await act(async () => added.resolve(source));
+    expect(await findText('Source assessment')).toBeTruthy();
+  });
+
   it('guides case intake through Details, Workspace, and Review using live selection data', async () => {
     const chooseWorkspaceFolder = vi.fn().mockResolvedValue({
       selectedPath: 'D:/recovery-cases', rootPath: 'D:/', rootLabel: 'D:',
@@ -275,7 +390,7 @@ describe('live renderer pages', () => {
     expect(await findText('Prior Cases')).toBeTruthy();
     expect(await findText('Case 004')).toBeTruthy();
     expect(container?.querySelector('[role="tree"], [role="treeitem"]')).toBeNull();
-    expect(container?.querySelector('ul[aria-label="Folder preview"]')).toBeTruthy();
+    expect(container?.querySelectorAll('ul[aria-label="Folder preview"]')).toHaveLength(1);
     expect(container?.textContent).toContain('800 GB free');
     expect(container?.textContent).toContain('2 TB total');
     expect(container?.textContent).not.toMatch(/estimated needed|required space|headroom/i);
@@ -300,6 +415,11 @@ describe('live renderer pages', () => {
       workspacePath: 'D:/recovery-cases/Finance Case',
       notes: 'Priority recovery',
     });
+    expect(await findText('Source setup')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem(RECENT_CASES_STORAGE_KEY)!)).toEqual([{
+      caseId: 'case-created', title: 'Finance laptop recovery', operator: 'examiner-7',
+      workspacePath: 'D:/recovery-cases/Finance Case', createdAt,
+    }]);
   });
 
   it('keeps the workspace step in place with an accessible error when inspection is denied', async () => {
@@ -317,6 +437,30 @@ describe('live renderer pages', () => {
     const alert = await findText('The selected folder could not be inspected. Choose a folder you have permission to read.');
     expect(alert.getAttribute('role')).toBe('alert');
     expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
+  });
+
+  it('opens only one native folder picker when the control is activated twice rapidly', async () => {
+    let finishFirstSelection: (value: null) => void = () => undefined;
+    const pendingSelection = new Promise<null>((resolve) => { finishFirstSelection = resolve; });
+    const chooseWorkspaceFolder = vi.fn()
+      .mockReturnValueOnce(pendingSelection)
+      .mockResolvedValueOnce(null);
+    Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder }) });
+    await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
+    await change(input('Case title'), 'Rapid picker case');
+    await change(input('Operator name or ID'), 'examiner-7');
+    await click(button('Continue to workspace'));
+
+    const pickerButton = button('Choose parent folder');
+    await act(async () => {
+      pickerButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      pickerButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
+    await act(async () => finishFirstSelection(null));
+    await click(pickerButton);
+    expect(chooseWorkspaceFolder).toHaveBeenCalledTimes(2);
   });
 
   it('opens the persisted case and renders the daemon case title', async () => {
@@ -374,6 +518,22 @@ describe('live renderer pages', () => {
       expect.stringContaining('Recovered artifacts501'),
       expect.stringContaining('Limitations1'),
     ]));
+  });
+
+  it('explains truthfully how a new case gets its first recovery job', async () => {
+    sessionStorage.removeItem('recovery:case-live:jobId');
+    const queryArtifacts = vi.fn().mockReturnValue(new Promise(() => undefined));
+    Object.assign(window, { recoveryApi: api({
+      listSources: vi.fn().mockResolvedValue([]),
+      queryArtifacts,
+    }) });
+    await renderRoute(<CaseOverviewPage />, '/cases/case-live/overview', '/cases/:caseId/overview');
+
+    expect(await findText('No recovery job yet')).toBeTruthy();
+    expect(container?.textContent).toContain('Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.');
+    expect(container?.querySelector('a[href="/cases/case-live/sources"]')?.textContent).toContain('Add source');
+    expect(window.recoveryApi.createRecoveryJob).not.toHaveBeenCalled();
+    expect(queryArtifacts).not.toHaveBeenCalled();
   });
 
   it('shows an Overview alert instead of invented metrics when daemon loading fails', async () => {

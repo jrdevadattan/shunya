@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchPackagedApp } from './support/electron-app.js';
+import { createLiveCase } from './support/case-context.js';
 
 test('live recovery renders daemon partitions, progress, results, preview and report limitations', async () => {
   test.setTimeout(60_000);
@@ -19,15 +20,13 @@ test('live recovery renders daemon partitions, progress, results, preview and re
   }
   await writeFile(imagePath, image);
   const electronApp = await launchPackagedApp();
+  let cleanupCase: () => Promise<void> = async () => undefined;
   try {
     const page = await electronApp.firstWindow();
-    await page.getByRole('link', { name: /New recovery case/ }).click();
-    await page.getByLabel('Case title').fill('Live renderer recovery');
-    await page.getByLabel('Operator name or ID').fill('e2e-operator');
-    await page.getByLabel('Case workspace destination').fill(path.join(directory, 'case'));
-    await page.getByRole('button', { name: 'Create case' }).click();
+    const context = await createLiveCase(page, 'Live renderer recovery');
+    cleanupCase = context.cleanup;
     await expect(page.getByText('Live renderer recovery')).toBeVisible();
-    await page.getByRole('link', { name: 'Sources' }).click();
+    await page.getByRole('link', { name: 'Recovery', exact: true }).click();
     await page.getByLabel('Disk image path').fill(imagePath);
     await page.getByRole('button', { name: 'Add image source' }).click();
     await expect(page.getByText('Ready', { exact: true })).toBeVisible();
@@ -36,18 +35,16 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await page.getByRole('button', { name: 'Continue to scan options' }).click();
     await page.getByText('Full Scan', { exact: true }).locator('..').getByRole('button', { name: 'Use this preset' }).click();
     await expect(page.getByRole('heading', { name: 'Partitions found' })).toBeVisible();
-    await expect(page.getByText('partition-1')).toBeVisible();
-    await expect(page.getByText('FAT32', { exact: true })).toBeVisible();
     await expect(page.getByRole('figure', { name: 'Partition map' })).toBeVisible();
-    await expect(page.getByRole('list', { name: 'Detected partition tree' })).toContainText('partition-1');
-    await page.getByRole('link', { name: 'Recovery Jobs' }).click();
+    await expect(page.getByRole('list', { name: 'Detected partition tree' })).toContainText(/partition-1.*FAT32/s);
+    await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/jobs`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Recovery completed' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/recovered content was not threat-scanned/i)).toBeVisible();
-    await page.getByRole('link', { name: 'Recovered Files' }).click();
+    await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/results`; }, context.caseId);
     const preloadPage = await page.evaluate(() => window.recoveryApi.queryArtifacts({ pageSize: 100 }));
     const sessionState = await page.evaluate(() => Object.fromEntries(Object.entries(sessionStorage)));
     const dom = await page.locator('body').innerText();
-    const directPage = await directArtifactQuery(path.join(directory, 'case'));
+    const directPage = await directArtifactQuery(context.workspacePath);
     expect(directPage).toEqual(preloadPage);
     expect(Object.keys(sessionState)).toContainEqual(expect.stringMatching(/:jobId$/));
     expect(dom).toContain('Recovered JPEG 0000001');
@@ -63,6 +60,7 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await expect(page.getByText(/YARA_X_UNAVAILABLE/)).toBeVisible();
   } finally {
     await electronApp.close();
+    await cleanupCase();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -1,5 +1,6 @@
 import { RecoveryCaseSchema, type CreateCaseInput, type RecoveryCase } from '@recovery/contracts';
-import { rememberCase } from '../../application-state.js';
+import { rememberValidatedCase } from '../../application-state.js';
+import { rememberRecentCase } from './recent-cases.js';
 
 export async function createCase(input: CreateCaseInput): Promise<RecoveryCase> {
   const title = input.title.trim();
@@ -9,6 +10,7 @@ export async function createCase(input: CreateCaseInput): Promise<RecoveryCase> 
   if (!operator) throw new Error('Enter the operator name or ID.');
   if (!workspacePath) throw new Error('Choose a case workspace destination.');
   const recoveryCase = RecoveryCaseSchema.parse(await window.recoveryApi.createCase({ ...input, title, operator, workspacePath }));
-  rememberCase(recoveryCase.caseId, recoveryCase.workspacePath);
+  rememberValidatedCase(recoveryCase);
+  rememberRecentCase(recoveryCase);
   return recoveryCase;
 }

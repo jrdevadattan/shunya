@@ -22,6 +22,7 @@ export function NewCaseForm() {
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [selectingFolder, setSelectingFolder] = useState(false);
+  const folderPickerOpenRef = useRef(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const destinationPath = selection ? joinPath(selection.selectedPath, caseFolderName.trim()) : '';
@@ -30,13 +31,18 @@ export function NewCaseForm() {
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   async function chooseWorkspace() {
+    if (folderPickerOpenRef.current) return;
+    folderPickerOpenRef.current = true;
     setError(undefined); setSelectingFolder(true);
     try {
       const selected = await window.recoveryApi.chooseWorkspaceFolder();
       if (selected) setSelection(selected);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The selected folder could not be inspected.');
-    } finally { setSelectingFolder(false); }
+    } finally {
+      folderPickerOpenRef.current = false;
+      setSelectingFolder(false);
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -59,7 +65,7 @@ export function NewCaseForm() {
         title, operator, referenceNumber: optional(referenceNumber), organization: optional(organization),
         workspacePath: destinationPath, notes: optional(notes),
       });
-      await navigate(`/cases/${recoveryCase.caseId}/overview`);
+      await navigate(`/cases/${recoveryCase.caseId}/sources`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The recovery case could not be created.');
     } finally { setSubmitting(false); }
@@ -123,7 +129,7 @@ function WorkspaceStep({ headingRef, selection, caseFolderName, destinationPath,
           <header><span><HardDrive aria-hidden="true" /><strong>{selection.rootLabel}</strong></span><button type="button" className="button button--secondary" onClick={choose} disabled={selecting}>Choose another folder</button></header>
           <div className="workspace-browser__tree">
             <div className="workspace-tree__root"><FolderOpen aria-hidden="true" /><strong>{selection.selectedPath}</strong></div>
-            {selection.directories.length ? <DirectoryTree entries={selection.directories} /> : <p className="workspace-browser__empty">The selected parent has no visible subfolders.</p>}
+            {selection.directories.length ? <DirectoryTree entries={selection.directories} label="Folder preview" /> : <p className="workspace-browser__empty">The selected parent has no visible subfolders.</p>}
             {selection.truncated ? <p className="workspace-browser__notice"><Info aria-hidden="true" />Only the first bounded portion of this folder tree is shown.</p> : null}
           </div>
           <label className="workspace-name">Case folder name <span>Required</span><input name="caseFolderName" value={caseFolderName} onChange={(event) => setName(event.target.value)} aria-describedby="workspace-name-hint" /></label>
@@ -134,8 +140,8 @@ function WorkspaceStep({ headingRef, selection, caseFolderName, destinationPath,
   </section>;
 }
 
-function DirectoryTree({ entries }: { entries: WorkspaceDirectoryEntry[] }) {
-  return <ul className="workspace-tree" aria-label="Folder preview">{entries.map((entry) => <li key={entry.relativePath}>
+function DirectoryTree({ entries, label }: { entries: WorkspaceDirectoryEntry[]; label?: string }) {
+  return <ul className="workspace-tree" aria-label={label}>{entries.map((entry) => <li key={entry.relativePath}>
     <span><Folder aria-hidden="true" />{entry.name}</span>{entry.children.length ? <DirectoryTree entries={entry.children} /> : null}{entry.childrenOmitted ? <small>Deeper folders not shown</small> : null}
   </li>)}</ul>;
 }

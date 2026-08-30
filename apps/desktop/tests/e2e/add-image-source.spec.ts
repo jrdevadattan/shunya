@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchPackagedApp } from './support/electron-app.js';
+import { createLiveCase } from './support/case-context.js';
 
 test('add image source identifies a RAW image without modifying it', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'recovery-image-e2e-'));
@@ -10,23 +11,23 @@ test('add image source identifies a RAW image without modifying it', async () =>
   const original = Buffer.from('forensic image fixture');
   await writeFile(imagePath, original);
   const electronApp = await launchPackagedApp();
+  let cleanupCase: () => Promise<void> = async () => undefined;
   try {
     const page = await electronApp.firstWindow();
-    await page.getByRole('link', { name: /New recovery case/ }).click();
-    await page.getByLabel('Case title').fill('Live source assessment');
-    await page.getByLabel('Operator name or ID').fill('e2e-operator');
-    await page.getByLabel('Case workspace destination').fill(path.join(directory, 'case'));
-    await page.getByRole('button', { name: 'Create case' }).click();
-    await page.getByRole('link', { name: 'Sources' }).click();
+    const context = await createLiveCase(page, 'Live source assessment');
+    cleanupCase = context.cleanup;
+    await page.getByRole('link', { name: 'Recovery', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Select recovery source' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Discover physical devices' })).toBeDisabled();
     await page.getByLabel('Disk image path').fill(imagePath);
     await page.getByRole('button', { name: 'Add image source' }).click();
-    await expect(page.getByRole('heading', { name: 'evidence.raw' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'evidence.raw' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Ready', { exact: true })).toBeVisible();
     await expect(page.getByRole('figure', { name: 'Read-only source relationship' })).toContainText('Read-only analysis path');
     expect(await (await import('node:fs/promises')).readFile(imagePath)).toEqual(original);
   } finally {
     await electronApp.close();
+    await cleanupCase();
     await rm(directory, { recursive: true, force: true });
   }
 });
