@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use uuid::Uuid;
@@ -77,17 +77,18 @@ impl CaseStore {
         failure: FailurePoint,
     ) -> Result<Self, CaseStoreError> {
         validate_input(&input)?;
-        let replace_empty_destination = if root.exists() {
-            let metadata = fs::symlink_metadata(root)?;
-            if !metadata.is_dir()
-                || metadata.file_type().is_symlink()
-                || fs::read_dir(root)?.next().is_some()
-            {
-                return Err(CaseStoreError::DestinationExists(root.to_path_buf()));
+        let replace_empty_destination = match fs::symlink_metadata(root) {
+            Ok(metadata) => {
+                if !metadata.is_dir()
+                    || metadata.file_type().is_symlink()
+                    || fs::read_dir(root)?.next().is_some()
+                {
+                    return Err(CaseStoreError::DestinationExists(root.to_path_buf()));
+                }
+                true
             }
-            true
-        } else {
-            false
+            Err(error) if error.kind() == ErrorKind::NotFound => false,
+            Err(error) => return Err(error.into()),
         };
         let parent = root.parent().unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(parent)?;
