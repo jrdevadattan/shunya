@@ -56,7 +56,7 @@ export function MemorySourcePage() {
 }
 
 function MemorySourceSummary({ source }: { source: SourceDescriptor }) {
-  return <li><FileText aria-hidden="true" /><span><strong>{source.displayName}</strong><small>Registered memory image</small></span><span><strong>{formatBytes(source.sizeBytes)}</strong><small>Reported file size</small></span><span><strong>Read-only</strong><small>Case source policy</small></span></li>;
+  return <li><FileText aria-hidden="true" /><span><strong>{source.displayName}</strong><small><code>{source.kind}</code> source kind</small></span><span><strong>{formatBytes(source.sizeBytes)}</strong><small><code>{source.sizeBytes} bytes</code> exact</small></span><span><strong>Stable identifier</strong><small><code>{source.stableId}</code></small></span><span><strong>Read-only</strong><small>Case source policy</small></span></li>;
 }
 
 function formatBytes(value: string): string {

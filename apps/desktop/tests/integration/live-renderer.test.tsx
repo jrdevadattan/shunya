@@ -335,6 +335,7 @@ describe('live renderer pages', () => {
       'Cases',
       'New case',
       'Case setup',
+      'Case activity',
       'Recovery',
       'Verify',
       'Reports',
@@ -1213,6 +1214,21 @@ describe('live renderer pages', () => {
     expect(container?.textContent).not.toContain('Python runtime Available');
   });
 
+  it('renders the exact memory source identity and byte count beyond Number precision', async () => {
+    Object.assign(window, { recoveryApi: api({ listSources: vi.fn().mockResolvedValue([{
+      ...source,
+      kind: 'memory_image',
+      displayName: 'large-authorized-capture.raw',
+      stableId: 'memory-source:sha256:exact-identity',
+      sizeBytes: '9007199254740993',
+    }]) }) });
+    await renderRoute(<MemorySourcePage />, '/cases/case-live/memory', '/cases/:caseId/memory');
+
+    expect(await findText('memory-source:sha256:exact-identity')).toBeTruthy();
+    expect(await findText('memory_image')).toBeTruthy();
+    expect(await findText('9007199254740993 bytes')).toBeTruthy();
+  });
+
   it('labels memory analysis choices as unavailable instead of presenting runnable fake controls', async () => {
     await renderRoute(<MemoryOptionsPage />, '/cases/case-live/memory/options', '/cases/:caseId/memory/options');
 
@@ -1246,6 +1262,32 @@ describe('live renderer pages', () => {
     expect(container.textContent).not.toContain('Chain verified');
   });
 
+  it('exposes Case activity in persistent navigation and marks its route current', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/cases/case-live/activity'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+
+    await findText('Case created');
+    const current = container.querySelector<HTMLAnchorElement>('nav a[aria-current="page"]');
+    expect(current?.textContent).toContain('Case activity');
+    expect(current?.getAttribute('href')).toBe('#/cases/case-live/activity');
+  });
+
+  it('shows an unambiguous UTC label while retaining raw activity timestamps', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/cases/case-live/activity'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+
+    await findText('Case created');
+    const timestamp = container.querySelector<HTMLTimeElement>('[data-activity-sequence="case"] time');
+    expect(timestamp?.dateTime).toBe(createdAt);
+    expect(timestamp?.textContent).toMatch(/ UTC$/);
+  });
+
   it('persists supported appearance settings while rendering recovery safety as immutable', async () => {
     container = document.createElement('div');
     document.body.append(container);
@@ -1263,5 +1305,30 @@ describe('live renderer pages', () => {
     expect(container.textContent).toContain('Enforced and cannot be changed');
     expect(container.textContent).toContain('Additional recovery defaults are unavailable because the daemon has no persisted settings API.');
     expect(container.querySelectorAll('.settings-invariant input')).toHaveLength(0);
+  });
+
+  it('detaches system-theme observation before explicit theme changes', async () => {
+    localStorage.clear();
+    const listeners = new Set<(event: MediaQueryListEvent) => void>();
+    const media = {
+      matches: false,
+      addEventListener: (_name: string, listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
+      removeEventListener: (_name: string, listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
+    } as unknown as MediaQueryList;
+    vi.stubGlobal('matchMedia', vi.fn(() => media));
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/settings'] });
+    await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
+
+    expect(document.documentElement.dataset.theme).toBe('light');
+    await click(input('Light theme'));
+    await act(async () => listeners.forEach((listener) => listener({ matches: true } as MediaQueryListEvent)));
+    expect(document.documentElement.dataset.theme).toBe('light');
+
+    await click(input('Dark theme'));
+    await act(async () => listeners.forEach((listener) => listener({ matches: false } as MediaQueryListEvent)));
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 });

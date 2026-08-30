@@ -90,7 +90,8 @@ function stageLabel(stage: JobEvent['stage']): string {
 }
 
 function formatTimestamp(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value));
+  const timestamp = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(value));
+  return `${timestamp} UTC`;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Case activity could not be loaded.'; }

@@ -64,3 +64,20 @@ No contracts or Rust production code changed in Task 6, so no contract extension
 - Settings does not imply that checkpoint cadence, verification policy, storage headroom, runtime installation, or other recovery defaults can be persisted.
 
 Final same-state screenshot comparison against the approved memory, activity, and settings references remains part of Task 7 visual QA.
+
+## Fix Round 1 — auditable capability state
+
+### Review corrections
+
+- Application theme observation now uses an explicit effect cleanup return. The original concise arrow expression already returned `applyTheme`'s cleanup, so the review's listener-leak premise did not reproduce; the new regression test proves that later system-theme events cannot override explicit light or dark preferences across mode transitions.
+- Case Activity is now a persistent case-scoped item in the approved Cases navigation group. Its route receives `aria-current="page"`, making the screen discoverable without opening command search.
+- Registered memory-image summaries now expose the typed source kind, complete `stableId`, and raw `sizeBytes` decimal string. A rounded binary-unit label remains supplementary. The regression fixture uses `9007199254740993`, above JavaScript's safe-integer limit, and verifies the exact string survives rendering.
+- Activity timestamps retain the service's raw ISO value in `<time dateTime>` and render a deterministic UTC display label, removing workstation-timezone ambiguity.
+
+### RED → GREEN evidence
+
+The focused review run produced three expected failures: missing exact memory identity/bytes, no current persistent Activity navigation item, and no visible timezone. The theme-transition test passed immediately because cleanup already occurred through the concise effect return.
+
+After the minimal production changes, the same focused run passed all four tests. The broader live-renderer and UI-preference run then passed 86 tests.
+
+Fresh Fix Round 1 verification passed: full desktop Vitest (112 tests), shared UI/accessibility (7 tests), workspace typechecks, packaging/security (16 passed plus the expected Windows Unix-mode skip), Electron Forge Windows packaging, and three packaged Playwright flows covering memory, Activity navigation/timestamps, and persisted Settings.

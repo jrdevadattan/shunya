@@ -784,11 +784,12 @@
 
 .workflow-page.memory-capability { max-width: 1280px; }
 .memory-source-list { margin: var(--space-5) 0 0; padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); list-style: none; overflow: hidden; }
-.memory-source-list li { min-width: 0; display: grid; grid-template-columns: 30px minmax(220px, 1.4fr) minmax(130px, .7fr) minmax(130px, .7fr); gap: var(--space-4); align-items: center; padding: var(--space-4); }
+.memory-source-list li { min-width: 0; display: grid; grid-template-columns: 30px minmax(190px, 1.25fr) minmax(150px, .7fr) minmax(190px, 1fr) minmax(100px, .55fr); gap: var(--space-4); align-items: center; padding: var(--space-4); }
 .memory-source-list li > svg { width: 26px; height: 26px; color: var(--accent-primary); }
 .memory-source-list li > span { min-width: 0; display: grid; gap: 3px; }
 .memory-source-list strong { overflow-wrap: anywhere; font-size: 11px; }
 .memory-source-list small { color: var(--text-secondary); font-size: 9px; }
+.memory-source-list code { overflow-wrap: anywhere; color: inherit; font-size: inherit; }
 .memory-empty { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: var(--space-4); align-items: center; margin-top: var(--space-5); padding: var(--space-4); border: 1px dashed var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); }
 .memory-empty > svg { width: 28px; height: 28px; color: var(--text-tertiary); }
 .memory-empty > span { display: grid; gap: 3px; }

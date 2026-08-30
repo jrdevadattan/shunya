@@ -35,6 +35,7 @@ export function caseNavigation(caseId: string | null, pathname: string): Navigat
         item({ id: 'cases', label: 'Cases', href: '#/', icon: Folder }, ['/', '/cases/open']),
         item({ id: 'new-case', label: 'New case', href: '#/cases/new', icon: CirclePlus }, ['/cases/new']),
         item(caseOnly({ id: 'case-setup', label: 'Case setup', href: `${base}/overview`, icon: SlidersHorizontal }), [route('overview')]),
+        item(caseOnly({ id: 'case-activity', label: 'Case activity', href: `${base}/activity`, icon: BriefcaseBusiness }), [route('activity')]),
       ],
     },
     {

@@ -31,7 +31,9 @@ export function ApplicationShell({ title, children }: { title: string; children:
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const navigation = caseNavigation(null, location.pathname);
 
-  useEffect(() => applyTheme(preferences.theme), [preferences.theme]);
+  useEffect(() => {
+    return applyTheme(preferences.theme);
+  }, [preferences.theme]);
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
