@@ -11,3 +11,7 @@ const api = createRecoveryApi({
 });
 
 contextBridge.exposeInMainWorld('recoveryApi', api);
+contextBridge.exposeInMainWorld('deletionApi', {
+  runScript: (scriptName: string) => ipcRenderer.invoke('deletion.run', scriptName)
+});
+

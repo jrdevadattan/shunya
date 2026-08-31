@@ -2,6 +2,7 @@ import { createHashRouter, Navigate } from 'react-router-dom';
 import { CaseLayout } from './CaseLayout.js';
 import { NewCasePage } from './NewCasePage.js';
 import { WelcomePage } from './WelcomePage.js';
+import { NewDeletionPage } from './NewDeletionPage.js';
 import { JobProgressPage } from '../features/jobs/JobProgressPage.js';
 import { AddSourcePage } from '../features/sources/AddSourcePage.js';
 import { SourceAssessmentPage } from '../features/sources/SourceAssessmentPage.js';
@@ -24,6 +25,7 @@ import { CaseActivityPage } from '../features/activity/CaseActivityPage.js';
 export const router = createHashRouter([
   { path: '/', element: <WelcomePage /> },
   { path: '/cases/new', element: <NewCasePage /> },
+  { path: '/deletion/new', element: <NewDeletionPage /> },
   { path: '/cases/open', element: <NewCasePage /> },
   { path: '/settings', element: <SettingsPage /> },
   { path: '/help', element: <HelpPage /> },

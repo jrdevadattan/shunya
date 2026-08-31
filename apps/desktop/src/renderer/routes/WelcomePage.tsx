@@ -72,6 +72,16 @@ export function WelcomePage() {
             <p>The recovery service does not expose a global case index. Open a known workspace to add it here.</p>
           </div>}
         </section>
+
+        <section className="recent-cases" aria-labelledby="deletion-cases-title" style={{ marginTop: '24px' }}>
+          <header>
+            <div><h2 id="deletion-cases-title">Your deletion cases</h2><p>Manage and review your secure deletion cases.</p></div>
+            <Link className="button button--secondary button--icon" to="/deletion/new"><Plus aria-hidden="true" />New deletion</Link>
+          </header>
+          <div className="recent-cases__empty">
+            <p>No deletion cases are stored on this device yet.</p>
+          </div>
+        </section>
       </div>
     </ApplicationShell>
   );
