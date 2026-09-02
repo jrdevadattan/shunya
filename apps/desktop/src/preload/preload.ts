@@ -15,3 +15,20 @@ contextBridge.exposeInMainWorld('deletionApi', {
   runScript: (scriptName: string) => ipcRenderer.invoke('deletion.run', scriptName)
 });
 
+contextBridge.exposeInMainWorld('secureErase', Object.freeze({
+  prepareBinary: () => ipcRenderer.invoke('secureErase.prepareBinary'),
+  listDevices: () => ipcRenderer.invoke('secureErase.listDevices'),
+  getCapabilities: (device: string) => ipcRenderer.invoke('secureErase.getCapabilities', device),
+  eraseDevice: (device: string, options: { confirmation: string; allowFormatFallback: boolean }) => ipcRenderer.invoke('secureErase.eraseDevice', device, options),
+  onProgress: (callback: (event: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('secureErase.progress', listener);
+    return () => ipcRenderer.removeListener('secureErase.progress', listener);
+  },
+  onDownloadProgress: (callback: (message: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(String(payload));
+    ipcRenderer.on('secureErase.downloadProgress', listener);
+    return () => ipcRenderer.removeListener('secureErase.downloadProgress', listener);
+  },
+}));
+

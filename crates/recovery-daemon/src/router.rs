@@ -106,6 +106,12 @@ struct ReportParams {
     case_id: Uuid,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeletionListParams {
+    target_path: PathBuf,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CapabilityLimitation {
@@ -207,6 +213,7 @@ impl DaemonState {
             "artifact.preview" => self.preview_artifact(request),
             "export.start" => self.export_artifacts(request),
             "report.generate" => self.generate_report(request),
+            "deletion.list_files" => self.deletion_list_files(request),
             method => Err((
                 "NOT_IMPLEMENTED",
                 format!("{method} is not implemented yet"),
@@ -734,6 +741,25 @@ impl DaemonState {
             "markdownPath": markdown_path,
             "limitations": limitations
         }))
+    }
+
+    fn deletion_list_files(&self, request: &RpcRequest) -> RouteResult {
+        let params: DeletionListParams = parse(request, "INVALID_DELETION_INPUT")?;
+        let mut files = Vec::new();
+        let mut stack = vec![params.target_path];
+        while let Some(path) = stack.pop() {
+            if let Ok(entries) = std::fs::read_dir(&path) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else {
+                        files.push(path.to_string_lossy().into_owned());
+                    }
+                }
+            }
+        }
+        Ok(json!(files))
     }
 
     fn assessment_for(

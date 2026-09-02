@@ -29,13 +29,18 @@ export function NewDeletionPage() {
     }
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!selection) return;
     
-    // For now, we don't have deletion logic, so just go back or show success
-    alert(`Created deletion task "${taskTitle}" for ${selection.selectedPath}`);
-    navigate('/');
+    try {
+      const files = await window.recoveryApi.listDeletionFiles(selection.selectedPath);
+      // For now, we don't have deletion logic, so just go back or show success
+      alert(`Created deletion task "${taskTitle}" for ${selection.selectedPath}. Listed ${files.length} files for deletion.`);
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (

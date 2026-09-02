@@ -145,6 +145,8 @@ export const ArtifactParamsSchema = z.object({ artifactId: z.string().min(1) }).
 export const ReportParamsSchema = z.object({ caseId: z.string().min(1) }).strict();
 export const ReportRevealParamsSchema = z.object({ reportPath: z.string().min(1) }).strict();
 export const ReportRevealResultSchema = z.object({ revealed: z.literal(true) }).strict();
+export const DeletionListParamsSchema = z.object({ targetPath: z.string().min(1) }).strict();
+export const DeletionListResultSchema = z.array(z.string());
 export type CreateCaseInput = z.infer<typeof CreateCaseInputSchema>;
 export type AddImageSourceInput = z.infer<typeof AddImageSourceInputSchema>;
 export type CreateRecoveryJobInput = z.infer<typeof CreateRecoveryJobInputSchema>;
@@ -188,6 +190,7 @@ export interface RecoveryDesktopApi {
   exportArtifacts(input: ExportArtifactsInput): Promise<ExportJob>;
   generateReport(caseId: string): Promise<ReportDescriptor>;
   revealReportInFolder(reportPath: string): Promise<void>;
+  listDeletionFiles(targetPath: string): Promise<string[]>;
   subscribeJobEvents(listener: (event: z.infer<typeof JobEventSchema>) => void): () => void;
 }
 
@@ -205,6 +208,7 @@ export function parseDesktopRpcParams(method: string, params: unknown): Record<s
     case 'artifact.get': case 'artifact.preview': return ArtifactParamsSchema.parse(params);
     case 'export.start': return ExportArtifactsInputSchema.parse(params);
     case 'report.generate': return ReportParamsSchema.parse(params);
+    case 'deletion.list_files': return DeletionListParamsSchema.parse(params);
     default: throw new Error(`Unsupported desktop RPC method: ${method}`);
   }
 }
@@ -225,6 +229,7 @@ export function parseDesktopRpcResult(method: string, result: unknown): unknown 
     case 'artifact.preview': return PreviewDescriptorSchema.parse(result);
     case 'export.start': return ExportJobSchema.parse(result);
     case 'report.generate': return ReportDescriptorSchema.parse(result);
+    case 'deletion.list_files': return DeletionListResultSchema.parse(result);
     default: throw new Error(`Unsupported desktop RPC method: ${method}`);
   }
 }
