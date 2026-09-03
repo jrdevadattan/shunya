@@ -25,6 +25,8 @@ const METHODS: &[&str] = &[
     "artifact.preview",
     "export.start",
     "report.generate",
+    "deletion.list_files",
+    "deletion.start",
 ];
 
 #[derive(Debug, Error)]

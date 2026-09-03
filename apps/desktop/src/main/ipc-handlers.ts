@@ -13,7 +13,7 @@ import { validateIpcSender } from './security.js';
 const requestChannels = [
   'runtime.get', 'case.create', 'case.open', 'case.state', 'source.list', 'source.add_image', 'source.assess',
   'job.create', 'job.start', 'job.pause', 'job.resume', 'job.cancel', 'job.status', 'job.events', 'artifact.query',
-  'artifact.get', 'artifact.preview', 'export.start', 'report.generate', 'deletion.list_files',
+  'artifact.get', 'artifact.preview', 'export.start', 'report.generate', 'deletion.list_files', 'deletion.start',
 ] as const;
 
 export interface WorkspaceInspectionFileSystem {

@@ -62,9 +62,9 @@ async function startDaemon(): Promise<DaemonSupervisor | undefined> {
     await daemon.start();
     return daemon;
   }
-  if (!app.isPackaged) return undefined;
-
-  const bundledResources = path.join(process.resourcesPath, 'resources');
+  const bundledResources = app.isPackaged 
+    ? path.join(process.resourcesPath, 'resources')
+    : path.join(__dirname, '../../resources');
   const bundledExecutable = path.join(bundledResources, process.platform === 'win32' ? 'recoveryd.exe' : 'recoveryd');
   const manifestPath = path.join(bundledResources, 'recoveryd.sha256');
   try {

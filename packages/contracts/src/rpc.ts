@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const RpcMethodSchema = z.enum([
   'runtime.get', 'case.create', 'case.open', 'case.state', 'source.list', 'source.add_image', 'source.assess',
   'job.create', 'job.start', 'job.pause', 'job.resume', 'job.cancel', 'artifact.query',
-  'job.status', 'job.events', 'artifact.get', 'artifact.preview', 'export.start', 'report.generate', 'deletion.list_files',
+  'job.status', 'job.events', 'artifact.get', 'artifact.preview', 'export.start', 'report.generate', 'deletion.list_files', 'deletion.start',
 ]);
 export const RpcRequestSchema = z.object({
   id: z.string().uuid(), method: RpcMethodSchema, params: z.record(z.string(), z.unknown()),

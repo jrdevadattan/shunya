@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, FolderOpen, ShieldAlert } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { WorkspaceSelection } from '@recovery/contracts';
+import { rememberRecentDeletion } from '../features/cases/recent-deletions.js';
 import { ApplicationShell } from './ApplicationShell.js';
 
 export function NewDeletionPage() {
@@ -34,9 +35,32 @@ export function NewDeletionPage() {
     if (!selection) return;
     
     try {
-      const files = await window.recoveryApi.listDeletionFiles(selection.selectedPath);
-      // For now, we don't have deletion logic, so just go back or show success
-      alert(`Created deletion task "${taskTitle}" for ${selection.selectedPath}. Listed ${files.length} files for deletion.`);
+      const sources = await window.recoveryApi.listSources();
+      // Match the physical device. Fallback to the first USB drive since only USB is allowed.
+      let match = sources.find(s => 
+        selection.rootPath.startsWith(s.displayName) || 
+        s.displayName.startsWith(selection.rootPath) ||
+        selection.selectedPath.startsWith(s.displayName)
+      );
+      if (!match) {
+         match = sources.find(s => s.bus?.toUpperCase() === 'USB');
+      }
+      if (!match) throw new Error("Could not identify the physical device for the selected folder. Is it a USB drive?");
+
+      const result = await window.recoveryApi.startDeletion({
+        sourceId: match.sourceId,
+        targetPath: selection.selectedPath
+      });
+
+      rememberRecentDeletion({
+        id: crypto.randomUUID(),
+        title: taskTitle,
+        targetPath: selection.selectedPath,
+        totalFiles: result.totalFiles,
+        markerPath: result.markerPath,
+        createdAt: new Date().toISOString(),
+      });
+
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

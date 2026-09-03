@@ -3,7 +3,7 @@ import {
   CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportFolderResultSchema, ExportJobSchema, JobEventSchema,
   JobEventsParamsSchema, JobParamsSchema, JobStatusSchema, PreviewDescriptorSchema, RecoveryArtifactSchema,
   RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, ReportRevealParamsSchema, ReportRevealResultSchema, RuntimeInfoSchema,
-  SourceAssessmentSchema, SourceDescriptorSchema, SourceImageResultSchema, SourceParamsSchema, WorkspaceFolderResultSchema, DeletionListResultSchema, type JobEvent, type RecoveryDesktopApi,
+  SourceAssessmentSchema, SourceDescriptorSchema, SourceImageResultSchema, SourceParamsSchema, WorkspaceFolderResultSchema, DeletionListResultSchema, DeletionStartResultSchema, type JobEvent, type RecoveryDesktopApi,
 } from '@recovery/contracts';
 
 export const recoveryApiMethodNames = [
@@ -46,6 +46,10 @@ export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopA
     listDeletionFiles: async (targetPath) => {
       const result = await invoke('deletion.list_files', { targetPath });
       return DeletionListResultSchema.parse(result);
+    },
+    startDeletion: async (input) => {
+      const result = await invoke('deletion.start', input);
+      return DeletionStartResultSchema.parse(result);
     },
     subscribeJobEvents: (listener: (event: JobEvent) => void) => transport.subscribe('job.event', (payload) => listener(JobEventSchema.parse(payload))),
   };
