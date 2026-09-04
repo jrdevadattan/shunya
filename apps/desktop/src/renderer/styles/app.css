@@ -251,6 +251,12 @@
 .job-progress__timeline .stage-timeline li[data-status='completed']::after { background: var(--status-success); }
 .job-progress__bar { height: 5px; margin: 0 0 var(--space-4); overflow: hidden; border-radius: 0 0 999px 999px; background: var(--surface-muted); }
 .job-progress__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-primary); transition: width 180ms ease; }
+.job-progress__bar--running > span { background: linear-gradient(90deg, var(--accent-primary), color-mix(in oklch, var(--accent-primary) 45%, white) 50%, var(--accent-primary)); background-size: 200% 100%; animation: job-progress-sheen 1.15s linear infinite; }
+@keyframes job-progress-sheen { from { background-position: 200% 0; } to { background-position: 0 0; } }
+.job-progress__log ol { max-height: 260px; overflow-y: auto; }
+.job-progress__log ol li { animation: job-log-in 320ms ease both; }
+@keyframes job-log-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .job-progress__bar--running > span { animation: none; } .job-progress__log ol li { animation: none; } }
 .job-progress__relationship { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .55fr) minmax(0, 1fr); gap: var(--space-4); align-items: center; margin: 0 0 var(--space-4); padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); }
 .job-progress__relationship > div { min-width: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr) 18px; gap: 10px; align-items: center; padding: 13px; border: 1px solid color-mix(in oklch, var(--status-success) 42%, var(--border-subtle)); border-radius: var(--radius-sm); }
 .job-progress__relationship > div > svg:first-child { width: 27px; height: 27px; }

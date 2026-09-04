@@ -25,7 +25,9 @@ button { color: inherit; }
 .stage-timeline { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-3); }
 .stage-timeline li { display: flex; align-items: center; gap: var(--space-3); color: var(--text-secondary); }
 .stage-timeline__marker { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--status-neutral); }
-.stage-timeline li[data-status='running'] .stage-timeline__marker { border-color: var(--accent-primary); background: var(--accent-primary); }
+.stage-timeline li[data-status='running'] .stage-timeline__marker { border-color: var(--accent-primary); background: var(--accent-primary); animation: stage-marker-pulse 1.6s ease-in-out infinite; }
+@keyframes stage-marker-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-primary) 50%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in oklch, var(--accent-primary) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .stage-timeline li[data-status='running'] .stage-timeline__marker { animation: none; } }
 .stage-timeline li[data-status='completed'] .stage-timeline__marker { border-color: var(--status-success); background: var(--status-success); }
 
 .surface-card, .metric-card { border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); box-shadow: 0 1px 2px oklch(0 0 0 / 4%); }

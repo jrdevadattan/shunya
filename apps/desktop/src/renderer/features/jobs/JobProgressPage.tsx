@@ -1,6 +1,6 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
 import { CapabilityBanner, StageTimeline, SurfaceCard, type TimelineStage } from '@recovery/ui';
-import { ArrowRight, CheckCircle2, Clock3, Database, FolderLock, Gauge, HardDrive, Pause, Play, ShieldCheck, Square, Waypoints } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, Database, FolderLock, HardDrive, Pause, Play, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { activeJobId, activeWorkspace } from '../../application-state.js';
@@ -35,6 +35,7 @@ export function JobProgressPage() {
   const [commandError, setCommandError] = useState<string>();
   const terminal = useRef(false);
   const requestGeneration = useRef(0);
+  const logRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -74,6 +75,12 @@ export function JobProgressPage() {
     return () => { active = false; terminal.current = true; if (timer !== undefined) window.clearTimeout(timer); };
   }, [jobId]);
 
+  // Keep the append-only event feed scrolled to the newest entry as events stream in.
+  useEffect(() => {
+    const list = logRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [events]);
+
   async function command(operation: (id: string) => Promise<JobStatus>) {
     if (!jobId) return;
     requestGeneration.current += 1;
@@ -89,6 +96,8 @@ export function JobProgressPage() {
   if (!status && !pollError) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
   const error = commandError ?? pollError;
   const progress = status && !stagesWithoutWorkflowPosition.has(status.stage) ? progressByStage[status.stage] : undefined;
+  // A job is actively working (worth animating) unless it is in a terminal or held state.
+  const running = status ? !terminalStages.has(status.stage) && !stagesWithoutWorkflowPosition.has(status.stage) : false;
   return <section className="job-progress">
     <header className="page-heading job-progress__heading"><div><p className="eyebrow">Live recovery workspace</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p className="page-heading__description">Daemon-reported recovery state for job {status?.jobId}. Values that are not exposed remain visibly unavailable.</p></div>{status ? <div className="job-progress__headline" data-unavailable={progress === undefined || undefined}><strong>{progress === undefined ? 'Stage position unavailable' : `${progress}%`}</strong><span>{progress === undefined ? 'This state does not report a workflow position' : 'Stage-based position, not measured bytes'}</span></div> : null}</header>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -96,7 +105,7 @@ export function JobProgressPage() {
       <SurfaceCard className="job-progress__timeline" title="Recovery stages" description="Completed, active, and upcoming stages derived from the current daemon stage.">
         <StageTimeline stages={timelineFor(status.stage)} ariaLabel="Recovery stage timeline" />
       </SurfaceCard>
-      {progress !== undefined ? <div className="job-progress__bar" role="progressbar" aria-label="Stage-based workflow progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+      {progress !== undefined ? <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Stage-based workflow progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
         <span style={{ width: `${progress}%` }} />
       </div> : null}
       <figure className="job-progress__relationship" aria-label="Recovery data path">
@@ -109,7 +118,7 @@ export function JobProgressPage() {
         <div className="job-progress__main">
           <section className="job-progress__telemetry" aria-label="Recovery telemetry">
             <article><Database aria-hidden="true" /><span><strong>{status.partitions?.partitions.length ?? 'Not reported'}</strong><small>Partitions recorded</small></span></article>
-            <article><Gauge aria-hidden="true" /><span><strong>Unavailable</strong><small>Throughput is not reported</small></span></article>
+            <article><Timer aria-hidden="true" /><span><strong>{elapsedLabel(status.createdAt, status.updatedAt)}</strong><small>{running ? 'Elapsed · updating live' : 'Elapsed'}</small></span></article>
             <article><Clock3 aria-hidden="true" /><span><strong>{formatTime(status.updatedAt)}</strong><small>Last daemon update</small></span></article>
           </section>
           <ReadErrorMap />
@@ -131,7 +140,7 @@ export function JobProgressPage() {
       {status.limitations.length ? <div className="job-progress__limitations">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={limitation.code} explanation={limitation.explanation} />)}</div> : null}
     </> : null}
     <SurfaceCard title="Event stream" description="Append-only events returned by the recovery daemon." className="job-progress__log">
-      <ol aria-label="Recovery event stream">{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
+      <ol aria-label="Recovery event stream" ref={logRef}>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
       {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
     </SurfaceCard>
   </section>;
@@ -165,6 +174,19 @@ function timelineFor(stage: JobStatus['stage']): TimelineStage[] {
 function formatTime(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Elapsed wall-clock time between the daemon-reported job start and its latest
+// update. Both timestamps are daemon-reported, so this stays truthful while the
+// last-update time advances on each poll, giving the live view a ticking value.
+function elapsedLabel(createdAt: string, updatedAt: string): string {
+  const start = new Date(createdAt).getTime();
+  const end = new Date(updatedAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 'Unavailable';
+  const totalSeconds = Math.floor((end - start) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function mergeEvents(current: JobEvent[], incoming: JobEvent[]): JobEvent[] {
