@@ -3,6 +3,7 @@ import { ArrowLeft, HardDrive, Loader2, ShieldAlert, ShieldCheck, Usb } from 'lu
 import { Link } from 'react-router-dom';
 import type { BlockDevice, EraseProgressEvent, EraseResult } from '../../main/secure-erase/types.js';
 import { ApplicationShell } from './ApplicationShell.js';
+import { CertificatePanel } from '../features/certificate/CertificatePanel.js';
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
@@ -189,6 +190,19 @@ export function FlashErasePage() {
                 </div>
               </div>
             ) : null}
+
+            {result ? <CertificatePanel record={{
+              kind: 'sanitization',
+              title: dryRun ? `Secure-erase dry run — ${target.model}` : `Secure sanitization of ${target.model}`,
+              device: target.device,
+              model: target.model,
+              serial: target.serial ?? undefined,
+              method: dryRun ? 'CSPRNG overwrite (DRY RUN — device not modified)' : 'CSPRNG overwrite (AES-256-CTR keystream)',
+              assurance: result.assurance,
+              standard: 'NIST SP 800-88 Rev. 2 · Clear',
+              details: `${(target.sizeBytes / 1024 ** 3).toFixed(2)} GB removable device`,
+              completedAt: result.completedAt,
+            }} /> : null}
           </section>
         ) : null}
       </div>

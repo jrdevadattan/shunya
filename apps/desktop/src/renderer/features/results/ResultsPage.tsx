@@ -1,5 +1,5 @@
 import { ArtifactPageSchema, PreviewDescriptorSchema, type ArtifactPage, type PreviewDescriptor, type RecoveryArtifact } from '@recovery/contracts';
-import { ArrowRight, CheckCircle2, Files, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Files, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArtifactDetailsPanel } from './ArtifactDetailsPanel.js';
@@ -61,13 +61,14 @@ export function ResultsPage() {
 
   const artifact = page.items.find((item) => item.artifactId === selected);
   const artifactLabel = `${page.totalCount.toLocaleString('en-US')} indexed ${page.totalCount === 1 ? 'artifact' : 'artifacts'}`;
+  const threatCount = page.items.filter((item) => item.threatStatus === 'potential_threat').length;
   const selectedBytes = Array.from(exportSelection.values()).reduce((total, item) => total + BigInt(item.sizeBytes), 0n);
   const selectedCount = exportSelection.size;
   const toggleExport = (item: RecoveryArtifact) => setExportSelection((current) => { const next = new Map(current); if (next.has(item.artifactId)) next.delete(item.artifactId); else next.set(item.artifactId, item); return next; });
   const prepareExport = () => sessionStorage.setItem(`recovery:${caseId}:exportArtifactIds`, JSON.stringify(Array.from(exportSelection.keys())));
 
   return <section className="results-page">
-    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovery results</h1><p className="page-heading__description">Review indexed artifacts, their provenance, and protected preview status without launching recovered originals.</p></div><div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Daemon-indexed evidence</small></span></div></header>
+    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovery results</h1><p className="page-heading__description">Review indexed artifacts, their provenance, and protected preview status without launching recovered originals.</p></div><div className="results-page__summary"><div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Daemon-indexed evidence</small></span></div>{threatCount > 0 ? <div className="results-page__threats"><ShieldAlert aria-hidden="true" /><span><strong>{threatCount} potential threat{threatCount === 1 ? '' : 's'}</strong><small>Flagged by YARA-X · quarantined</small></span></div> : null}</div></header>
     {error ? <p role="alert" className="form-error">{error}</p> : null}
     <div className="results-workspace" aria-label="Recovery result browser">
       <ResultFilters artifacts={page.items} search={search} method={method} originalPathPrefix={originalPathPrefix} onSearch={setSearch} onMethod={(value) => { setMethod(value); setOriginalPathPrefix(undefined); }} onFolder={(path) => { setMethod('metadata'); setOriginalPathPrefix(path); setSearch(''); }} />

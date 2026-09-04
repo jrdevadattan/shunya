@@ -1,31 +1,49 @@
-# SHUNYA Recovery 0.2.0
+# SHUNYA Recovery 0.3.0
 
-This release delivers the redesigned Windows x64 recovery workstation and the completed case lifecycle.
+Windows x64 recovery + secure‑erase workstation. This release makes threat
+scanning genuinely real, adds a flash secure‑erase module with a tamper‑evident
+certificate, and refreshes the interface.
 
 ## Highlights
 
-- Approved SHUNYA interface across case intake, source assessment, recovery setup, live activity, results, export, reporting, memory analysis, settings, and support.
-- Native workspace selection with a bounded folder tree, real storage data, overwrite protection, and immediate duplicate-dialog protection.
-- Persistent Recent cases list with validated case reopening and clear guidance before the first recovery job exists.
-- Sandboxed Electron renderer with a typed preload boundary and a SHA-256-verified Rust recovery daemon.
-- Read-only RAW-image workflow with source revalidation, SHA-256 hashing, GPT/MBR discovery, bounded JPEG signature carving, deterministic validation, indexed review, verified export, and JSON/Markdown reporting.
-- Checkpointed recovery jobs with pause, resume, cancellation, event history, and recoverable restart behavior.
-- Fresh-process case reopening restores the daemon-derived persisted source and latest job link; cases without a job remain explicitly empty.
-- Isolated packaged E2E profiles so temporary test cases cannot enter a shared Electron profile.
+- **Real YARA‑X threat scanning.** Recovered files are scanned by the real,
+  pure‑Rust YARA‑X engine (built‑in SIH + EICAR demonstration rules); matches are
+  flagged as *Potentially unsafe*, quarantined, and preview‑blocked. Replaces the
+  previous placeholder. The Results screen summarises how many files were flagged.
+- **Secure Drive Eraser (flash / removable media).** An "Erase a device" workflow
+  performs a full‑device **CSPRNG overwrite** (single AES‑256‑CTR keystream pass) —
+  an overwrite‑based **NIST SP 800‑88 Rev. 2 Clear** method (correctly *not* called
+  "cryptographic erase"). The system disk is protected and never selectable; a live
+  wipe requires administrator rights and an exact‑device‑path confirmation; a safe
+  **dry‑run** exercises the pipeline without touching the device.
+- **Tamper‑evident certificate.** Both the erase utility and the recovery report can
+  issue an **Ed25519‑signed certificate** that verifies in‑app as *Authentic* and
+  detects any modification. Certificates can be saved as a self‑contained HTML
+  document and printed to PDF.
+- **Read‑only recovery with chain of custody.** RAW/dd images, GPT/MBR discovery,
+  bounded JPEG signature carving, deterministic validation, SHA‑256 of the source
+  before/after, verified export (refuses a same‑device destination), and JSON/Markdown
+  reporting — all offline.
+- **Refreshed UI.** A premium visual foundation (depth, gradients, motion), an
+  animated live‑recovery view, and honest "unavailable" states for capabilities not
+  in this build.
 
 ## Windows assets
 
-- `SIH-Recovery-Platform-Setup.exe`: Windows x64 installer.
-- `sih_recovery_platform-0.2.0-full.nupkg`: Windows x64 Squirrel update package.
-- `SHA256SUMS`: cryptographic checksums for the published assets.
-- `release-manifest.json`: release metadata and asset hashes.
+- `SIH-Recovery-Platform-Setup.exe` — Windows x64 installer.
+- `sih_recovery_platform-0.3.0-full.nupkg` — Windows x64 Squirrel update package.
+- `SHA256SUMS` — cryptographic checksums for the published assets.
 
-The Windows artifacts are unsigned because no Authenticode certificate was supplied. Windows may display a SmartScreen warning.
+The Windows artifacts are unsigned (no Authenticode certificate supplied); Windows may
+show a SmartScreen warning.
 
-This Windows-only asset set is verified with `node packaging/scripts/verify-release-set.mjs --profile windows-x64 dist/release/v0.2.0`; the verifier requires both Windows packages, checksums, and complete manifest coverage without weakening the default multi-platform gate.
+## Honest capability limits
 
-## Capability limits
-
-The packaged vertical slice includes bounded JPEG content-signature recovery. It reports The Sleuth Kit, PhotoRec, and YARA-X as unavailable unless approved, hash-verified binaries are present. It does not claim original names or folders for carved data, and it marks content as not threat-scanned when YARA-X is unavailable.
-
-SSD TRIM, overwriting, missing encryption keys, and physical damage can make recovery impossible. Installed Mode is not equivalent to a clean Rescue Mode environment. Linux, macOS, and Rescue ISO artifacts are not part of this Windows release.
+The packaged slice recovers content by **JPEG signature carving** from RAW images; it
+does not restore original filenames/folders and reports The Sleuth Kit, PhotoRec, and
+broader tooling as **unavailable** (shown honestly in the UI, never faked). Volatility
+memory analysis and physical‑device acquisition are not in this build. The CSPRNG
+overwrite is a **Clear**; firmware **Sanitize** (ATA Secure Erase / NVMe Sanitize) for
+**Purge**‑level assurance is roadmap. SSD TRIM, overwriting, and physical damage can make
+recovery impossible. Linux, macOS, and Rescue ISO artifacts are not part of this Windows
+release (the Rescue ISO must be built on Linux with `live-build`).

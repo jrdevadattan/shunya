@@ -15,6 +15,12 @@ contextBridge.exposeInMainWorld('deletionApi', {
   runScript: (scriptName: string) => ipcRenderer.invoke('deletion.run', scriptName)
 });
 
+contextBridge.exposeInMainWorld('certificates', Object.freeze({
+  generate: (record: unknown) => ipcRenderer.invoke('certificate.generate', record),
+  verify: (cert: unknown) => ipcRenderer.invoke('certificate.verify', cert),
+  save: (suggestedName: string, content: string) => ipcRenderer.invoke('certificate.save', { suggestedName, content }),
+}));
+
 contextBridge.exposeInMainWorld('secureErase', Object.freeze({
   prepareBinary: () => ipcRenderer.invoke('secureErase.prepareBinary'),
   listDevices: () => ipcRenderer.invoke('secureErase.listDevices'),

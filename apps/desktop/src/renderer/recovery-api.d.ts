@@ -3,6 +3,11 @@ import type { createRecoveryApi } from '../preload/recovery-api.js';
 declare global {
   interface Window {
     recoveryApi: ReturnType<typeof createRecoveryApi>;
+    certificates: {
+      generate(record: import('../main/certificate.js').CertificateRecord): Promise<import('../main/certificate.js').SignedCertificate>;
+      verify(cert: import('../main/certificate.js').SignedCertificate): Promise<{ valid: boolean; reason?: string }>;
+      save(suggestedName: string, content: string): Promise<string | null>;
+    };
     secureErase: {
       prepareBinary(): Promise<void>;
       listDevices(): Promise<import('../main/secure-erase/types.js').NvmeDevice[]>;

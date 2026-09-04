@@ -571,6 +571,35 @@
 .flash-erase__result div { display: grid; gap: 3px; min-width: 0; }
 .flash-erase__result small { color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
 
+/* Results threat summary */
+.results-page__summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.results-page__threats { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border: 1px solid color-mix(in oklch, var(--status-danger) 45%, var(--border-subtle)); border-radius: var(--radius-card); background: color-mix(in oklch, var(--status-danger) 8%, var(--surface-panel)); color: var(--status-danger); box-shadow: var(--shadow-sm); }
+.results-page__threats svg { width: 20px; height: 20px; }
+.results-page__threats span { display: grid; gap: 2px; }
+.results-page__threats strong { font-size: 13px; }
+.results-page__threats small { color: color-mix(in oklch, var(--status-danger) 80%, var(--text-secondary)); font-size: 11px; }
+
+/* Tamper-evident certificate panel */
+.certificate { margin-top: 8px; display: grid; gap: 14px; padding: 20px; border: 1px solid color-mix(in oklch, var(--status-info) 30%, var(--border-subtle)); border-radius: var(--radius-card); background: color-mix(in oklch, var(--status-info) 5%, var(--surface-panel)); box-shadow: var(--shadow-sm); }
+.certificate__head { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: center; }
+.certificate__head svg { width: 22px; height: 22px; color: var(--status-info); }
+.certificate__head strong { font-size: 14px; }
+.certificate__head small { color: var(--text-secondary); font-size: 12px; }
+.certificate__body { display: grid; gap: 14px; }
+.certificate__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin: 0; }
+.certificate__facts > div { min-width: 0; display: grid; gap: 2px; }
+.certificate__facts .certificate__wide { grid-column: 1 / -1; }
+.certificate__facts dt { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.certificate__facts dd { margin: 0; font-size: 13px; }
+.certificate__mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.certificate__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.certificate__verdict { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; }
+.certificate__verdict svg { width: 18px; height: 18px; }
+.certificate__verdict--ok { background: color-mix(in oklch, var(--status-success) 12%, var(--surface-panel)); color: var(--status-success); }
+.certificate__verdict--bad { background: color-mix(in oklch, var(--status-danger) 12%, var(--surface-panel)); color: var(--status-danger); }
+.certificate__saved { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.certificate__saved code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+
 .scan-comparison { overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); }
 .scan-comparison table { min-width: 820px; margin: 0; }
 .scan-comparison th { padding: 11px 12px; background: var(--surface-muted); color: var(--text-secondary); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }

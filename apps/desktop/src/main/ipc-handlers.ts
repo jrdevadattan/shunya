@@ -1,7 +1,8 @@
 import path from 'node:path';
 import type { Dirent, Stats } from 'node:fs';
-import { lstat, readdir, realpath, statfs } from 'node:fs/promises';
+import { lstat, readdir, realpath, statfs, writeFile } from 'node:fs/promises';
 import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron';
+import { generateCertificate, verifyCertificate, type CertificateRecord, type SignedCertificate } from './certificate.js';
 import {
   parseDesktopRpcParams, parseDesktopRpcResult, WORKSPACE_TREE_MAX_DEPTH, WORKSPACE_TREE_MAX_ENTRIES,
   ReportDescriptorSchema, ReportRevealParamsSchema, WorkspaceFolderResultSchema,
@@ -189,6 +190,30 @@ export function registerIpcHandlers(daemon?: DaemonSupervisor): void {
     }
     shell.showItemInFolder(reportPath);
     return { revealed: true };
+  });
+  // Tamper-evident certificate signing (Ed25519).
+  ipcMain.handle('certificate.generate', async (event, record: unknown) => {
+    validateIpcSender(event);
+    return generateCertificate(record as CertificateRecord);
+  });
+  ipcMain.handle('certificate.verify', async (event, cert: unknown) => {
+    validateIpcSender(event);
+    return verifyCertificate(cert as SignedCertificate);
+  });
+  ipcMain.handle('certificate.save', async (event, value: unknown) => {
+    validateIpcSender(event);
+    const input = value as { suggestedName?: string; content?: string };
+    if (typeof input?.content !== 'string') throw new Error('CERTIFICATE_SAVE_INVALID');
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: 'Save certificate',
+      defaultPath: input.suggestedName || 'certificate.html',
+      filters: [{ name: 'HTML certificate', extensions: ['html'] }],
+    };
+    const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    await writeFile(result.filePath, input.content, 'utf8');
+    return result.filePath;
   });
   for (const channel of requestChannels) {
     ipcMain.handle(channel, async (event, ...args: unknown[]) => {
