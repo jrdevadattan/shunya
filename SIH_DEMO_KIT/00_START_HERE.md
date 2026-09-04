@@ -21,7 +21,12 @@ Two independent parts:
 | `03_JUDGE_QA.md` | Likely judge questions + confident answers (**read twice**) |
 | `04_PITCH_AND_UNIQUENESS.md` | The pitch, why it's unique, PS alignment |
 | `05_TECH_DEEP_DIVE.md` | Deeper technical answers |
+| `06_CERTIFICATE_EXPLAINED.md` | The certificate: purpose, why it's required, counter‑questions + the online **verifier** link |
 | `assets/demo_evidence.raw` | A ready‑made evidence image (optional — you can use your own, see 01) |
+| `assets/sample-certificate.html` | A real signed certificate you can open/print as an example |
+
+> **Online certificate verifier** (paste a certificate → it checks the signature, offline, no server):
+> **https://claude.ai/code/artifact/a383a5e4-c9a0-4ec8-885c-f376a6721604** — see `06` for how to make it public for judges.
 
 ---
 

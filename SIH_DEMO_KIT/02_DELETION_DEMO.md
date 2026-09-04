@@ -50,6 +50,7 @@
 **5. THE FINALE — tamper‑proof certificate** *(do)*
 - Click **Generate signed certificate** → a **sanitization certificate** appears with device, method, standard, an **Ed25519 signature**, and a **key fingerprint**.
 - Click **Verify certificate** → **Authentic ✓**.
+- *(Optional, strong)* Open the **online verifier** (link in `00`/`06`), paste it → **Authentic** independently; the **Tamper** button flips it to **Tampered ✗** live.
 - Click **Save certificate (.html)** → mention it prints to PDF for the disposal record.
 
 > *(say)* "This is the compliance artefact recyclers need — a certificate that proves the wipe **and cannot be forged or altered**. Edit one field and verification fails. That closes the loop."

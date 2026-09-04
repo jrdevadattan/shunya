@@ -59,6 +59,7 @@ SHUNYA recovers from a **RAW disk image** (`.raw` / `.dd`) by **signature carvin
 **8. THE FINALE — signed certificate** *(do)*
 - On the **Reports** screen, click **Generate signed certificate** → a **tamper‑evident certificate** appears (Ed25519 signature + key fingerprint).
 - Click **Verify certificate** → it shows **Authentic ✓**.
+- *(Optional, strong)* Open the **online verifier** (link in `00`/`06`), paste the certificate → it says **Authentic** independently; the **Tamper** button flips it to **Tampered ✗** live.
 - *(Optional)* Click **Save certificate (.html)** and mention you can print it to PDF.
 
 > *(say)* "And we seal the result with an **Ed25519‑signed certificate**. Change one character and verification fails — it can be checked by anyone, offline. Over to [friend]."

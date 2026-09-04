@@ -1,0 +1,24 @@
+{
+  "certificateId": "9E044A4F44271893617FEACB",
+  "issuedAt": "2026-09-04T20:07:30.454Z",
+  "algorithm": "ed25519",
+  "record": {
+    "kind": "sanitization",
+    "title": "Secure sanitization of SanDisk Ultra",
+    "operator": "Demo Operator",
+    "organization": "Team SHUNYA",
+    "caseReference": "SIH-26149-DEMO",
+    "device": "\\\\.\\PhysicalDrive1",
+    "model": "SanDisk Ultra",
+    "serial": "4C530000080921116270",
+    "method": "CSPRNG overwrite (AES-256-CTR keystream)",
+    "assurance": "clear",
+    "standard": "NIST SP 800-88 Rev. 2 · Clear",
+    "details": "28.64 GB removable device, single-pass overwrite",
+    "completedAt": "2026-09-04T20:07:30.451Z"
+  },
+  "payloadSha256": "ff52f57545e62a71c0740920ec63664035a9737d2a04798496e3e3f0b87b85d2",
+  "signature": "urS/mpZs37ZRtbWDBmxqyZiCUGnvtQtdbcKmrief5X764z7QKrAbilOK1NRYYpspbaQ01iSAuqOH8ESKJGmUBg==",
+  "publicKey": "MCowBQYDK2VwAyEACyQ9eJ265aqt8Vq61/ABLcIoEco92hDTUoLSUAJD/HA=",
+  "publicKeyFingerprint": "DE08905DBC80C735EF630DA21E2B8EA5"
+}
