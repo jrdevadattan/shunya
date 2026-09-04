@@ -1,0 +1,149 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, open, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { appendAudit } from './audit.js';
+import { listBlockDevices } from './blockDevices.js';
+import { csprngOverwrite, type OverwriteProgress } from './csprngOverwrite.js';
+import type { BlockDevice, EraseProgressEvent, EraseResult } from './types.js';
+
+export interface CsprngEraseOptions {
+  /** Must exactly equal the target device path; re-checked in the main process. */
+  confirmation: string;
+  /** When true, no device is touched: a real CSPRNG stream is written to a
+   * scratch file to demonstrate the pipeline safely. */
+  dryRun: boolean;
+}
+
+const METHOD = 'csprng_overwrite' as const;
+const DRY_RUN_SAMPLE_BYTES = 64 * 1024 * 1024;
+
+function run(executable: string, args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, { shell: false, windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.once('error', reject);
+    child.once('close', (code) => resolve({ exitCode: code ?? -1, stdout, stderr }));
+  });
+}
+
+/** Resolves the target only if it exists, is not the system disk, and is
+ * removable — a defence-in-depth re-check independent of the renderer. */
+async function requireEligibleDevice(device: string): Promise<BlockDevice> {
+  const devices = await listBlockDevices();
+  const match = devices.find((candidate) => candidate.device === device);
+  if (!match) throw new Error('ERASE_DEVICE_NOT_FOUND');
+  if (match.system) throw new Error('ERASE_SYSTEM_DEVICE_BLOCKED');
+  if (!match.removable) throw new Error('ERASE_NON_REMOVABLE_DEVICE_BLOCKED');
+  if (!Number.isSafeInteger(match.sizeBytes) || match.sizeBytes <= 0) throw new Error('ERASE_DEVICE_SIZE_UNKNOWN');
+  return match;
+}
+
+async function isElevated(): Promise<boolean> {
+  if (process.platform === 'win32') {
+    const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      "[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"]);
+    return result.stdout.trim().toLowerCase() === 'true';
+  }
+  return typeof process.getuid === 'function' && process.getuid() === 0;
+}
+
+function windowsDiskNumber(device: string): number {
+  const digits = device.match(/physicaldrive(\d+)$/i)?.[1];
+  const number = digits ? Number.parseInt(digits, 10) : Number.NaN;
+  if (!Number.isInteger(number)) throw new Error('ERASE_INVALID_DEVICE_PATH');
+  return number;
+}
+
+/** Takes the disk offline (dismounts its volumes) and clears read-only so the
+ * raw device can be written, or restores it. Requires elevation. */
+async function setWindowsDiskOffline(device: string, offline: boolean): Promise<void> {
+  const number = windowsDiskNumber(device);
+  const script = offline
+    ? `Set-Disk -Number ${number} -IsOffline $true; Set-Disk -Number ${number} -IsReadOnly $false`
+    : `Set-Disk -Number ${number} -IsReadOnly $false; Set-Disk -Number ${number} -IsOffline $false`;
+  const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
+  if (result.exitCode !== 0) throw new Error(`ERASE_DISK_STATE_FAILED: ${result.stderr.trim()}`);
+}
+
+/** Unmounts every mounted partition of the target device. Requires privilege. */
+async function unmountLinuxDevice(device: string): Promise<void> {
+  const list = await run('lsblk', ['-nro', 'PATH,MOUNTPOINT', device]);
+  const mounts = list.stdout.split(/\r?\n/).flatMap((line) => {
+    const parts = line.trim().split(/\s+/);
+    return parts.length >= 2 && parts[0] && parts[1] ? [parts[0]] : [];
+  });
+  for (const partition of mounts) {
+    const result = await run('umount', [partition]);
+    if (result.exitCode !== 0) throw new Error(`ERASE_UNMOUNT_FAILED: ${partition}: ${result.stderr.trim()}`);
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${bytes} bytes`;
+}
+
+/**
+ * CSPRNG overwrite of a removable flash device (NIST SP 800-88 Clear).
+ *
+ * `dryRun` writes a real CSPRNG stream to a scratch file so the flow can be
+ * demonstrated and tested without destroying anything. The live path requires
+ * elevation, takes the disk offline (Windows) / unmounts it (Linux), then
+ * overwrites every sector in one pass.
+ */
+export async function csprngEraseDevice(
+  device: string,
+  options: CsprngEraseOptions,
+  onProgress: (event: EraseProgressEvent) => void,
+): Promise<EraseResult> {
+  if (options.confirmation !== device) throw new Error('ERASE_CONFIRMATION_MISMATCH');
+  const target = await requireEligibleDevice(device);
+  const forward = (progress: OverwriteProgress, statusText: string) =>
+    onProgress({ device, method: METHOD, percent: progress.percent, statusText });
+
+  if (options.dryRun) {
+    const sample = Math.min(target.sizeBytes, DRY_RUN_SAMPLE_BYTES);
+    const directory = await mkdtemp(path.join(tmpdir(), 'csprng-dry-'));
+    const scratch = path.join(directory, 'sample.bin');
+    try {
+      const handle = await open(scratch, 'w');
+      await handle.truncate(sample);
+      await handle.close();
+      onProgress({ device, method: METHOD, percent: 0,
+        statusText: `Dry run: CSPRNG overwrite of a ${formatBytes(sample)} sample — the device (${formatBytes(target.sizeBytes)}) is not touched` });
+      await csprngOverwrite(scratch, sample, { onProgress: (progress) => forward(progress, 'Dry run: writing CSPRNG sample') });
+      const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'dry_run', model: target.model,
+        serial: target.serial, deviceBytes: target.sizeBytes, sampleBytes: sample, finalStatus: 'dry_run_completed' });
+      onProgress({ device, method: METHOD, percent: 100, statusText: 'Dry run complete — no data on the device was changed' });
+      return { device, method: METHOD, assurance: 'clear', completedAt: new Date().toISOString(), auditLogPath };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  if (!(await isElevated())) throw new Error('ERASE_REQUIRES_ELEVATION');
+  await appendAudit({ device, method: METHOD, mode: 'live', model: target.model, serial: target.serial,
+    deviceBytes: target.sizeBytes, action: 'start' });
+  try {
+    if (process.platform === 'win32') await setWindowsDiskOffline(device, true);
+    else if (process.platform === 'linux') await unmountLinuxDevice(device);
+    else throw new Error('ERASE_UNSUPPORTED_PLATFORM');
+
+    onProgress({ device, method: METHOD, percent: 0, statusText: 'Overwriting every sector with CSPRNG data' });
+    await csprngOverwrite(device, target.sizeBytes, { onProgress: (progress) => forward(progress, 'Writing CSPRNG data across the device') });
+
+    const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'live', model: target.model,
+      serial: target.serial, deviceBytes: target.sizeBytes, finalStatus: 'completed' });
+    onProgress({ device, method: METHOD, percent: 100, statusText: 'CSPRNG overwrite complete (NIST 800-88 Clear)' });
+    return { device, method: METHOD, assurance: 'clear', completedAt: new Date().toISOString(), auditLogPath };
+  } finally {
+    if (process.platform === 'win32') await setWindowsDiskOffline(device, false).catch(() => undefined);
+  }
+}
+
+export { isElevated };

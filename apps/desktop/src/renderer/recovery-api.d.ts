@@ -8,6 +8,9 @@ declare global {
       listDevices(): Promise<import('../main/secure-erase/types.js').NvmeDevice[]>;
       getCapabilities(device: string): Promise<import('../main/secure-erase/types.js').SanitizeCapabilities>;
       eraseDevice(device: string, options: import('../main/secure-erase/types.js').EraseOptions): Promise<import('../main/secure-erase/types.js').EraseResult>;
+      listBlockDevices(): Promise<import('../main/secure-erase/types.js').BlockDevice[]>;
+      isElevated(): Promise<boolean>;
+      csprngErase(device: string, options: { confirmation: string; dryRun: boolean }): Promise<import('../main/secure-erase/types.js').EraseResult>;
       onProgress(callback: (event: import('../main/secure-erase/types.js').EraseProgressEvent) => void): () => void;
       onDownloadProgress(callback: (message: string) => void): () => void;
     };

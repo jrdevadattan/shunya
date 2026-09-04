@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('secureErase', Object.freeze({
   listDevices: () => ipcRenderer.invoke('secureErase.listDevices'),
   getCapabilities: (device: string) => ipcRenderer.invoke('secureErase.getCapabilities', device),
   eraseDevice: (device: string, options: { confirmation: string; allowFormatFallback: boolean }) => ipcRenderer.invoke('secureErase.eraseDevice', device, options),
+  listBlockDevices: () => ipcRenderer.invoke('secureErase.listBlockDevices'),
+  isElevated: () => ipcRenderer.invoke('secureErase.isElevated'),
+  csprngErase: (device: string, options: { confirmation: string; dryRun: boolean }) => ipcRenderer.invoke('secureErase.csprngErase', device, options),
   onProgress: (callback: (event: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('secureErase.progress', listener);
