@@ -42,7 +42,7 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await expect(page.getByRole('list', { name: 'Detected partition tree' })).toContainText(/partition-1.*FAT32/s);
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/jobs`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Recovery completed' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/recovered content was not threat-scanned/i)).toBeVisible();
+    await expect(page.getByText(/built-in demonstration ruleset/i)).toBeVisible();
     await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/activity`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Case activity' })).toBeVisible();
     await page.setViewportSize({ width: 1427, height: 894 });
@@ -79,14 +79,14 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     expect(artifactLayout.nameWidth).toBeGreaterThanOrEqual(170);
     expect(artifactLayout.conditionWidth).toBeGreaterThanOrEqual(90);
     await expect(page.getByText(/Preview derivative is unavailable/i)).toBeVisible();
-    await expect(page.getByText(/not scanned/i)).toBeVisible();
+    await expect(page.getByText(/No threat-rule match/i)).toBeVisible();
     await page.getByRole('button', { name: 'Load more results' }).click();
     await expect(page.getByText(/Recovered JPEG 0000101/).first()).toBeVisible();
     await page.getByRole('searchbox').fill('Recovered JPEG 0000001');
     await expect(page.getByText(/Recovered JPEG 0000001/).first()).toBeVisible();
     await page.getByRole('link', { name: 'Reports' }).click();
     await page.getByRole('button', { name: 'Generate report' }).click();
-    await expect(page.getByText(/YARA_X_UNAVAILABLE/)).toBeVisible();
+    await expect(page.getByText(/YARA_X_LIMITED_RULESET/)).toBeVisible();
   } finally {
     await electronApp.close();
     await cleanupCase();
