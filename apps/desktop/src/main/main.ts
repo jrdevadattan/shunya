@@ -7,6 +7,7 @@ import { DaemonSupervisor } from './daemon-supervisor.js';
 import { registerIpcHandlers } from './ipc-handlers.js';
 import { hardenWindow } from './security.js';
 import { buildMainWindowOptions } from './windows.js';
+import { registerSecureEraseHandlers } from './secure-erase/ipc.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -46,6 +47,7 @@ app.whenReady().then(async () => {
   registerAppProtocol();
   const daemon = await startDaemon();
   registerIpcHandlers(daemon);
+  registerSecureEraseHandlers();
   await createMainWindow();
 });
 

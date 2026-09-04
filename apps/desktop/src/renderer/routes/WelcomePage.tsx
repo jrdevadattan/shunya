@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { rememberValidatedCase } from '../application-state.js';
 import { loadRecentCases, rememberRecentCase, type RecentRecoveryCase } from '../features/cases/recent-cases.js';
+import { loadRecentDeletions, type RecentDeletionCase } from '../features/cases/recent-deletions.js';
 import { ApplicationShell } from './ApplicationShell.js';
 
 const recoveryPaths = [
@@ -15,6 +16,7 @@ const recoveryPaths = [
 export function WelcomePage() {
   const navigate = useNavigate();
   const [recentCases, setRecentCases] = useState(loadRecentCases);
+  const [recentDeletions, setRecentDeletions] = useState(loadRecentDeletions);
   const [openingCaseId, setOpeningCaseId] = useState<string>();
   const [error, setError] = useState<string>();
 
@@ -70,6 +72,24 @@ export function WelcomePage() {
           </ul> : <div className="recent-cases__empty">
             <p>No recent cases are stored on this device yet.</p>
             <p>The recovery service does not expose a global case index. Open a known workspace to add it here.</p>
+          </div>}
+        </section>
+
+        <section className="recent-cases" aria-labelledby="deletion-cases-title" style={{ marginTop: '24px' }}>
+          <header>
+            <div><h2 id="deletion-cases-title">Your deletion cases</h2><p>Manage and review your secure deletion cases.</p></div>
+            <Link className="button button--secondary button--icon" to="/deletion/new"><Plus aria-hidden="true" />New deletion</Link>
+          </header>
+          {recentDeletions.length ? <ul className="recent-cases__list">
+            {recentDeletions.map((recentCase) => <li key={recentCase.id}>
+              <div className="recent-case__identity"><strong>{recentCase.title}</strong><small>{recentCase.targetPath}</small></div>
+              <div className="recent-case__details">
+                <span>Total Files: {recentCase.totalFiles}</span>
+                <span><CalendarDays aria-hidden="true" />{formatDate(recentCase.createdAt)}</span>
+              </div>
+            </li>)}
+          </ul> : <div className="recent-cases__empty">
+            <p>No deletion cases are stored on this device yet.</p>
           </div>}
         </section>
       </div>

@@ -145,6 +145,10 @@ export const ArtifactParamsSchema = z.object({ artifactId: z.string().min(1) }).
 export const ReportParamsSchema = z.object({ caseId: z.string().min(1) }).strict();
 export const ReportRevealParamsSchema = z.object({ reportPath: z.string().min(1) }).strict();
 export const ReportRevealResultSchema = z.object({ revealed: z.literal(true) }).strict();
+export const DeletionListParamsSchema = z.object({ targetPath: z.string().min(1) }).strict();
+export const DeletionListResultSchema = z.array(z.string());
+export const DeletionStartParamsSchema = z.object({ sourceId: z.string().min(1), targetPath: z.string().min(1) }).strict();
+export const DeletionStartResultSchema = z.object({ markerPath: z.string().min(1), totalFiles: z.number().int().nonnegative() }).strict();
 export type CreateCaseInput = z.infer<typeof CreateCaseInputSchema>;
 export type AddImageSourceInput = z.infer<typeof AddImageSourceInputSchema>;
 export type CreateRecoveryJobInput = z.infer<typeof CreateRecoveryJobInputSchema>;
@@ -163,6 +167,8 @@ export type PreviewDescriptor = z.infer<typeof PreviewDescriptorSchema>;
 export type ExportJob = z.infer<typeof ExportJobSchema>;
 export type ReportDescriptor = z.infer<typeof ReportDescriptorSchema>;
 export type CaseState = z.infer<typeof CaseStateSchema>;
+export type DeletionStartParams = z.infer<typeof DeletionStartParamsSchema>;
+export type DeletionStartResult = z.infer<typeof DeletionStartResultSchema>;
 
 export interface RecoveryDesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
@@ -188,6 +194,8 @@ export interface RecoveryDesktopApi {
   exportArtifacts(input: ExportArtifactsInput): Promise<ExportJob>;
   generateReport(caseId: string): Promise<ReportDescriptor>;
   revealReportInFolder(reportPath: string): Promise<void>;
+  listDeletionFiles(targetPath: string): Promise<string[]>;
+  startDeletion(input: DeletionStartParams): Promise<DeletionStartResult>;
   subscribeJobEvents(listener: (event: z.infer<typeof JobEventSchema>) => void): () => void;
 }
 
@@ -205,6 +213,8 @@ export function parseDesktopRpcParams(method: string, params: unknown): Record<s
     case 'artifact.get': case 'artifact.preview': return ArtifactParamsSchema.parse(params);
     case 'export.start': return ExportArtifactsInputSchema.parse(params);
     case 'report.generate': return ReportParamsSchema.parse(params);
+    case 'deletion.list_files': return DeletionListParamsSchema.parse(params);
+    case 'deletion.start': return DeletionStartParamsSchema.parse(params);
     default: throw new Error(`Unsupported desktop RPC method: ${method}`);
   }
 }
@@ -225,6 +235,8 @@ export function parseDesktopRpcResult(method: string, result: unknown): unknown 
     case 'artifact.preview': return PreviewDescriptorSchema.parse(result);
     case 'export.start': return ExportJobSchema.parse(result);
     case 'report.generate': return ReportDescriptorSchema.parse(result);
+    case 'deletion.list_files': return DeletionListResultSchema.parse(result);
+    case 'deletion.start': return DeletionStartResultSchema.parse(result);
     default: throw new Error(`Unsupported desktop RPC method: ${method}`);
   }
 }

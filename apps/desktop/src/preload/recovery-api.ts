@@ -3,13 +3,13 @@ import {
   CreateCaseInputSchema, CreateRecoveryJobInputSchema, ExportArtifactsInputSchema, ExportFolderResultSchema, ExportJobSchema, JobEventSchema,
   JobEventsParamsSchema, JobParamsSchema, JobStatusSchema, PreviewDescriptorSchema, RecoveryArtifactSchema,
   RecoveryCaseSchema, RecoveryJobSchema, ReportDescriptorSchema, ReportParamsSchema, ReportRevealParamsSchema, ReportRevealResultSchema, RuntimeInfoSchema,
-  SourceAssessmentSchema, SourceDescriptorSchema, SourceImageResultSchema, SourceParamsSchema, WorkspaceFolderResultSchema, type JobEvent, type RecoveryDesktopApi,
+  SourceAssessmentSchema, SourceDescriptorSchema, SourceImageResultSchema, SourceParamsSchema, WorkspaceFolderResultSchema, DeletionListResultSchema, DeletionStartResultSchema, type JobEvent, type RecoveryDesktopApi,
 } from '@recovery/contracts';
 
 export const recoveryApiMethodNames = [
   'getRuntimeInfo', 'chooseWorkspaceFolder', 'chooseExportFolder', 'chooseSourceImage', 'createCase', 'openCase', 'getCaseState', 'listSources', 'addImageSource', 'assessSource',
   'createRecoveryJob', 'startJob', 'pauseJob', 'resumeJob', 'cancelJob', 'queryArtifacts',
-  'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'revealReportInFolder', 'subscribeJobEvents',
+  'getJobStatus', 'listJobEvents', 'getArtifact', 'requestPreview', 'exportArtifacts', 'generateReport', 'revealReportInFolder', 'subscribeJobEvents', 'listDeletionFiles',
 ] as const;
 
 export interface PreloadTransport {
@@ -43,6 +43,14 @@ export function createRecoveryApi(transport: PreloadTransport): RecoveryDesktopA
     exportArtifacts: async (input) => ExportJobSchema.parse(await invoke('export.start', ExportArtifactsInputSchema.parse(input))),
     generateReport: async (caseId) => ReportDescriptorSchema.parse(await invoke('report.generate', ReportParamsSchema.parse({ caseId }))),
     revealReportInFolder: async (reportPath) => { ReportRevealResultSchema.parse(await invoke('report.reveal', ReportRevealParamsSchema.parse({ reportPath }))); },
+    listDeletionFiles: async (targetPath) => {
+      const result = await invoke('deletion.list_files', { targetPath });
+      return DeletionListResultSchema.parse(result);
+    },
+    startDeletion: async (input) => {
+      const result = await invoke('deletion.start', input);
+      return DeletionStartResultSchema.parse(result);
+    },
     subscribeJobEvents: (listener: (event: JobEvent) => void) => transport.subscribe('job.event', (payload) => listener(JobEventSchema.parse(payload))),
   };
   return Object.freeze(api);
