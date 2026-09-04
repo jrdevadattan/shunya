@@ -24,8 +24,8 @@ pub struct ThreatOutcome {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RuleCompileError {
-    #[error("failed to compile YARA rule '{name}': {source}")]
-    Compile { name: String, source: String },
+    #[error("failed to compile YARA rule '{name}': {reason}")]
+    Compile { name: String, reason: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,7 +48,7 @@ impl CompiledRules {
                 .add_source(rule.source.as_str())
                 .map_err(|error| RuleCompileError::Compile {
                     name: rule.name.clone(),
-                    source: error.to_string(),
+                    reason: error.to_string(),
                 })?;
         }
         Ok(Self {
