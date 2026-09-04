@@ -1,77 +1,72 @@
-# Part A — Retrieval / Recovery Demo  (YOU present)
+# Part A — Retrieval / Recovery Demo  (YOU present, manually)
 
-**Goal:** show that "deleted" files are recoverable, with a full chain of custody, and that the tool even **detects a malicious file** among the recovered data.
+**Goal:** show that "deleted" files are recoverable, with a full chain of custody, that a **malicious** file among them is detected, and finish with a **cryptographically signed recovery certificate**.
 
-**Time:** ~2–3 minutes. **Admin needed:** No.
-
-> The evidence image `assets\demo_evidence.raw` simulates a 4 MB drive with **7 deleted photos** sitting in unallocated space. One of them carries the **EICAR** signature — the industry‑standard *harmless* test string that every antivirus recognises. This proves real threat detection without touching real malware.
-
-**Known‑good result (memorise this):** the tool recovers **7 files**, all validated with SHA‑256, and **YARA‑X flags exactly 1** ("Recovered JPEG 0000005") as *Potentially unsafe*.
+**Time:** ~2.5 min. **Admin needed:** No.
 
 ---
 
-## Setup (before you start speaking)
-1. Double‑click **`LAUNCH_APP.bat`** → the SHUNYA window opens on "Your recovery cases".
-2. Have the evidence image path on your clipboard:
-   `C:\Users\J R Deva Dattan\Desktop\sih\SIH_DEMO_KIT\assets\demo_evidence.raw`
+## How recovery actually works (so you present it accurately)
+
+SHUNYA recovers from a **RAW disk image** (`.raw` / `.dd`) by **signature carving** — it finds file content sitting in unallocated ("deleted") space. It does **not** undelete from a live Windows folder. So you present it with a `.raw` image that contains the deleted files. Two ways to get one:
+
+- **Easiest / reliable (recommended):** use the included **`assets\demo_evidence.raw`** — a ready‑made image with **7 recoverable images**, one carrying a harmless **EICAR** malware test signature. Known‑good result: **7 recovered, 1 flagged as a threat.**
+- **Most convincing "we deleted it and got it back" (optional, prepare beforehand):** plug in a small USB, copy a few photos, **delete them + empty the Recycle Bin**, then image the USB **read‑only** to a `.raw`/`.dd` file with a free imager like **FTK Imager** (`File → Create Disk Image → Raw (dd)`). On stage, add that image and recover the photos you just "lost."
+
+> Say it honestly if asked: *"We work on a forensic image so the original device is never touched — that's the read‑only chain of custody. The image holds the deleted files in unallocated space; we carve them back."*
 
 ---
 
 ## The script (do + say)
 
 **1. Frame the problem** *(say)*
-> "When you delete a file and empty the recycle bin, the data isn't gone — the space is just marked reusable. For an investigator that's an opportunity; for anyone disposing of a device, it's a data‑leak risk. Let me show you both."
+> "When you delete a file and empty the bin, the data isn't gone — the space is just marked reusable. For an investigator that's evidence; for anyone disposing of a device, it's a leak. Watch."
 
-**2. Create the case** *(do)*
-- Click **New recovery** (top‑right).
-- **Case title:** `Seized Laptop — Case 26149`  ·  **Operator:** your name.
-- **Continue to workspace** → **Choose parent folder** → pick an empty folder (e.g., a new `Desktop\demo-case`).
-- **Continue to review** → **Create case**.
+**2. Open the app + create the case** *(do)*
+- Double‑click **`recovery-platform.exe`** (or your desktop shortcut).
+- Click **New recovery** → **Case title:** `Seized Laptop — Case 26149` · **Operator:** your name.
+- **Continue to workspace** → **Choose parent folder** → pick a new empty folder → **Continue to review** → **Create case**.
 
-> *(say)* "Every action is logged against a case number and an operator — chain of custody from the first click."
+> *(say)* "Every action is logged against a case number and an operator — chain of custody from click one."
 
 **3. Add the evidence (read‑only)** *(do)*
-- In the case, open **Recovery** (or **Sources**) in the left sidebar.
-- Paste the image path into **Disk image path** → click **Add image source**.
+- Open **Recovery** (or **Sources**) in the left sidebar.
+- In **Disk image path**, type/paste the path to your image (the included `...\SIH_DEMO_KIT\assets\demo_evidence.raw`, or your own) → **Add image source**.
 - Wait for the green **Ready** badge.
 
-> *(say)* "The source is opened **strictly read‑only** — we never write to the evidence. Notice the safety assessment ran automatically."
+> *(say)* "Opened strictly **read‑only** — we never write to evidence. A safety assessment ran automatically."
 
-**4. Choose the goal** *(do)*
-- Click **Choose recovery goal** → select **Recover everything** (marked **Recommended**) → **Continue to scan options**.
+**4. Choose the goal + run — THE WOW MOMENT** *(do)*
+- **Choose recovery goal** → **Recover everything** (Recommended) → **Continue to scan options**.
+- On **Full Scan**, click **Use this preset**. The app jumps to the **live recovery view** — point at the animated progress bar, the pulsing stage, the elapsed timer, and the streaming event feed.
 
-> *(say)* "We're honest in the UI — goals that need a metadata engine we don't ship are clearly marked 'not in this build'. No overclaiming."
+> *(say)* "The engine actually working — partition discovery, carving, validation, **threat scanning**, indexing. Real stages, real progress."
 
-**5. Run the scan — THE WOW MOMENT** *(do)*
-- On **Full Scan**, click **Use this preset**. The app jumps to the **live recovery view**.
-- **Point at the screen** while it runs: the animated progress bar, the pulsing active stage, the elapsed timer, and the **live event feed** streaming each stage.
+**5. Show the recovered files** *(do)*
+- Open **Recovered Files**. You'll see the recovered images, each with a **SHA‑256** hash. At the top, a red **"1 potential threat"** summary.
 
-> *(say)* "This is the engine actually working — partition discovery, signature carving, validation, **threat scanning**, indexing. Real stages, real progress, not a fake spinner."
+> *(say)* "Files an investigator would have lost — back, each fingerprinted with SHA‑256 so it's tamper‑evident in court."
 
-**6. Show the recovered files** *(do)*
-- Open **Recovered Files** (Results). You'll see **7 recovered images**, each with a **SHA‑256** hash and a validation state.
+**6. THE SECOND WOW — threat detection** *(do)*
+- Click the file marked **Potentially unsafe**. Show the blocked preview ("Potentially unsafe content detected").
 
-> *(say)* "Seven files an investigator would have lost — back. Each one fingerprinted with SHA‑256 so it's tamper‑evident in court."
+> *(say)* "One recovered file carries a **malware signature** — our **YARA‑X** engine caught it and quarantined it. Recovered content is never auto‑opened. We recover evidence *and* protect the investigator."
 
-**7. THE SECOND WOW — threat detection** *(do)*
-- Find **Recovered JPEG 0000005**, marked **Potentially unsafe**. Click it.
-- Show that the **preview is blocked** and it's flagged by the threat scanner.
+**7. Verified export + report** *(do)*
+- **Exports** → export to a **different folder** (it refuses same‑device); every file is **re‑hashed and verified**.
+- **Reports** → **Generate report** → show the JSON/Markdown report + the honest limitations.
 
-> *(say)* "One of the recovered files carries a **malware signature**. Our **YARA‑X** engine caught it and quarantined it — recovered content is *never* auto‑opened. So we recover evidence **and** protect the investigator. That's unique."
+**8. THE FINALE — signed certificate** *(do)*
+- On the **Reports** screen, click **Generate signed certificate** → a **tamper‑evident certificate** appears (Ed25519 signature + key fingerprint).
+- Click **Verify certificate** → it shows **Authentic ✓**.
+- *(Optional)* Click **Save certificate (.html)** and mention you can print it to PDF.
 
-**8. Verified export + report** *(do)*
-- Open **Exports** → export the results to a **different folder** (the tool refuses same‑device export). Every exported file is **re‑hashed and verified**.
-- Open **Reports** → **Generate report**. Show the JSON/Markdown report: the tools used (**yara‑x** is listed), method counts, and the **honest limitations** section.
-
-> *(say)* "Exports are verified byte‑for‑byte, and the report states exactly what we did and what we *couldn't* do — a judge can trust it because it doesn't hide its limits."
-
-**9. Hand over** *(say)*
-> "So — deleted data is recoverable. Which is exactly why secure destruction matters. Over to [friend] for the other half."
+> *(say)* "And we seal the result with an **Ed25519‑signed certificate**. Change one character and verification fails — it can be checked by anyone, offline. Over to [friend]."
 
 ---
 
-## If something goes wrong (calm recovery)
-- **App won't open** → run the dev app instead: open a terminal in the repo and run `pnpm --filter @recovery/desktop start`.
-- **"DAEMON_UNAVAILABLE"** → the bundled engine didn't start; use the dev app fallback above.
-- **Fewer/for than 7 files** → re‑generate the image: `node tools\demo\make-demo-image.mjs`, then re‑add the source.
-- **Never** improvise a feature that isn't there. If asked for something unsupported, say "that's on our roadmap — today we ship the honest, working slice," and point to the limitations in the report. Judges reward honesty.
+## If something goes wrong (stay calm)
+- **App won't open** → run the dev app: in a terminal in the repo, `pnpm --filter @recovery/desktop start`.
+- **"DAEMON_UNAVAILABLE"** → use the dev app fallback above.
+- **No files recovered** → make sure you pointed at the `.raw` image path correctly; use the included `demo_evidence.raw`.
+- If asked for a feature that isn't there, say *"that's on our roadmap; today we ship the honest, working slice"* and point at the report's limitations. Honesty wins.

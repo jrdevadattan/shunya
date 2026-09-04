@@ -45,8 +45,11 @@
 **Q. Why not multi‑pass (DoD 5220.22‑M / Gutmann)?**
 > Those were designed for old magnetic media. For modern flash, **NIST 800‑88 and IEEE 2883** say a single pass is sufficient and multi‑pass is obsolete (and just wears the flash). One CSPRNG pass is the current best practice.
 
-**Q. Where's the sanitization certificate?**
-> Today we produce a tamper‑evident **audit log** (NDJSON) of every step. The **signed certificate** — an ed25519 signature over the record plus a QR for third‑party verification — is the next milestone; the data model already reserves the signature field for it.
+**Q. Tell us about your certificate — can it be forged or tampered with?**
+> No. Every certificate is signed with an **Ed25519** key over a canonical record of the operation (device, method, standard, timestamp, operator). The app **verifies** it in one click — it says *Authentic* only if the signature, the public‑key fingerprint, **and** the payload hash all match. Change a single character of any field and verification fails. The public‑key **fingerprint is the trust anchor**, so a third party can verify the certificate **offline** with any standard Ed25519 tool — no server needed. We also keep an NDJSON audit log of every step. *(Production hardening: the signing key would live in an HSM / secure key store rather than on the workstation — the mechanism is identical.)*
+
+**Q. Is that a real cryptographic signature or just a hash?**
+> A real **digital signature** (Ed25519, via the platform crypto). A hash alone proves integrity but not origin; a signature proves **both** — that *this* key issued it and nothing changed since. That's why the certificate is defensible as a disposal/compliance record.
 
 ---
 

@@ -59,8 +59,9 @@ Recovery **never writes to the source**; it re‑hashes the source **after** the
 | SHA‑256 chain of custody, verified export, report | ✅ working |
 | Real YARA‑X threat scanning + quarantine | ✅ working |
 | CSPRNG flash wipe (NIST Clear) + audit, system‑disk protection | ✅ working |
+| Ed25519‑signed, verifiable, tamper‑evident certificate (erase + recovery) | ✅ working |
 | PhotoRec multi‑format carving, Sleuth Kit metadata, Volatility memory | 🚧 roadmap (shown as "unavailable", never faked) |
-| NVMe Sanitize (Purge), signed sanitization certificate | 🚧 roadmap (hooks in place) |
+| NVMe Sanitize (Purge‑level assurance) | 🚧 roadmap (hooks in place) |
 | Linux / macOS / Rescue‑ISO builds | 🚧 roadmap (architecture ready) |
 
 ## Stack summary

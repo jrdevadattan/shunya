@@ -48,7 +48,7 @@
 | Read‑only image recovery + JPEG carving | Multi‑format carving (PhotoRec) |
 | SHA‑256 hashing + verified export + report | Metadata recovery / original filenames (Sleuth Kit) |
 | **Real YARA‑X** malware flag on recovered file | Memory analysis (Volatility) |
-| CSPRNG flash wipe (NIST Clear) + audit log | Firmware Sanitize (Purge) & signed certificate |
+| CSPRNG flash wipe (NIST Clear) + **tamper‑proof signed certificate** | Firmware Sanitize (Purge‑level assurance) |
 | System‑disk protection, honest limitations | Linux/macOS/Rescue‑ISO builds |
 
 Lead with the working slice, be proud of the honesty, and route "can it do X?" to the roadmap + the report's limitations. That posture wins.

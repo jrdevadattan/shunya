@@ -1,13 +1,13 @@
 # SHUNYA — SIH Demo Kit  🎯
 
-**Read this first.** Everything you need for tomorrow's presentation is in this folder.
-The demo is split into two independent parts:
+**Read this first.** This kit is documentation + assets you use to run the demo **manually** on stage — there are no scripts to run. You click through the real app yourself.
 
+Two independent parts:
 - **Part A — Retrieval / Recovery** → *you* present. (SIH PS **26149**, read‑only recovery)
 - **Part B — Secure Deletion / Drive Eraser** → *your friend* presents. (Secure Data Wiping, NIST SP 800‑88)
 
-> One‑line story that ties it together (say this in the intro):
-> **"Deleting a file doesn't destroy it — we prove that by recovering it. And when data *must* be destroyed for safe disposal, we destroy it properly and provably. Two sides of the digital‑evidence lifecycle, in one platform."**
+> **One‑line story (say it in the intro):**
+> **"Deleting a file doesn't destroy it — we prove that by recovering it. And when data *must* be destroyed for safe disposal, we destroy it provably — and issue a certificate that can't be forged. Two sides of the digital‑evidence lifecycle, in one platform."**
 
 ---
 
@@ -15,49 +15,48 @@ The demo is split into two independent parts:
 
 | File | Use it for |
 |---|---|
-| `00_START_HERE.md` | This master guide + setup + pre‑demo checklist |
-| `01_RETRIEVAL_DEMO.md` | Part A — your click‑by‑click script + narration |
-| `02_DELETION_DEMO.md` | Part B — your friend's click‑by‑click script + narration |
-| `03_JUDGE_QA.md` | Likely judge questions + confident answers (**read this twice**) |
-| `04_PITCH_AND_UNIQUENESS.md` | The 60‑second pitch, why it's unique, PS alignment |
-| `05_TECH_DEEP_DIVE.md` | Deeper technical answers if judges probe |
-| `assets/demo_evidence.raw` | The prepared evidence image for the retrieval demo |
-| `LAUNCH_APP.bat` | Double‑click to open the app (normal mode, for retrieval) |
-| `LAUNCH_APP_ADMIN.bat` | Open the app **as Administrator** (needed for a live device wipe) |
+| `00_START_HERE.md` | This master guide + setup + checklist |
+| `01_RETRIEVAL_DEMO.md` | Part A — your step‑by‑step manual demo + narration |
+| `02_DELETION_DEMO.md` | Part B — your friend's step‑by‑step manual demo + narration |
+| `03_JUDGE_QA.md` | Likely judge questions + confident answers (**read twice**) |
+| `04_PITCH_AND_UNIQUENESS.md` | The pitch, why it's unique, PS alignment |
+| `05_TECH_DEEP_DIVE.md` | Deeper technical answers |
+| `assets/demo_evidence.raw` | A ready‑made evidence image (optional — you can use your own, see 01) |
 
 ---
 
-## Setup (do this once, on this laptop)
+## The app you'll run (open it yourself — no script)
 
-**1. The app (the only `.exe` you run):**
+Open this file in File Explorer and double‑click it:
 ```
 apps\desktop\out\SIH Recovery Platform-win32-x64\recovery-platform.exe
 ```
-Double‑click `LAUNCH_APP.bat` in this folder — it opens exactly that app. It is self‑contained (the Rust recovery engine is bundled inside).
+- For the **retrieval** demo: just double‑click it (normal).
+- For a **live device wipe** (deletion): **right‑click → Run as administrator** (a wipe needs admin; the dry‑run does not).
 
-**2. The evidence image** for retrieval is already prepared at `assets\demo_evidence.raw` (4 MB, contains 7 recoverable images, one carrying a harmless malware **test** signature). You can regenerate it any time with `node tools\demo\make-demo-image.mjs`.
+The app is self‑contained — the recovery engine is bundled inside. Nothing else to install.
 
-**3. The pendrive** for the deletion part: your SanDisk Ultra (28.6 GB). Put a few throwaway files on it before the demo so you can *show* them, then wipe. **Back up anything you care about — the wipe is irreversible.**
+> Tip: right‑click `recovery-platform.exe` → **Send to → Desktop (create shortcut)** so it's one click on stage. Rename the shortcut "SHUNYA".
 
 ---
 
 ## ✅ Pre‑demo checklist (rehearse the morning of)
 
-- [ ] Laptop charged + charger in bag. Screen mirroring tested on the venue projector.
-- [ ] `LAUNCH_APP.bat` opens the app cleanly (do a full retrieval run once — see `01_RETRIEVAL_DEMO.md`).
-- [ ] Confirm the retrieval recovers **7 files** and flags **1 threat** (that's the known‑good result).
-- [ ] Pendrive plugged in; a couple of dummy files copied onto it; **backup done**.
-- [ ] Decide with your friend: live pendrive **wipe** on stage, or the safe **dry‑run**? (Both are in `02_DELETION_DEMO.md`. Dry‑run is zero‑risk and still visually convincing.)
+- [ ] Laptop charged; projector/mirroring tested; display scaling increased so judges can read.
+- [ ] Open the app once and do a **full retrieval run** (see `01`). Confirm it recovers files and flags **1 threat**.
+- [ ] Generate a **certificate** once and click **Verify** → it says *Authentic*. (This is your standout moment.)
+- [ ] Decide the retrieval evidence: the included `assets\demo_evidence.raw`, **or** your own `.raw` image (01 explains how).
+- [ ] Pendrive plugged in with a couple of throwaway files; **backup done**; decide live‑wipe vs. dry‑run (see `02`).
 - [ ] Both of you have read `03_JUDGE_QA.md`.
-- [ ] Close Slack/notifications; full‑screen the app; increase display scaling so judges can read it.
+- [ ] Close notifications; full‑screen the app.
 
 ---
 
-## The 30‑second flow on stage
+## The flow on stage (~5 min)
 
-1. **Intro (either of you):** the one‑line story above + the problem (30s).
-2. **Part A – Retrieval (you):** recover "deleted" files from the evidence image; show hashes; **YARA‑X flags a malicious file**; export verified + report. (~2 min)
-3. **Part B – Deletion (friend):** securely wipe the pendrive with a CSPRNG overwrite (NIST 800‑88 *Clear*); show the audit log. (~2 min)
-4. **Close:** "Recovery for investigation, sanitization for safe disposal — standards‑aligned, offline, and honest about its limits." + Q&A.
+1. **Intro** — the one‑line story + the problem (30s).
+2. **Part A – Retrieval (you)** — recover "deleted" files; hashes; **YARA‑X flags a malicious file**; verified export + report; **signed recovery certificate** (~2.5 min).
+3. **Part B – Deletion (friend)** — securely wipe the pendrive (NIST 800‑88 Clear); **tamper‑proof sanitization certificate** (~2.5 min).
+4. **Close** — "Recovery for investigation, sanitization for safe disposal — standards‑aligned, offline, honest, and provable." + Q&A.
 
-Good luck — you've got a real, working, standards‑literate tool. Own it. 🚀
+You've got a real, working, standards‑literate tool. Own it. 🚀
