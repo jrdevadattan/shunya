@@ -1,5 +1,5 @@
 import { RecoveryCaseSchema } from '@recovery/contracts';
-import { ArrowRight, BrainCircuit, CalendarDays, FolderOpen, HardDrive, Plus } from 'lucide-react';
+import { ArrowRight, BrainCircuit, CalendarDays, FolderOpen, HardDrive, Plus, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { rememberValidatedCase } from '../application-state.js';
@@ -78,7 +78,10 @@ export function WelcomePage() {
         <section className="recent-cases" aria-labelledby="deletion-cases-title" style={{ marginTop: '24px' }}>
           <header>
             <div><h2 id="deletion-cases-title">Your deletion cases</h2><p>Manage and review your secure deletion cases.</p></div>
-            <Link className="button button--secondary button--icon" to="/deletion/new"><Plus aria-hidden="true" />New deletion</Link>
+            <div className="welcome-deletion-actions">
+              <Link className="button button--secondary button--icon" to="/secure-erase"><ShieldAlert aria-hidden="true" />Erase a device</Link>
+              <Link className="button button--secondary button--icon" to="/deletion/new"><Plus aria-hidden="true" />New deletion</Link>
+            </div>
           </header>
           {recentDeletions.length ? <ul className="recent-cases__list">
             {recentDeletions.map((recentCase) => <li key={recentCase.id}>
