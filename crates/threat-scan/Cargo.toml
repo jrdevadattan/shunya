@@ -8,6 +8,7 @@ license.workspace = true
 recovery-domain = { path = "../recovery-domain" }
 serde.workspace = true
 thiserror.workspace = true
+yara-x = { version = "1.20.0", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

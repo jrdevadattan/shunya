@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use source_inventory::{ImageSource, SourceInventory};
+use threat_scan::ThreatScanner;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Read;
@@ -720,6 +721,10 @@ impl DaemonState {
             tools: vec![
                 tool_record("partition-scan-built-in"),
                 tool_record("signature-carver-built-in"),
+                ToolRecord {
+                    id: "yara-x".into(),
+                    version: "1.20.0".into(),
+                },
             ],
             method_counts,
             quality_counts,
@@ -1127,10 +1132,10 @@ fn run_recovery_worker(
     add_limitation(
         &mut limitations,
         limitation(
-            "YARA_X_UNAVAILABLE",
+            "YARA_X_LIMITED_RULESET",
             JobStage::ThreatScan,
-            "YARA-X is not available in the current verified tool catalog; recovered content was not threat-scanned.",
-            "Install and verify YARA-X before relying on threat classifications.",
+            "Threat scanning ran with the YARA-X engine and the built-in demonstration ruleset (SIH marker and EICAR). Supply a full YARA ruleset for production coverage.",
+            "Provide a verified production YARA ruleset for complete threat classification.",
         ),
     );
     write_json_atomic(
@@ -1204,8 +1209,18 @@ fn run_recovery_worker(
         if !begin_stage(&mut engine, job_id, JobStage::ThreatScan, control)? {
             return Ok(());
         }
+        let scanner = ThreatScanner::default();
+        let mut threat_matches = 0_usize;
         for artifact in &mut artifacts {
-            artifact.threat_status = ThreatStatus::NotScanned;
+            match scanner.scan(&artifact_payload_path(root, artifact)) {
+                Ok(outcome) => {
+                    if outcome.status == ThreatStatus::PotentialThreat {
+                        threat_matches += 1;
+                    }
+                    artifact.threat_status = outcome.status;
+                }
+                Err(_) => artifact.threat_status = ThreatStatus::ScanError,
+            }
             artifact.preview_status = PreviewStatus::Unsupported;
         }
         write_json_atomic(&artifacts_path, &artifacts).map_err(|error| {
@@ -1220,7 +1235,12 @@ fn run_recovery_worker(
             job_id,
             JobStage::ThreatScan,
             artifacts.len() as u64,
-            json!({ "artifactCount": artifacts.len(), "limitations": limitations }),
+            json!({
+                "artifactCount": artifacts.len(),
+                "threatMatches": threat_matches,
+                "scanner": "yara-x",
+                "limitations": limitations,
+            }),
             control,
         )? {
             return Ok(());

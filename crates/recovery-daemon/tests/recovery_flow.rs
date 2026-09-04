@@ -147,7 +147,7 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
         .collect::<Vec<_>>();
     assert!(limitation_codes.contains(&"TSK_METADATA_UNAVAILABLE"));
     assert!(limitation_codes.contains(&"PHOTOREC_UNAVAILABLE"));
-    assert!(limitation_codes.contains(&"YARA_X_UNAVAILABLE"));
+    assert!(limitation_codes.contains(&"YARA_X_LIMITED_RULESET"));
     assert_eq!(status["partitions"]["sectorSize"], 512);
     assert_eq!(
         status["partitions"]["partitions"][0]["partitionId"],
@@ -208,7 +208,7 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
         artifact["sourceRanges"][0]["length"],
         jpeg.len().to_string()
     );
-    assert_eq!(artifact["threatStatus"], "not_scanned");
+    assert_eq!(artifact["threatStatus"], "no_rule_match");
     assert_eq!(artifact["previewStatus"], "unsupported");
     let visible_name_search = daemon.rpc(
         "artifact.query",
@@ -258,10 +258,10 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|value| value.as_str().unwrap().contains("YARA_X_UNAVAILABLE"))
+            .any(|value| value.as_str().unwrap().contains("YARA_X_LIMITED_RULESET"))
     );
     assert!(
-        !report_manifest["tools"]
+        report_manifest["tools"]
             .as_array()
             .unwrap()
             .iter()
@@ -548,11 +548,11 @@ fn unverified_threat_and_preview_capabilities_are_never_claimed() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|item| item["code"] == "YARA_X_UNAVAILABLE")
+            .any(|item| item["code"] == "YARA_X_LIMITED_RULESET")
     );
 
     let artifact = daemon.rpc("artifact.query", json!({ "pageSize": 1 }))["items"][0].clone();
-    assert_eq!(artifact["threatStatus"], "not_scanned");
+    assert_eq!(artifact["threatStatus"], "no_rule_match");
     assert_eq!(artifact["previewStatus"], "unsupported");
     let preview = daemon.rpc(
         "artifact.preview",
@@ -584,10 +584,10 @@ fn unverified_threat_and_preview_capabilities_are_never_claimed() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|item| item.as_str().unwrap().contains("YARA_X_UNAVAILABLE"))
+            .any(|item| item.as_str().unwrap().contains("YARA_X_LIMITED_RULESET"))
     );
     assert!(
-        !manifest["tools"]
+        manifest["tools"]
             .as_array()
             .unwrap()
             .iter()
