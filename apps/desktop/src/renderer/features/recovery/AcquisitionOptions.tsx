@@ -11,6 +11,6 @@ export function AcquisitionOptions() {
       <article><FileCheck2 aria-hidden="true" /><span><strong>Verification</strong><small>No acquisition hash or completion state is assumed.</small></span></article>
     </div>
     <div className="workflow-truth"><ShieldCheck aria-hidden="true" /><span><strong>Rescue Mode for system disks</strong><small>Use authorized Rescue Mode before acquiring the current system disk.</small></span></div>
-    <code>ACQUISITION_UI_UNAVAILABLE</code><div className="workflow-inline-actions"><button className="button button--primary" type="button" disabled title="Acquisition capability is unavailable">Create verified image</button></div>
+    <code className="diagnostic-code">ACQUISITION_UI_UNAVAILABLE</code><div className="workflow-inline-actions"><button className="button button--primary" type="button" disabled title="Acquisition capability is unavailable">Create verified image</button></div>
   </WorkflowFrame>;
 }

@@ -9,7 +9,7 @@ export function DamagedDeviceWizard() {
       <h2>Damaged device recovery</h2>
       <CapabilityBanner level="info" title="Rescue Mode only" explanation="In Installed Mode, stop using the source and restart SHUNYA in Rescue Mode." />
       <CapabilityBanner level="warning" title="Damaged-device workflow unavailable" explanation="The current daemon does not expose a typed acquisition request, ddrescue telemetry, mapfile, or controls. No source details, rates, ranges, or capabilities are simulated." />
-      <code>DDRESCUE_UI_UNAVAILABLE</code>
+      <code className="diagnostic-code">DDRESCUE_UI_UNAVAILABLE</code>
       <figure className="damaged-workspace__relationship" aria-label="Unavailable damaged-media data path">
         <article><HardDrive aria-hidden="true" /><span><strong>Source device details unavailable</strong><small>No physical device descriptor is exposed.</small></span></article>
         <div className="damaged-workspace__path"><Settings2 aria-hidden="true" /><span><strong>Imaging engine unavailable</strong><small>No safe strategy can be selected.</small></span><ArrowRight aria-hidden="true" /></div>

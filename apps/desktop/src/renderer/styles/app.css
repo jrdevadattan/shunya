@@ -508,6 +508,10 @@
 .goal-card__badge[data-tone='available'] { background: color-mix(in oklch, var(--accent-primary) 14%, var(--surface-panel)); color: var(--accent-primary); }
 .goal-card__badge[data-tone='unavailable'] { background: color-mix(in oklch, var(--status-warning) 18%, var(--surface-panel)); color: var(--status-warning); }
 .workflow-note { margin: 0; padding: 12px 14px; border-left: 3px solid var(--status-success); background: color-mix(in oklch, var(--status-success) 5%, var(--surface-panel)); color: var(--text-secondary); font-size: 11px; }
+/* Turns a bare machine diagnostic marker into a tidy, labelled reference chip
+   instead of what reads like a raw error dump. The code text is unchanged. */
+.diagnostic-code { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; margin: 2px 0; padding: 3px 10px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--surface-muted); color: var(--text-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; letter-spacing: 0.03em; }
+.diagnostic-code::before { content: 'Diagnostic reference'; font-family: system-ui, sans-serif; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); }
 
 .scan-comparison { overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); }
 .scan-comparison table { min-width: 820px; margin: 0; }

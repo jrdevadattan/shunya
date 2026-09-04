@@ -34,4 +34,8 @@
   --accent-contrast: #1f1712;
   --focus-ring: #ff9b57;
   --status-success: #46b969;
+  --status-warning: oklch(0.78 0.16 66);
+  --status-danger: oklch(0.68 0.2 25);
+  --status-info: oklch(0.7 0.16 262);
+  --status-neutral: oklch(0.72 0 0);
 }
