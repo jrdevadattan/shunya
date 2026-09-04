@@ -913,7 +913,7 @@ describe('live renderer pages', () => {
     expect(container.textContent).not.toContain('Evidence volume');
   });
 
-  it('creates and starts a daemon job before showing partition results', async () => {
+  it('creates and starts a daemon job and shows the live job view', async () => {
     sessionStorage.removeItem('recovery:case-live:jobId');
     sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
     sessionStorage.setItem('recovery:case-live:goal', 'recover_everything');
@@ -923,13 +923,13 @@ describe('live renderer pages', () => {
       getJobStatus: vi.fn().mockResolvedValueOnce({ ...status, jobId: 'job-new', stage: 'preflight', partitions: null }).mockResolvedValue(status),
     }) });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/scan-options']}><Routes><Route path="/cases/:caseId/recovery/scan-options" element={<ScanOptionsPage />} /><Route path="/cases/:caseId/recovery/partitions" element={<PartitionList />} /></Routes></MemoryRouter>));
+    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/scan-options']}><Routes><Route path="/cases/:caseId/recovery/scan-options" element={<ScanOptionsPage />} /><Route path="/cases/:caseId/jobs" element={<JobProgressPage />} /></Routes></MemoryRouter>));
     const fullCard = Array.from(container.querySelectorAll('article')).find((element) => element.textContent?.includes('Full Scan'));
     const usePreset = fullCard?.querySelector('a,button') as HTMLElement | null;
     if (!usePreset) throw new Error('Full Scan action not found');
     await click(usePreset);
     expect(sessionStorage.getItem('recovery:case-live:jobId')).toBe('job-new');
-    expect(await findText('Evidence volume')).toBeTruthy();
+    expect(await findText('Recovery completed')).toBeTruthy();
   });
 
   it('renders live job state, events, limitations, and controls daemon errors', async () => {

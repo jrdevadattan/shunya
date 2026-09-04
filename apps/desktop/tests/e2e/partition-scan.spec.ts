@@ -34,6 +34,9 @@ test('live recovery renders daemon partitions, progress, results, preview and re
     await page.getByRole('button', { name: /Recover everything/ }).click();
     await page.getByRole('button', { name: 'Continue to scan options' }).click();
     await page.getByText('Full Scan', { exact: true }).locator('..').getByRole('button', { name: 'Use this preset' }).click();
+    // Starting a scan now lands on the live job view; the partition results stay available on their own route.
+    await page.waitForFunction(() => window.location.hash.endsWith('/jobs'));
+    await page.evaluate((caseId) => { window.location.hash = `#/cases/${caseId}/recovery/partitions`; }, context.caseId);
     await expect(page.getByRole('heading', { name: 'Partitions found' })).toBeVisible();
     await expect(page.getByRole('figure', { name: 'Partition map' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Detected partition tree' })).toContainText(/partition-1.*FAT32/s);

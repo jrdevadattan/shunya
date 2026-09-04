@@ -494,6 +494,13 @@
 .goal-card small { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
 .goal-card > i { width: 16px; height: 16px; border: 1px solid var(--border-subtle); border-radius: 999px; }
 .goal-card[aria-pressed='true'] > i { border: 5px solid var(--accent-primary); }
+.goal-card[data-tone='recommended'] { border-color: color-mix(in oklch, var(--status-success) 40%, var(--border-subtle)); }
+.goal-card:disabled { cursor: not-allowed; opacity: 0.62; }
+.goal-card:disabled:hover { border-color: var(--border-subtle); }
+.goal-card__badge { justify-self: start; display: inline-flex; align-items: center; margin-top: 3px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: 0.02em; background: var(--surface-muted); color: var(--text-secondary); }
+.goal-card__badge[data-tone='recommended'] { background: color-mix(in oklch, var(--status-success) 16%, var(--surface-panel)); color: var(--status-success); }
+.goal-card__badge[data-tone='available'] { background: color-mix(in oklch, var(--accent-primary) 14%, var(--surface-panel)); color: var(--accent-primary); }
+.goal-card__badge[data-tone='unavailable'] { background: color-mix(in oklch, var(--status-warning) 18%, var(--surface-panel)); color: var(--status-warning); }
 .workflow-note { margin: 0; padding: 12px 14px; border-left: 3px solid var(--status-success); background: color-mix(in oklch, var(--status-success) 5%, var(--surface-panel)); color: var(--text-secondary); font-size: 11px; }
 
 .scan-comparison { overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); }

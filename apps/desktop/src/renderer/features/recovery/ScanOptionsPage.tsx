@@ -26,7 +26,7 @@ export function ScanOptionsPage() {
       const job = RecoveryJobSchema.parse(await window.recoveryApi.createRecoveryJob({ caseId, sourceId, goal: goal.data, preset }));
       rememberJob(caseId, job.jobId);
       await window.recoveryApi.startJob(job.jobId);
-      await navigate(`/cases/${caseId}/recovery/partitions`);
+      await navigate(`/cases/${caseId}/jobs`);
     } catch (cause) { setError(message(cause)); }
     finally { setStarting(undefined); }
   }
