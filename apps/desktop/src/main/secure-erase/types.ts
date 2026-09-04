@@ -18,7 +18,27 @@ export interface EraseOptions {
   allowFormatFallback: boolean;
 }
 
-export type EraseMethod = 'sanitize_crypto_erase' | 'sanitize_block_erase' | 'format_user_data_erase';
+export type EraseMethod =
+  | 'sanitize_crypto_erase'
+  | 'sanitize_block_erase'
+  | 'format_user_data_erase'
+  // Host-side CSPRNG overwrite (NIST SP 800-88 Clear) for USB flash / pendrives.
+  | 'csprng_overwrite';
+
+/** NIST SP 800-88 Rev. 2 sanitization assurance level. */
+export type Assurance = 'purge' | 'clear' | 'lower_assurance';
+
+export interface BlockDevice {
+  /** Raw device path: \\.\PhysicalDriveN on Windows, /dev/sdX on Linux. */
+  device: string;
+  model: string;
+  serial: string | null;
+  sizeBytes: number;
+  busType: string | null;
+  removable: boolean;
+  /** True when this device backs the running operating system; never erasable. */
+  system: boolean;
+}
 
 export interface EraseProgressEvent {
   device: string;
@@ -30,7 +50,7 @@ export interface EraseProgressEvent {
 export interface EraseResult {
   device: string;
   method: EraseMethod;
-  assurance: 'purge' | 'lower_assurance';
+  assurance: Assurance;
   completedAt: string;
   auditLogPath: string;
 }
