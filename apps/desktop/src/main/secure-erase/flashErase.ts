@@ -44,9 +44,13 @@ async function requireEligibleDevice(device: string): Promise<BlockDevice> {
 
 async function isElevated(): Promise<boolean> {
   if (process.platform === 'win32') {
-    const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      "[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"]);
-    return result.stdout.trim().toLowerCase() === 'true';
+    // `net session` returns exit code 0 only for an elevated (admin) process.
+    const netSession = await run('cmd.exe', ['/d', '/s', '/c', 'net session']).catch(() => null);
+    if (netSession && netSession.exitCode === 0) return true;
+    // Fallback: token elevation check.
+    const ps = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      '[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)']).catch(() => null);
+    return Boolean(ps && ps.stdout.trim().toLowerCase() === 'true');
   }
   return typeof process.getuid === 'function' && process.getuid() === 0;
 }
@@ -66,7 +70,13 @@ async function setWindowsDiskOffline(device: string, offline: boolean): Promise<
     ? `Set-Disk -Number ${number} -IsOffline $true; Set-Disk -Number ${number} -IsReadOnly $false`
     : `Set-Disk -Number ${number} -IsReadOnly $false; Set-Disk -Number ${number} -IsOffline $false`;
   const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
-  if (result.exitCode !== 0) throw new Error(`ERASE_DISK_STATE_FAILED: ${result.stderr.trim()}`);
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.trim();
+    if (/denied|elevat|administrat|requires/i.test(stderr)) {
+      throw new Error('This wipe needs administrator rights — close the app and relaunch it as Administrator, then try again.');
+    }
+    throw new Error(`ERASE_DISK_STATE_FAILED: ${stderr}`);
+  }
 }
 
 /** Unmounts every mounted partition of the target device. Requires privilege. */
@@ -126,7 +136,10 @@ export async function csprngEraseDevice(
     }
   }
 
-  if (!(await isElevated())) throw new Error('ERASE_REQUIRES_ELEVATION');
+  // We do NOT hard-block on an elevation pre-check — any probe can be wrong and
+  // wrongly block a genuinely-elevated app. If the process is not actually
+  // elevated, taking the disk offline / the raw write below fails cleanly with a
+  // clear access-denied error instead.
   await appendAudit({ device, method: METHOD, mode: 'live', model: target.model, serial: target.serial,
     deviceBytes: target.sizeBytes, action: 'start' });
   try {

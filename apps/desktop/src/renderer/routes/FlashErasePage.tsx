@@ -45,8 +45,8 @@ export function FlashErasePage() {
 
   const target = devices?.find((device) => device.device === selected);
   const confirmed = Boolean(target) && confirmText === target?.device;
-  const liveBlockedByElevation = !dryRun && elevated === false;
-  const canErase = confirmed && phase !== 'running' && !liveBlockedByElevation;
+  const showElevationHint = !dryRun && elevated === false;
+  const canErase = confirmed && phase !== 'running';
 
   async function erase() {
     if (!target || !confirmed) return;
@@ -134,8 +134,8 @@ export function FlashErasePage() {
               </span>
             </label>
 
-            {liveBlockedByElevation ? (
-              <p role="alert" className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> The live wipe needs administrator rights. Relaunch the app as Administrator, or keep Dry run enabled.</p>
+            {showElevationHint ? (
+              <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> A live wipe needs administrator rights. If it fails with “access denied”, close and relaunch the app as Administrator. If you already launched as admin, you can proceed.</p>
             ) : null}
 
             {!dryRun ? (
