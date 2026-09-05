@@ -43,6 +43,8 @@ The app is self‑contained — the recovery engine is bundled inside. Nothing e
 
 > Tip: right‑click `recovery-platform.exe` → **Send to → Desktop (create shortcut)** so it's one click on stage. Rename the shortcut "SHUNYA".
 
+> Tip: long tasks (a wipe or a device capture) keep running even if you switch screens — the **floating progress circle** (bottom‑right) lists every running task with a live bar; click a task to jump straight back to its screen.
+
 ---
 
 ## ✅ Pre‑demo checklist (rehearse the morning of)

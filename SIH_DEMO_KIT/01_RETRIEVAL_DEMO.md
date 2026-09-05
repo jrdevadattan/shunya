@@ -50,12 +50,12 @@ SHUNYA recovers from a **RAW disk image** (`.raw` / `.dd`) by **signature carvin
 > *(say)* "Files an investigator would have lost — back, each fingerprinted with SHA‑256 so it's tamper‑evident in court."
 
 **6. THE SECOND WOW — threat detection** *(do)*
-- Click the file marked **Potentially unsafe**. Show the blocked preview ("Potentially unsafe content detected").
+- In the table, the flagged row is highlighted and shows a red **Potential threat** badge in the **Threat scan** column — click that file. The details panel reads **"Potentially unsafe — flagged by YARA‑X"** and explains the preview is blocked and the file quarantined.
 
 > *(say)* "One recovered file carries a **malware signature** — our **YARA‑X** engine caught it and quarantined it. Recovered content is never auto‑opened. We recover evidence *and* protect the investigator."
 
 **7. Verified export + report** *(do)*
-- **Exports** → export to a **different folder** (it refuses same‑device); every file is **re‑hashed and verified**.
+- **Exports** → export to any folder **outside the case workspace** — e.g. your Downloads. It refuses to write into the evidence image or the case workspace itself; every file is **re‑hashed and SHA‑256 verified** on arrival.
 - **Reports** → **Generate report** → show the JSON/Markdown report + the honest limitations.
 
 **8. THE FINALE — signed certificate** *(do)*

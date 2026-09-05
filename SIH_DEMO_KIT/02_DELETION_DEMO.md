@@ -66,4 +66,4 @@
 ## Safety rules (don't skip)
 - **Only ever select the SanDisk (PhysicalDrive1).** Confirm the model + size before typing the path.
 - A real wipe is **irreversible**. Unsure on stage? Use the **dry‑run** — it's still convincing and 100% safe.
-- The real wipe needs the app **running as Administrator**; otherwise the tool blocks it with a clear message (by design).
+- The real wipe needs the app **running as Administrator**; without it the wipe fails with a clear error naming the Windows reason (e.g. access denied) rather than silently doing nothing.

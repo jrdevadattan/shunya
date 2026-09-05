@@ -47,7 +47,7 @@ Recovery **never writes to the source**; it re‑hashes the source **after** the
 
 - Source opened **read‑only**; **SHA‑256 before + after**.
 - Every action logged to the **case store** against a case number + operator.
-- Each recovered file carries a **SHA‑256**; exports are **re‑verified** and refuse a same‑device destination.
+- Each recovered file carries a **SHA‑256**; exports are **re‑verified** on arrival and refuse to write into the evidence image or the case workspace.
 - Recovered content is **quarantined** — never auto‑opened; active/unsafe types are preview‑blocked.
 - A **JSON + Markdown report** documents tools/versions, method counts, and **explicit limitations**.
 
