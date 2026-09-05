@@ -5,7 +5,25 @@ import path from 'node:path';
 import { appendAudit } from './audit.js';
 import { listBlockDevices } from './blockDevices.js';
 import { csprngOverwrite, type OverwriteProgress } from './csprngOverwrite.js';
+import { windowsCsprngOverwrite } from './windowsRawWrite.js';
 import type { BlockDevice, EraseProgressEvent, EraseResult } from './types.js';
+
+/** Runs a CSPRNG overwrite of `target` using the engine that works on this
+ * platform. Windows raw devices (and Windows scratch files, so the dry run is a
+ * true rehearsal) go through a .NET FileStream because Node's `fs` cannot do
+ * positioned writes to a `\\.\PhysicalDriveN` handle; everything else uses the
+ * cross-platform Node AES-256-CTR engine. */
+async function overwriteTarget(
+  target: string,
+  totalBytes: number,
+  onProgress: (progress: OverwriteProgress) => void,
+): Promise<void> {
+  if (process.platform === 'win32') {
+    await windowsCsprngOverwrite(target, totalBytes, { onProgress });
+  } else {
+    await csprngOverwrite(target, totalBytes, { onProgress });
+  }
+}
 
 export interface CsprngEraseOptions {
   /** Must exactly equal the target device path; re-checked in the main process. */
@@ -126,7 +144,7 @@ export async function csprngEraseDevice(
       await handle.close();
       onProgress({ device, method: METHOD, percent: 0,
         statusText: `Dry run: CSPRNG overwrite of a ${formatBytes(sample)} sample — the device (${formatBytes(target.sizeBytes)}) is not touched` });
-      await csprngOverwrite(scratch, sample, { onProgress: (progress) => forward(progress, 'Dry run: writing CSPRNG sample') });
+      await overwriteTarget(scratch, sample, (progress) => forward(progress, 'Dry run: writing CSPRNG sample'));
       const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'dry_run', model: target.model,
         serial: target.serial, deviceBytes: target.sizeBytes, sampleBytes: sample, finalStatus: 'dry_run_completed' });
       onProgress({ device, method: METHOD, percent: 100, statusText: 'Dry run complete — no data on the device was changed' });
@@ -148,7 +166,7 @@ export async function csprngEraseDevice(
     else throw new Error('ERASE_UNSUPPORTED_PLATFORM');
 
     onProgress({ device, method: METHOD, percent: 0, statusText: 'Overwriting every sector with CSPRNG data' });
-    await csprngOverwrite(device, target.sizeBytes, { onProgress: (progress) => forward(progress, 'Writing CSPRNG data across the device') });
+    await overwriteTarget(device, target.sizeBytes, (progress) => forward(progress, 'Writing CSPRNG data across the device'));
 
     const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'live', model: target.model,
       serial: target.serial, deviceBytes: target.sizeBytes, finalStatus: 'completed' });
