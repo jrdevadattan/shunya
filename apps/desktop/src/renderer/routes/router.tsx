@@ -4,6 +4,7 @@ import { NewCasePage } from './NewCasePage.js';
 import { WelcomePage } from './WelcomePage.js';
 import { NewDeletionPage } from './NewDeletionPage.js';
 import { FlashErasePage } from './FlashErasePage.js';
+import { CaptureImagePage } from './CaptureImagePage.js';
 import { JobProgressPage } from '../features/jobs/JobProgressPage.js';
 import { AddSourcePage } from '../features/sources/AddSourcePage.js';
 import { SourceAssessmentPage } from '../features/sources/SourceAssessmentPage.js';
@@ -28,6 +29,7 @@ export const router = createHashRouter([
   { path: '/cases/new', element: <NewCasePage /> },
   { path: '/deletion/new', element: <NewDeletionPage /> },
   { path: '/secure-erase', element: <FlashErasePage /> },
+  { path: '/capture-image', element: <CaptureImagePage /> },
   { path: '/cases/open', element: <NewCasePage /> },
   { path: '/settings', element: <SettingsPage /> },
   { path: '/help', element: <HelpPage /> },

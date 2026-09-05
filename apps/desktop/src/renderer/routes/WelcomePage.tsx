@@ -1,5 +1,5 @@
 import { RecoveryCaseSchema } from '@recovery/contracts';
-import { ArrowRight, BrainCircuit, CalendarDays, FolderOpen, HardDrive, Plus, ShieldAlert } from 'lucide-react';
+import { ArrowRight, BrainCircuit, CalendarDays, FolderOpen, HardDrive, HardDriveDownload, Plus, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { rememberValidatedCase } from '../application-state.js';
@@ -10,6 +10,7 @@ import { ApplicationShell } from './ApplicationShell.js';
 const recoveryPaths = [
   { title: 'Recover from a device', description: 'Create a case, then add a supported read-only source.', to: '/cases/new', icon: HardDrive },
   { title: 'Analyze a disk image', description: 'Create a case for an existing RAW image.', to: '/cases/new?source=disk-image', icon: FolderOpen },
+  { title: 'Capture a device (read-only)', description: 'Clone a USB drive to a RAW image, then recover deleted files from it.', to: '/capture-image', icon: HardDriveDownload },
   { title: 'Analyze a memory image', description: 'Review the verified memory-analysis capability before starting.', to: '/cases/new?source=memory-image', icon: BrainCircuit },
 ];
 

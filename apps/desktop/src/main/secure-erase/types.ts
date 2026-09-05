@@ -54,3 +54,23 @@ export interface EraseResult {
   completedAt: string;
   auditLogPath: string;
 }
+
+export interface CaptureProgressEvent {
+  device: string;
+  percent: number | null;
+  statusText: string;
+}
+
+export interface CaptureResult {
+  device: string;
+  model: string;
+  /** Absolute path of the written .raw image. */
+  imagePath: string;
+  bytesCaptured: number;
+  /** SHA-256 of the whole image, for read-only chain of custody. */
+  sha256: string;
+  /** True when only a leading portion of the device was captured. */
+  truncated: boolean;
+  completedAt: string;
+  auditLogPath: string;
+}

@@ -29,10 +29,17 @@ contextBridge.exposeInMainWorld('secureErase', Object.freeze({
   listBlockDevices: () => ipcRenderer.invoke('secureErase.listBlockDevices'),
   isElevated: () => ipcRenderer.invoke('secureErase.isElevated'),
   csprngErase: (device: string, options: { confirmation: string; dryRun: boolean }) => ipcRenderer.invoke('secureErase.csprngErase', device, options),
+  chooseCaptureOutput: (suggestedName: string) => ipcRenderer.invoke('secureErase.chooseCaptureOutput', suggestedName),
+  captureImage: (device: string, options: { imagePath: string; maxBytes?: number | null }) => ipcRenderer.invoke('secureErase.captureImage', device, options),
   onProgress: (callback: (event: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('secureErase.progress', listener);
     return () => ipcRenderer.removeListener('secureErase.progress', listener);
+  },
+  onCaptureProgress: (callback: (event: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('secureErase.captureProgress', listener);
+    return () => ipcRenderer.removeListener('secureErase.captureProgress', listener);
   },
   onDownloadProgress: (callback: (message: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(String(payload));

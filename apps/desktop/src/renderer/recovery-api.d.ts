@@ -16,7 +16,10 @@ declare global {
       listBlockDevices(): Promise<import('../main/secure-erase/types.js').BlockDevice[]>;
       isElevated(): Promise<boolean>;
       csprngErase(device: string, options: { confirmation: string; dryRun: boolean }): Promise<import('../main/secure-erase/types.js').EraseResult>;
+      chooseCaptureOutput(suggestedName: string): Promise<string | null>;
+      captureImage(device: string, options: { imagePath: string; maxBytes?: number | null }): Promise<import('../main/secure-erase/types.js').CaptureResult>;
       onProgress(callback: (event: import('../main/secure-erase/types.js').EraseProgressEvent) => void): () => void;
+      onCaptureProgress(callback: (event: import('../main/secure-erase/types.js').CaptureProgressEvent) => void): () => void;
       onDownloadProgress(callback: (message: string) => void): () => void;
     };
   }
