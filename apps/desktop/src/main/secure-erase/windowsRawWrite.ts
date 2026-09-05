@@ -14,16 +14,24 @@ export interface WindowsOverwriteOptions {
 const DEFAULT_CHUNK = 4 * 1024 * 1024;
 
 /**
- * The .NET program that actually performs the overwrite, compiled at runtime by
+ * The .NET program that performs the overwrite, compiled at runtime by
  * PowerShell's `Add-Type`. Node's own `fs` cannot do positioned writes to a raw
- * `\\.\PhysicalDriveN` handle on Windows (it fails with EBADF); a .NET
- * `FileStream` opens the device with the correct share mode + WRITE_THROUGH and
- * issues sector-aligned writes, which Windows supports for raw devices.
+ * `\\.\PhysicalDriveN` handle on Windows (it fails with EBADF).
  *
- * The overwrite bytes come from `RNGCryptoServiceProvider` — the Windows OS
- * CSPRNG (BCryptGenRandom), which is an AES-256 CTR_DRBG per NIST SP 800-90A.
- * That keeps this a genuine single-pass CSPRNG overwrite (NIST SP 800-88 Clear),
- * consistent with the AES-256-CTR keystream used by the cross-platform engine.
+ * The correct Windows recipe for writing a raw removable disk (used by Rufus,
+ * dd-for-windows, etc.) is:
+ *   1. For every mounted volume on the target disk: open `\\.\X:`, then
+ *      FSCTL_LOCK_VOLUME + FSCTL_DISMOUNT_VOLUME, and KEEP that handle open so
+ *      the lock is held for the whole write. `Set-Disk -IsOffline` alone does
+ *      not reliably free a USB drive, which is why the raw open was refused.
+ *   2. Open `\\.\PhysicalDriveN` with GENERIC_WRITE + FILE_SHARE_READ|WRITE +
+ *      FILE_FLAG_WRITE_THROUGH and write sector-aligned chunks.
+ *   3. Release the volume locks.
+ *
+ * Overwrite bytes come from the OS CSPRNG (`RNGCryptoServiceProvider` /
+ * BCryptGenRandom, an AES-256 CTR_DRBG per NIST SP 800-90A), so it stays a
+ * genuine single-pass CSPRNG overwrite (NIST SP 800-88 Clear), consistent with
+ * the cross-platform AES-256-CTR engine used on Linux and in tests.
  */
 const PS_WRAPPER = String.raw`param(
   [Parameter(Mandatory=$true)][string]$Target,
@@ -31,46 +39,117 @@ const PS_WRAPPER = String.raw`param(
   [Parameter(Mandatory=$true)][int]$ChunkSize
 )
 $ErrorActionPreference = 'Stop'
+$volumes = ''
+if ($Target -match 'PhysicalDrive(\d+)') {
+  $diskNum = [int]$Matches[1]
+  try {
+    $volumes = (Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue |
+      Where-Object { $_.DriveLetter } | ForEach-Object { [string]$_.DriveLetter }) -join ','
+  } catch { $volumes = '' }
+}
 $src = @"
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Threading;
+using Microsoft.Win32.SafeHandles;
 
 public static class RawWipe {
-  public static void Run(string target, long totalBytes, int chunkSize) {
-    byte[] buffer = new byte[chunkSize];
-    using (RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider())
-    using (FileStream fs = new FileStream(target, FileMode.Open, FileAccess.Write, FileShare.ReadWrite, 1048576, FileOptions.WriteThrough)) {
-      long written = 0;
-      long lastReport = -1;
-      while (written < totalBytes) {
-        long remaining = totalBytes - written;
-        int thisChunk = remaining < (long)chunkSize ? (int)remaining : chunkSize;
-        rng.GetBytes(buffer);
-        fs.Write(buffer, 0, thisChunk);
-        written += thisChunk;
-        if (written - lastReport >= (64L * 1024 * 1024) || written >= totalBytes) {
-          lastReport = written;
-          Console.Out.WriteLine("PROGRESS " + written + " " + totalBytes);
-          Console.Out.Flush();
+  const uint GENERIC_READ = 0x80000000;
+  const uint GENERIC_WRITE = 0x40000000;
+  const uint FILE_SHARE_READ = 0x00000001;
+  const uint FILE_SHARE_WRITE = 0x00000002;
+  const uint OPEN_EXISTING = 3;
+  const uint FILE_FLAG_WRITE_THROUGH = 0x80000000;
+  const uint FSCTL_LOCK_VOLUME = 0x00090018;
+  const uint FSCTL_DISMOUNT_VOLUME = 0x00090020;
+
+  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+  static extern SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+    IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  static extern bool DeviceIoControl(SafeFileHandle hDevice, uint dwIoControlCode, IntPtr lpInBuffer,
+    uint nInBufferSize, IntPtr lpOutBuffer, uint nOutBufferSize, out uint lpBytesReturned, IntPtr lpOverlapped);
+
+  static SafeFileHandle LockVolume(char letter) {
+    SafeFileHandle vh = CreateFile("\\\\.\\" + letter + ":", GENERIC_READ | GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+    if (vh.IsInvalid) throw new Exception("Could not open volume " + letter + ": (Win32 error " + Marshal.GetLastWin32Error() + ")");
+    uint br;
+    bool locked = false;
+    for (int i = 0; i < 20 && !locked; i++) {
+      locked = DeviceIoControl(vh, FSCTL_LOCK_VOLUME, IntPtr.Zero, 0, IntPtr.Zero, 0, out br, IntPtr.Zero);
+      if (!locked) Thread.Sleep(100);
+    }
+    DeviceIoControl(vh, FSCTL_DISMOUNT_VOLUME, IntPtr.Zero, 0, IntPtr.Zero, 0, out br, IntPtr.Zero);
+    return vh; // keep open so the lock/dismount holds for the whole write
+  }
+
+  public static void Run(string target, long totalBytes, int chunkSize, string volumes) {
+    List<SafeFileHandle> held = new List<SafeFileHandle>();
+    try {
+      if (!string.IsNullOrEmpty(volumes)) {
+        foreach (string v in volumes.Split(',')) {
+          string t = v.Trim();
+          if (t.Length == 0) continue;
+          held.Add(LockVolume(t[0]));
         }
       }
-      fs.Flush();
+      SafeFileHandle disk = CreateFile(target, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        IntPtr.Zero, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, IntPtr.Zero);
+      if (disk.IsInvalid) throw new Exception("Could not open device " + target + " for writing (Win32 error " + Marshal.GetLastWin32Error() + ")");
+      byte[] buffer = new byte[chunkSize];
+      using (RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider())
+      using (FileStream fs = new FileStream(disk, FileAccess.Write, 1048576, false)) {
+        long written = 0;
+        long lastReport = -1;
+        while (written < totalBytes) {
+          long remaining = totalBytes - written;
+          int thisChunk = remaining < (long)chunkSize ? (int)remaining : chunkSize;
+          rng.GetBytes(buffer);
+          fs.Write(buffer, 0, thisChunk);
+          written += thisChunk;
+          if (written - lastReport >= (64L * 1024 * 1024) || written >= totalBytes) {
+            lastReport = written;
+            Console.Out.WriteLine("PROGRESS " + written + " " + totalBytes);
+            Console.Out.Flush();
+          }
+        }
+        fs.Flush();
+      }
+      Console.Out.WriteLine("DONE");
+      Console.Out.Flush();
+    } finally {
+      foreach (SafeFileHandle h in held) { try { h.Dispose(); } catch {} }
     }
-    Console.Out.WriteLine("DONE");
-    Console.Out.Flush();
   }
 }
 "@
 Add-Type -TypeDefinition $src -Language CSharp
-[RawWipe]::Run($Target, $TotalBytes, $ChunkSize)
+[RawWipe]::Run($Target, $TotalBytes, $ChunkSize, $volumes)
 `;
+
+function friendlyWin32(detail: string): string | null {
+  if (/Win32 error 5\b|Access is denied|UnauthorizedAccess/i.test(detail)) {
+    return 'Windows refused write access to the drive (error 5). Make sure the app is running as Administrator, and close any Explorer/AV window that has the drive open, then try again.';
+  }
+  if (/Win32 error 32\b|being used by another process|sharing violation/i.test(detail)) {
+    return 'The drive is in use by another process (error 32). Close any window or program using it (Explorer, antivirus) and try again.';
+  }
+  if (/Win32 error 21\b|not ready/i.test(detail)) {
+    return 'The drive is not ready (error 21). Re-seat the USB drive and try again.';
+  }
+  return null;
+}
 
 /**
  * CSPRNG overwrite of `target` (a raw device path like `\\.\PhysicalDrive1`, or a
- * scratch file for the dry run) using a .NET `FileStream`. Streams progress back
- * as the child writes. Requires the Electron process to be elevated for a real
- * device; a non-elevated attempt surfaces a clear access-denied error.
+ * scratch file for the dry run) using a .NET device handle. Streams progress as
+ * the child writes. For a real device the Electron process must be elevated.
  */
 export async function windowsCsprngOverwrite(
   target: string,
@@ -128,11 +207,12 @@ export async function windowsCsprngOverwrite(
           return;
         }
         const detail = stderr.trim();
-        if (/denied|unauthorized|elevat|administrat|privilege|requires/i.test(detail)) {
-          reject(new Error('This wipe needs administrator rights — close the app and relaunch it as Administrator, then try again.'));
+        const friendly = friendlyWin32(detail);
+        if (friendly) {
+          reject(new Error(friendly));
           return;
         }
-        reject(new Error(detail ? `CSPRNG_OVERWRITE_FAILED: ${detail}` : `CSPRNG_OVERWRITE_FAILED: exited with code ${code}`));
+        reject(new Error(detail ? `The wipe could not be completed: ${detail}` : `The wipe failed (exit code ${code}).`));
       });
     });
   } finally {

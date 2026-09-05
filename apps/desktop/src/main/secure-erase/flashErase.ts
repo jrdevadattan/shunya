@@ -73,30 +73,6 @@ async function isElevated(): Promise<boolean> {
   return typeof process.getuid === 'function' && process.getuid() === 0;
 }
 
-function windowsDiskNumber(device: string): number {
-  const digits = device.match(/physicaldrive(\d+)$/i)?.[1];
-  const number = digits ? Number.parseInt(digits, 10) : Number.NaN;
-  if (!Number.isInteger(number)) throw new Error('ERASE_INVALID_DEVICE_PATH');
-  return number;
-}
-
-/** Takes the disk offline (dismounts its volumes) and clears read-only so the
- * raw device can be written, or restores it. Requires elevation. */
-async function setWindowsDiskOffline(device: string, offline: boolean): Promise<void> {
-  const number = windowsDiskNumber(device);
-  const script = offline
-    ? `Set-Disk -Number ${number} -IsOffline $true; Set-Disk -Number ${number} -IsReadOnly $false`
-    : `Set-Disk -Number ${number} -IsReadOnly $false; Set-Disk -Number ${number} -IsOffline $false`;
-  const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
-  if (result.exitCode !== 0) {
-    const stderr = result.stderr.trim();
-    if (/denied|elevat|administrat|requires/i.test(stderr)) {
-      throw new Error('This wipe needs administrator rights — close the app and relaunch it as Administrator, then try again.');
-    }
-    throw new Error(`ERASE_DISK_STATE_FAILED: ${stderr}`);
-  }
-}
-
 /** Unmounts every mounted partition of the target device. Requires privilege. */
 async function unmountLinuxDevice(device: string): Promise<void> {
   const list = await run('lsblk', ['-nro', 'PATH,MOUNTPOINT', device]);
@@ -160,21 +136,19 @@ export async function csprngEraseDevice(
   // clear access-denied error instead.
   await appendAudit({ device, method: METHOD, mode: 'live', model: target.model, serial: target.serial,
     deviceBytes: target.sizeBytes, action: 'start' });
-  try {
-    if (process.platform === 'win32') await setWindowsDiskOffline(device, true);
-    else if (process.platform === 'linux') await unmountLinuxDevice(device);
-    else throw new Error('ERASE_UNSUPPORTED_PLATFORM');
+  if (process.platform === 'linux') await unmountLinuxDevice(device);
+  else if (process.platform !== 'win32') throw new Error('ERASE_UNSUPPORTED_PLATFORM');
+  // On Windows the raw-write engine locks + dismounts the target's volumes
+  // itself and holds the lock for the whole write — `Set-Disk -IsOffline` does
+  // not reliably free a removable USB drive, so the raw open was refused.
 
-    onProgress({ device, method: METHOD, percent: 0, statusText: 'Overwriting every sector with CSPRNG data' });
-    await overwriteTarget(device, target.sizeBytes, (progress) => forward(progress, 'Writing CSPRNG data across the device'));
+  onProgress({ device, method: METHOD, percent: 0, statusText: 'Overwriting every sector with CSPRNG data' });
+  await overwriteTarget(device, target.sizeBytes, (progress) => forward(progress, 'Writing CSPRNG data across the device'));
 
-    const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'live', model: target.model,
-      serial: target.serial, deviceBytes: target.sizeBytes, finalStatus: 'completed' });
-    onProgress({ device, method: METHOD, percent: 100, statusText: 'CSPRNG overwrite complete (NIST 800-88 Clear)' });
-    return { device, method: METHOD, assurance: 'clear', completedAt: new Date().toISOString(), auditLogPath };
-  } finally {
-    if (process.platform === 'win32') await setWindowsDiskOffline(device, false).catch(() => undefined);
-  }
+  const auditLogPath = await appendAudit({ device, method: METHOD, mode: 'live', model: target.model,
+    serial: target.serial, deviceBytes: target.sizeBytes, finalStatus: 'completed' });
+  onProgress({ device, method: METHOD, percent: 100, statusText: 'CSPRNG overwrite complete (NIST 800-88 Clear)' });
+  return { device, method: METHOD, assurance: 'clear', completedAt: new Date().toISOString(), auditLogPath };
 }
 
 export { isElevated };
