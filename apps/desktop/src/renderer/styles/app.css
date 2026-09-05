@@ -583,6 +583,59 @@
 .button--ghost:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 .button--small { padding: 3px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
 
+/* Floating background-operations widget */
+.bg-ops { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.bg-ops__fab { position: relative; width: 56px; height: 56px; border-radius: 999px; border: none; background: var(--surface-panel); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.35)); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.bg-ops__fab svg { position: absolute; inset: 4px; width: 48px; height: 48px; }
+.bg-ops__track { stroke: color-mix(in oklch, var(--border-subtle) 70%, transparent); }
+.bg-ops__meter { stroke: var(--status-info); transition: stroke-dasharray 0.3s ease; }
+.bg-ops[data-tone="done"] .bg-ops__meter { stroke: var(--status-success); }
+.bg-ops[data-tone="error"] .bg-ops__meter { stroke: var(--status-danger); }
+.bg-ops[data-tone="running"] .bg-ops__fab { animation: bg-ops-pulse 2s ease-in-out infinite; }
+@keyframes bg-ops-pulse { 0%,100% { box-shadow: 0 10px 30px rgba(0,0,0,0.35); } 50% { box-shadow: 0 0 0 6px color-mix(in oklch, var(--status-info) 18%, transparent), 0 10px 30px rgba(0,0,0,0.35); } }
+.bg-ops__fab-glyph { display: grid; place-items: center; color: var(--text-primary); }
+.bg-ops__fab-glyph svg { position: static; inset: auto; width: 18px; height: 18px; }
+.bg-ops[data-tone="done"] .bg-ops__fab-glyph { color: var(--status-success); }
+.bg-ops[data-tone="error"] .bg-ops__fab-glyph { color: var(--status-danger); }
+.bg-ops__fab-count { font-size: 15px; font-weight: 700; color: var(--status-info); }
+.bg-ops__panel { width: 320px; max-width: calc(100vw - 44px); background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.35)); overflow: hidden; }
+.bg-ops__panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); }
+.bg-ops__panel-head strong { font-size: 13px; }
+.bg-ops__close, .bg-ops__dismiss { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; display: grid; place-items: center; padding: 4px; border-radius: var(--radius-sm); }
+.bg-ops__close:hover, .bg-ops__dismiss:hover { color: var(--text-primary); background: var(--surface-app); }
+.bg-ops__list { list-style: none; margin: 0; padding: 6px; display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+.bg-ops__item { display: flex; align-items: center; gap: 4px; border-radius: var(--radius-sm); }
+.bg-ops__item:hover { background: var(--surface-app); }
+.bg-ops__item-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; background: transparent; border: none; cursor: pointer; text-align: left; padding: 10px; color: inherit; }
+.bg-ops__item-icon { display: grid; place-items: center; color: var(--status-info); margin-top: 1px; }
+.bg-ops__item-icon svg { width: 16px; height: 16px; }
+.bg-ops__item[data-status="done"] .bg-ops__item-icon { color: var(--status-success); }
+.bg-ops__item[data-status="error"] .bg-ops__item-icon { color: var(--status-danger); }
+.bg-ops__item-body { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.bg-ops__item-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-ops__item-status { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-ops__item-bar { display: block; height: 4px; border-radius: 999px; background: color-mix(in oklch, var(--border-subtle) 70%, transparent); overflow: hidden; }
+.bg-ops__item-bar span { display: block; height: 100%; background: var(--status-info); border-radius: 999px; transition: width 0.3s ease; }
+
+/* Per-artifact threat badge + threat-row highlight */
+.threat-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid var(--border-subtle); color: var(--text-secondary); background: var(--surface-app); }
+.threat-badge svg { width: 13px; height: 13px; }
+.threat-badge[data-tone="threat"] { color: var(--status-danger); border-color: color-mix(in oklch, var(--status-danger) 45%, var(--border-subtle)); background: color-mix(in oklch, var(--status-danger) 10%, var(--surface-panel)); }
+.threat-badge[data-tone="clean"] { color: var(--status-success); border-color: color-mix(in oklch, var(--status-success) 35%, var(--border-subtle)); background: color-mix(in oklch, var(--status-success) 8%, var(--surface-panel)); }
+.threat-badge[data-tone="unknown"] { color: var(--status-warning); border-color: color-mix(in oklch, var(--status-warning) 35%, var(--border-subtle)); }
+.artifact-row[data-threat] { background: color-mix(in oklch, var(--status-danger) 7%, transparent); }
+.artifact-row[data-threat] td:first-child { box-shadow: inset 3px 0 0 var(--status-danger); }
+.artifact-evidence li[data-threat] { border-radius: var(--radius-sm); padding: 10px; background: color-mix(in oklch, var(--status-danger) 8%, var(--surface-panel)); border: 1px solid color-mix(in oklch, var(--status-danger) 40%, var(--border-subtle)); }
+.artifact-evidence li[data-threat] svg { color: var(--status-danger); }
+
+/* Recovery-complete call to action on the job progress screen */
+.job-progress__complete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; border-radius: var(--radius-card); border: 1px solid color-mix(in oklch, var(--status-success) 40%, var(--border-subtle)); background: color-mix(in oklch, var(--status-success) 8%, var(--surface-panel)); box-shadow: var(--shadow-sm); }
+.job-progress__complete > svg { width: 26px; height: 26px; color: var(--status-success); flex-shrink: 0; }
+.job-progress__complete-body { flex: 1; min-width: 200px; display: grid; gap: 3px; }
+.job-progress__complete-body strong { font-size: 15px; }
+.job-progress__complete-body p { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.job-progress__complete-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
 /* Results threat summary */
 .results-page__summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .results-page__threats { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border: 1px solid color-mix(in oklch, var(--status-danger) 45%, var(--border-subtle)); border-radius: var(--radius-card); background: color-mix(in oklch, var(--status-danger) 8%, var(--surface-panel)); color: var(--status-danger); box-shadow: var(--shadow-sm); }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Copy, HardDrive, HardDriveDownload, Loader2, ShieldAlert, ShieldCheck, Usb } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { BlockDevice, CaptureProgressEvent, CaptureResult } from '../../main/secure-erase/types.js';
+import type { BlockDevice, CaptureResult } from '../../main/secure-erase/types.js';
 import { ApplicationShell } from './ApplicationShell.js';
+import { trackOperation, useOperationByKind } from '../features/operations/operations-store.js';
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
@@ -12,7 +13,6 @@ function formatBytes(bytes: number): string {
 
 const GiB = 1024 ** 3;
 type Scope = 'full' | '2gb' | '4gb';
-type Phase = 'idle' | 'running' | 'done' | 'error';
 
 function scopeBytes(scope: Scope): number | null {
   if (scope === '2gb') return 2 * GiB;
@@ -27,11 +27,16 @@ export function CaptureImagePage() {
   const [selected, setSelected] = useState<string>();
   const [scope, setScope] = useState<Scope>('full');
   const [imagePath, setImagePath] = useState<string>();
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [progress, setProgress] = useState<CaptureProgressEvent>();
-  const [result, setResult] = useState<CaptureResult>();
-  const [runError, setRunError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   const [copied, setCopied] = useState(false);
+
+  // The running/finished capture lives in the global store, so progress and the
+  // result survive navigating away and back while the read runs in the main process.
+  const latestCapture = useOperationByKind('capture');
+  const op = latestCapture && latestCapture.device === selected ? latestCapture : undefined;
+  const running = op?.status === 'running';
+  const result = op?.status === 'done' ? (op.result as CaptureResult | undefined) : undefined;
+  const runError = op?.status === 'error' ? op.error : actionError;
 
   async function refresh() {
     setLoadError(undefined);
@@ -44,22 +49,17 @@ export function CaptureImagePage() {
     }
   }
 
+  useEffect(() => { void refresh(); }, []);
   useEffect(() => {
-    void refresh();
-    const unsubscribe = window.secureErase.onCaptureProgress((event) => setProgress(event as CaptureProgressEvent));
-    return unsubscribe;
-  }, []);
+    if (!selected && latestCapture?.device) setSelected(latestCapture.device);
+  }, [latestCapture, selected]);
 
   const target = devices?.find((device) => device.device === selected);
 
   function selectDevice(device: BlockDevice) {
     setSelected(device.device);
     setImagePath(undefined);
-    setResult(undefined);
-    setRunError(undefined);
-    setPhase('idle');
-    setProgress(undefined);
-    // Default large drives to a fast leading capture; small ones to the whole device.
+    setActionError(undefined);
     setScope(device.sizeBytes > 8 * GiB ? '2gb' : 'full');
   }
 
@@ -67,26 +67,21 @@ export function CaptureImagePage() {
     const suggested = target ? `evidence-${target.model.replace(/[^a-z0-9]+/gi, '-')}-${new Date().toISOString().slice(0, 10)}.raw` : 'evidence.raw';
     try {
       const chosen = await window.secureErase.chooseCaptureOutput(suggested);
-      if (chosen) { setImagePath(chosen); setResult(undefined); setPhase('idle'); }
+      if (chosen) { setImagePath(chosen); setActionError(undefined); }
     } catch (cause) {
-      setRunError(cause instanceof Error ? cause.message : 'The output file could not be chosen.');
+      setActionError(cause instanceof Error ? cause.message : 'The output file could not be chosen.');
     }
   }
 
   async function capture() {
     if (!target || !imagePath) return;
-    setPhase('running');
-    setRunError(undefined);
-    setResult(undefined);
-    setProgress({ device: target.device, percent: 0, statusText: 'Starting…' });
+    setActionError(undefined);
     try {
-      const outcome = await window.secureErase.captureImage(target.device, { imagePath, maxBytes: scopeBytes(scope) });
-      setResult(outcome);
-      setPhase('done');
-    } catch (cause) {
-      setRunError(cause instanceof Error ? cause.message : 'The capture could not be completed.');
-      setPhase('error');
-    }
+      await trackOperation(
+        { id: `capture:${target.device}`, kind: 'capture', label: `Imaging ${target.model}`, route: '/capture-image', device: target.device },
+        window.secureErase.captureImage(target.device, { imagePath, maxBytes: scopeBytes(scope) }),
+      );
+    } catch { /* error surfaces via the store op */ }
   }
 
   async function copyPath() {
@@ -98,9 +93,9 @@ export function CaptureImagePage() {
     } catch { /* clipboard may be unavailable; ignore */ }
   }
 
-  const captureGiB = scopeBytes(scope);
-  const plannedBytes = target ? (captureGiB === null ? target.sizeBytes : Math.min(target.sizeBytes, captureGiB)) : 0;
-  const canCapture = Boolean(target) && Boolean(imagePath) && phase !== 'running';
+  const captureCap = scopeBytes(scope);
+  const plannedBytes = target ? (captureCap === null ? target.sizeBytes : Math.min(target.sizeBytes, captureCap)) : 0;
+  const canCapture = Boolean(target) && Boolean(imagePath) && !running;
 
   return (
     <ApplicationShell title="Capture evidence image">
@@ -116,7 +111,7 @@ export function CaptureImagePage() {
               modified. Add the image to a recovery case to carve back deleted files. A SHA-256 of the image is recorded for chain of custody.
             </p>
           </div>
-          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={phase === 'running'}>Rescan devices</button>
+          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}>Rescan devices</button>
         </header>
 
         {loadError ? <p role="alert" className="form-error">{loadError}</p> : null}
@@ -135,7 +130,7 @@ export function CaptureImagePage() {
                 data-eligible={eligible || undefined}
                 data-active={active || undefined}
                 aria-pressed={active}
-                disabled={!eligible || phase === 'running'}
+                disabled={!eligible || running}
                 onClick={() => selectDevice(device)}
               >
                 <span className="flash-erase__device-icon" aria-hidden="true">{device.removable ? <Usb /> : <HardDrive />}</span>
@@ -163,13 +158,13 @@ export function CaptureImagePage() {
 
             <fieldset className="flash-erase__scope">
               <legend>How much to capture</legend>
-              <label><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={phase === 'running'} /> <span><strong>Entire device</strong> <small>{formatBytes(target.sizeBytes)} — exact clone, slower for large drives.</small></span></label>
-              <label><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={phase === 'running'} /> <span><strong>First 2 GB</strong> <small>Fast — for a prepared demo drive where the files sit at the start.</small></span></label>
-              <label><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={phase === 'running'} /> <span><strong>First 4 GB</strong> <small>A larger leading slice.</small></span></label>
+              <label><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={running} /> <span><strong>Entire device</strong> <small>{formatBytes(target.sizeBytes)} — exact clone, slower for large drives.</small></span></label>
+              <label><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={running} /> <span><strong>First 2 GB</strong> <small>Fast — for a prepared demo drive where the files sit at the start.</small></span></label>
+              <label><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={running} /> <span><strong>First 4 GB</strong> <small>A larger leading slice.</small></span></label>
             </fieldset>
 
             <div className="flash-erase__output">
-              <button type="button" className="button button--secondary" onClick={() => void chooseOutput()} disabled={phase === 'running'}>Choose output file…</button>
+              <button type="button" className="button button--secondary" onClick={() => void chooseOutput()} disabled={running}>Choose output file…</button>
               {imagePath ? <code className="flash-erase__path">{imagePath}</code> : <small>Pick a <code>.raw</code> file on a different drive than the one you are imaging.</small>}
             </div>
 
@@ -180,16 +175,16 @@ export function CaptureImagePage() {
             <div className="flash-erase__actions">
               <button type="button" className="button button--primary" disabled={!canCapture} onClick={() => void capture()}>
                 <HardDriveDownload aria-hidden="true" />
-                {phase === 'running' ? 'Capturing…' : `Capture ${formatBytes(plannedBytes)} image`}
+                {running ? 'Capturing…' : `Capture ${formatBytes(plannedBytes)} image`}
               </button>
             </div>
 
-            {phase === 'running' || phase === 'done' ? (
+            {running || op?.status === 'done' ? (
               <div className="flash-erase__progress">
-                <div className={`job-progress__bar${phase === 'running' ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Capture progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress?.percent ?? 0)}>
-                  <span style={{ width: `${progress?.percent ?? 0}%` }} />
+                <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Capture progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(op?.percent ?? 0)}>
+                  <span style={{ width: `${op?.percent ?? 0}%` }} />
                 </div>
-                <p className="flash-erase__status">{progress?.statusText ?? 'Working…'} {progress?.percent !== null && progress?.percent !== undefined ? `(${Math.round(progress.percent)}%)` : ''}</p>
+                <p className="flash-erase__status">{op?.statusText ?? 'Working…'} ({Math.round(op?.percent ?? 0)}%)</p>
               </div>
             ) : null}
 

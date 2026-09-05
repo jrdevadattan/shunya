@@ -1139,7 +1139,7 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Content-signature recovery');
     expect(container?.textContent).not.toContain('Invented');
     expect(container?.querySelector('table[aria-label="Recovered artifacts"]')).toBeTruthy();
-    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] thead th')).toHaveLength(6);
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] thead th')).toHaveLength(7);
   });
 
   it('shows selected artifact evidence and a truthful export selection summary', async () => {
@@ -1302,8 +1302,8 @@ describe('live renderer pages', () => {
   it('offers live typed filters and uses a complete semantic artifact table', async () => {
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
-    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] th')).toHaveLength(6);
-    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] tbody td')).toHaveLength(6);
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] th')).toHaveLength(7);
+    expect(container?.querySelectorAll('table[aria-label="Recovered artifacts"] tbody td')).toHaveLength(7);
     expect(container?.querySelectorAll('.results-filters input[type="checkbox"]')).toHaveLength(0);
     expect(container?.textContent).not.toContain('Save filter');
     expect(container?.textContent).toContain('Content-signature recovery');

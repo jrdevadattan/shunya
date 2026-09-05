@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, HardDrive, Loader2, ShieldAlert, ShieldCheck, Usb } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { BlockDevice, EraseProgressEvent, EraseResult } from '../../main/secure-erase/types.js';
+import type { BlockDevice, EraseResult } from '../../main/secure-erase/types.js';
 import { ApplicationShell } from './ApplicationShell.js';
 import { CertificatePanel } from '../features/certificate/CertificatePanel.js';
+import { trackOperation, useOperationByKind } from '../features/operations/operations-store.js';
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${bytes} B`;
 }
-
-type Phase = 'idle' | 'running' | 'done' | 'error';
 
 export function FlashErasePage() {
   const [devices, setDevices] = useState<BlockDevice[] | null>(null);
@@ -20,11 +19,15 @@ export function FlashErasePage() {
   const [selected, setSelected] = useState<string>();
   const [dryRun, setDryRun] = useState(true);
   const [confirmText, setConfirmText] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [progress, setProgress] = useState<EraseProgressEvent>();
-  const [result, setResult] = useState<EraseResult>();
-  const [runError, setRunError] = useState<string>();
-  const progressRef = useRef<HTMLDivElement>(null);
+
+  // The running/finished wipe lives in the global store, so progress and the
+  // result survive navigating away and back while the wipe runs in the main process.
+  const latestWipe = useOperationByKind('wipe');
+  const op = latestWipe && latestWipe.device === selected ? latestWipe : undefined;
+  const phase = op ? op.status : 'idle';
+  const running = phase === 'running';
+  const result = op?.status === 'done' ? (op.result as EraseResult | undefined) : undefined;
+  const runError = op?.status === 'error' ? op.error : undefined;
 
   async function refresh() {
     setLoadError(undefined);
@@ -37,31 +40,26 @@ export function FlashErasePage() {
     }
   }
 
+  useEffect(() => { void refresh(); }, []);
+  // Returning to this screen (e.g. from the background-tasks widget) restores the
+  // device whose wipe is in flight, so the live progress is shown again.
   useEffect(() => {
-    void refresh();
-    const unsubscribe = window.secureErase.onProgress((event) => setProgress(event as EraseProgressEvent));
-    return unsubscribe;
-  }, []);
+    if (!selected && latestWipe?.device) setSelected(latestWipe.device);
+  }, [latestWipe, selected]);
 
   const target = devices?.find((device) => device.device === selected);
   const confirmed = Boolean(target) && confirmText === target?.device;
   const showElevationHint = !dryRun && elevated === false;
-  const canErase = confirmed && phase !== 'running';
+  const canErase = confirmed && !running;
 
   async function erase() {
     if (!target || !confirmed) return;
-    setPhase('running');
-    setRunError(undefined);
-    setResult(undefined);
-    setProgress({ device: target.device, method: 'csprng_overwrite', percent: 0, statusText: 'Starting…' });
     try {
-      const outcome = await window.secureErase.csprngErase(target.device, { confirmation: target.device, dryRun });
-      setResult(outcome);
-      setPhase('done');
-    } catch (cause) {
-      setRunError(cause instanceof Error ? cause.message : 'The erase could not be completed.');
-      setPhase('error');
-    }
+      await trackOperation(
+        { id: `wipe:${target.device}`, kind: 'wipe', label: `${dryRun ? 'Dry run' : 'Erasing'} ${target.model}`, route: '/secure-erase', device: target.device },
+        window.secureErase.csprngErase(target.device, { confirmation: target.device, dryRun }),
+      );
+    } catch { /* error surfaces via the store op */ }
   }
 
   return (
@@ -78,7 +76,7 @@ export function FlashErasePage() {
               a NIST SP 800-88 <strong>Clear</strong> method. The system disk can never be selected.
             </p>
           </div>
-          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={phase === 'running'}>Rescan devices</button>
+          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}>Rescan devices</button>
         </header>
 
         {loadError ? <p role="alert" className="form-error">{loadError}</p> : null}
@@ -97,8 +95,8 @@ export function FlashErasePage() {
                 data-eligible={eligible || undefined}
                 data-active={active || undefined}
                 aria-pressed={active}
-                disabled={!eligible || phase === 'running'}
-                onClick={() => { setSelected(device.device); setConfirmText(''); setResult(undefined); setPhase('idle'); }}
+                disabled={!eligible || running}
+                onClick={() => { setSelected(device.device); setConfirmText(''); }}
               >
                 <span className="flash-erase__device-icon" aria-hidden="true">{device.removable ? <Usb /> : <HardDrive />}</span>
                 <span className="flash-erase__device-body">
@@ -127,7 +125,7 @@ export function FlashErasePage() {
             </div>
 
             <label className="flash-erase__dryrun">
-              <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} disabled={phase === 'running'} />
+              <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} disabled={running} />
               <span>
                 <strong>Dry run (safe)</strong>
                 <small>Writes a real CSPRNG sample to a scratch file to prove the pipeline. The device is <em>not</em> changed. Uncheck to perform the real, irreversible wipe.</small>
@@ -151,7 +149,7 @@ export function FlashErasePage() {
                     placeholder={target.device}
                     spellCheck={false}
                     autoComplete="off"
-                    disabled={phase === 'running'}
+                    disabled={running}
                   />
                 </div>
               </div>
@@ -161,20 +159,20 @@ export function FlashErasePage() {
               <button
                 type="button"
                 className="button button--danger"
-                disabled={dryRun ? phase === 'running' : !canErase}
+                disabled={dryRun ? running : !canErase}
                 onClick={() => void erase()}
               >
                 <ShieldAlert aria-hidden="true" />
-                {phase === 'running' ? 'Working…' : dryRun ? 'Run dry run' : `Erase ${target.model}`}
+                {running ? 'Working…' : dryRun ? 'Run dry run' : `Erase ${target.model}`}
               </button>
             </div>
 
-            {phase === 'running' || phase === 'done' ? (
-              <div className="flash-erase__progress" ref={progressRef}>
-                <div className={`job-progress__bar${phase === 'running' ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Erase progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress?.percent ?? 0)}>
-                  <span style={{ width: `${progress?.percent ?? 0}%` }} />
+            {running || phase === 'done' ? (
+              <div className="flash-erase__progress">
+                <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Erase progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(op?.percent ?? 0)}>
+                  <span style={{ width: `${op?.percent ?? 0}%` }} />
                 </div>
-                <p className="flash-erase__status">{progress?.statusText ?? 'Working…'} {progress?.percent !== null && progress?.percent !== undefined ? `(${Math.round(progress.percent)}%)` : ''}</p>
+                <p className="flash-erase__status">{op?.statusText ?? 'Working…'} ({Math.round(op?.percent ?? 0)}%)</p>
               </div>
             ) : null}
 

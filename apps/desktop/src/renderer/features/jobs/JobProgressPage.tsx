@@ -1,8 +1,8 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
 import { CapabilityBanner, StageTimeline, SurfaceCard, type TimelineStage } from '@recovery/ui';
-import { ArrowRight, CheckCircle2, Clock3, Database, FolderLock, HardDrive, Pause, Play, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, Database, FileText, Files, FolderLock, HardDrive, Pause, Play, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { activeJobId, activeWorkspace } from '../../application-state.js';
 import { ReadErrorMap } from './ReadErrorMap.js';
 
@@ -35,6 +35,7 @@ export function JobProgressPage() {
   const [commandError, setCommandError] = useState<string>();
   const terminal = useRef(false);
   const requestGeneration = useRef(0);
+  const reportKicked = useRef(false);
   const logRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
@@ -64,6 +65,12 @@ export function JobProgressPage() {
         setPollError(undefined);
         terminal.current = terminalStages.has(nextStatus.stage);
         scheduleNext = !terminal.current;
+        // Auto-generate the recovery report once the job completes, so a finished
+        // recovery always has a report ready without an extra manual step.
+        if (nextStatus.stage === 'completed' && !reportKicked.current) {
+          reportKicked.current = true;
+          void window.recoveryApi.generateReport(caseId).catch(() => undefined);
+        }
       } catch (cause) {
         if (active) setPollError(message(cause));
       } finally {
@@ -101,6 +108,19 @@ export function JobProgressPage() {
   return <section className="job-progress">
     <header className="page-heading job-progress__heading"><div><p className="eyebrow">Live recovery workspace</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p className="page-heading__description">Daemon-reported recovery state for job {status?.jobId}. Values that are not exposed remain visibly unavailable.</p></div>{status ? <div className="job-progress__headline" data-unavailable={progress === undefined || undefined}><strong>{progress === undefined ? 'Stage position unavailable' : `${progress}%`}</strong><span>{progress === undefined ? 'This state does not report a workflow position' : 'Stage-based position, not measured bytes'}</span></div> : null}</header>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
+    {status?.stage === 'completed' ? (
+      <div className="job-progress__complete" role="status">
+        <CheckCircle2 aria-hidden="true" />
+        <div className="job-progress__complete-body">
+          <strong>Recovery complete</strong>
+          <p>Recovered files are indexed and a report was generated automatically. Review the files, then export what you need.</p>
+        </div>
+        <div className="job-progress__complete-actions">
+          <Link className="button button--primary" to={`/cases/${caseId}/results`}><Files aria-hidden="true" />Review recovered files</Link>
+          <Link className="button button--secondary" to={`/cases/${caseId}/reports`}><FileText aria-hidden="true" />Open report</Link>
+        </div>
+      </div>
+    ) : null}
     {status ? <>
       <SurfaceCard className="job-progress__timeline" title="Recovery stages" description="Completed, active, and upcoming stages derived from the current daemon stage.">
         <StageTimeline stages={timelineFor(status.stage)} ariaLabel="Recovery stage timeline" />
