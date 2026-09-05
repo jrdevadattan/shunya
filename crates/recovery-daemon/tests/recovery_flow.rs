@@ -228,7 +228,10 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
     assert_eq!(preview["policy"], "derivative_required");
     assert!(preview.get("activeContent").is_none());
 
-    let export_error = daemon.rpc_error(
+    // The source is a read-only image file, so exporting to another folder on
+    // the same volume is allowed; only writing into the image or the case
+    // workspace is refused (covered separately). The export must verify hashes.
+    let export = daemon.rpc(
         "export.start",
         json!({
             "artifactIds": [artifact_id],
@@ -236,7 +239,12 @@ fn daemon_runs_read_only_raw_recovery_through_export_and_report() {
             "acknowledgeUnsafe": false
         }),
     );
-    assert_eq!(export_error["code"], "EXPORT_DESTINATION_NOT_SEPARATE");
+    let exported = export["items"].as_array().unwrap();
+    assert_eq!(exported.len(), 1);
+    assert_eq!(exported[0]["artifactId"], artifact_id);
+    assert_eq!(exported[0]["verified"], true);
+    assert_eq!(exported[0]["sha256"], artifact["sha256"]);
+    assert!(Path::new(exported[0]["outputPath"].as_str().unwrap()).is_file());
 
     let report = daemon.rpc("report.generate", json!({ "caseId": case_id }));
     let report_json = report["jsonPath"].as_str().unwrap();
@@ -596,9 +604,9 @@ fn unverified_threat_and_preview_capabilities_are_never_claimed() {
 }
 
 #[test]
-fn renderer_cannot_bypass_same_device_export_check() {
+fn renderer_cannot_export_into_the_case_workspace() {
     let temporary = tempdir().unwrap();
-    let (mut daemon, _, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
+    let (mut daemon, case_path, _, _, job_id, _) = setup_job(temporary.path(), 2 * 1024 * 1024);
     daemon.rpc("job.start", json!({ "jobId": job_id }));
     wait_for_stage(&mut daemon, &job_id, "completed");
     let artifact_id =
@@ -606,15 +614,18 @@ fn renderer_cannot_bypass_same_device_export_check() {
             .as_str()
             .unwrap()
             .to_owned();
+    // Same volume is fine for an image-file source, but the destination may never
+    // sit inside the case workspace (or the source image). The workspace root is
+    // always an ancestor of the job root, so this overlaps whatever the layout.
     let error = daemon.rpc_error(
         "export.start",
         json!({
             "artifactIds": [artifact_id],
-            "destinationPath": temporary.path().join("same-volume-export"),
+            "destinationPath": case_path,
             "acknowledgeUnsafe": false
         }),
     );
-    assert_eq!(error["code"], "EXPORT_DESTINATION_NOT_SEPARATE");
+    assert_eq!(error["code"], "EXPORT_DESTINATION_OVERLAP");
 }
 
 #[test]

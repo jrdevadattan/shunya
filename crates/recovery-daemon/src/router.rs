@@ -626,15 +626,15 @@ impl DaemonState {
             });
         }
         let destination = params.destination_path.clone();
-        let source_device = physical_device_evidence(&source.canonical_path)
-            .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
+        // The export source is always a read-only image file, so its identity is
+        // the file itself rather than the disk that happens to host it. Only the
+        // destination needs daemon-derived physical evidence.
         let destination_device = physical_device_evidence(&destination)
             .map_err(|error| ("EXPORT_DESTINATION_UNVERIFIED", error.to_string()))?;
         let (source_physical_id, destination_physical_id) = validate_export_destination(
             &source.canonical_path,
             &root,
             &destination,
-            &source_device,
             &destination_device,
         )?;
         let exported = run_export(ExportRequest {
@@ -1755,7 +1755,6 @@ fn validate_export_destination(
     source: &Path,
     case_root: &Path,
     destination: &Path,
-    source_device: &PhysicalDeviceEvidence,
     destination_device: &PhysicalDeviceEvidence,
 ) -> Result<(String, String), (&'static str, String)> {
     let source = normalized_target(source)
@@ -1771,24 +1770,19 @@ fn validate_export_destination(
             .into(),
         ));
     }
-    if source_device.backing != PhysicalBacking::ProvenPhysical
-        || destination_device.backing != PhysicalBacking::ProvenPhysical
-    {
+    if destination_device.backing != PhysicalBacking::ProvenPhysical {
         return Err((
             "EXPORT_DESTINATION_UNVERIFIED",
-            "The daemon cannot prove that source and destination have distinct non-virtual physical backing"
+            "The daemon cannot prove that the export destination has non-virtual physical backing"
                 .into(),
         ));
     }
-    if source_device.stable_id == destination_device.stable_id {
-        return Err((
-            "EXPORT_DESTINATION_NOT_SEPARATE",
-            "The daemon resolved the source image and destination to the same physical device"
-                .into(),
-        ));
-    }
+    // The source is a read-only image file, not a live device: writing recovered
+    // files elsewhere on the same disk cannot alter it, and the overlap check above
+    // already protects the image and the case workspace. Its identity is therefore
+    // the file itself, which can never collide with a physical destination id.
     Ok((
-        source_device.stable_id.clone(),
+        format!("image-file:{}", source.display()),
         destination_device.stable_id.clone(),
     ))
 }
@@ -2088,59 +2082,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn export_policy_accepts_separate_daemon_derived_physical_devices() {
-        let source_device = PhysicalDeviceEvidence {
-            stable_id: "physical-disk:0".into(),
-            backing: PhysicalBacking::ProvenPhysical,
-        };
+    fn export_policy_accepts_a_separate_physical_destination() {
         let destination_device = PhysicalDeviceEvidence {
             stable_id: "physical-disk:1".into(),
             backing: PhysicalBacking::ProvenPhysical,
         };
-        let result = validate_export_destination(
+        let (source_id, destination_id) = validate_export_destination(
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/safe-export"),
-            &source_device,
             &destination_device,
-        );
+        )
+        .unwrap();
 
-        assert_eq!(
-            result.unwrap(),
-            ("physical-disk:0".into(), "physical-disk:1".into())
-        );
+        assert!(source_id.starts_with("image-file:"), "{source_id}");
+        assert_eq!(destination_id, "physical-disk:1");
+        assert_ne!(source_id, destination_id);
     }
 
     #[test]
-    fn export_policy_refuses_same_device_and_case_or_source_overlap() {
-        let source_device = PhysicalDeviceEvidence {
+    fn export_policy_allows_same_disk_for_an_image_source_but_refuses_overlap() {
+        let device = PhysicalDeviceEvidence {
             stable_id: "physical-disk:0".into(),
             backing: PhysicalBacking::ProvenPhysical,
         };
-        let same_device = PhysicalDeviceEvidence {
-            stable_id: "physical-disk:0".into(),
-            backing: PhysicalBacking::ProvenPhysical,
-        };
-        let separate_device = PhysicalDeviceEvidence {
-            stable_id: "physical-disk:1".into(),
-            backing: PhysicalBacking::ProvenPhysical,
-        };
-        let same_device = validate_export_destination(
+        // A read-only image file may live on the same disk as the export
+        // destination; the image's identity never collides with the disk id, so
+        // the exporter's same-device guard cannot fire either.
+        let (source_id, destination_id) = validate_export_destination(
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/safe-export"),
-            &source_device,
-            &same_device,
+            &device,
         )
-        .unwrap_err();
-        assert_eq!(same_device.0, "EXPORT_DESTINATION_NOT_SEPARATE");
+        .unwrap();
+        assert_ne!(source_id, destination_id);
 
         let case_overlap = validate_export_destination(
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/case/exports"),
-            &source_device,
-            &separate_device,
+            &device,
         )
         .unwrap_err();
         assert_eq!(case_overlap.0, "EXPORT_DESTINATION_OVERLAP");
@@ -2149,19 +2131,14 @@ mod tests {
             Path::new("/evidence/source.raw"),
             Path::new("/case"),
             Path::new("/evidence"),
-            &source_device,
-            &separate_device,
+            &device,
         )
         .unwrap_err();
         assert_eq!(source_overlap.0, "EXPORT_DESTINATION_OVERLAP");
     }
 
     #[test]
-    fn export_policy_refuses_virtual_composite_and_unknown_backing() {
-        let physical = PhysicalDeviceEvidence {
-            stable_id: "physical-disk:0".into(),
-            backing: PhysicalBacking::ProvenPhysical,
-        };
+    fn export_policy_refuses_virtual_composite_and_unknown_destination_backing() {
         for backing in [
             PhysicalBacking::Virtual,
             PhysicalBacking::Composite,
@@ -2171,17 +2148,14 @@ mod tests {
                 stable_id: format!("unproven-{backing:?}"),
                 backing,
             };
-            for (source, destination) in [(&physical, &unproven), (&unproven, &physical)] {
-                let error = validate_export_destination(
-                    Path::new("/evidence/source.raw"),
-                    Path::new("/case"),
-                    Path::new("/safe-export"),
-                    source,
-                    destination,
-                )
-                .unwrap_err();
-                assert_eq!(error.0, "EXPORT_DESTINATION_UNVERIFIED");
-            }
+            let error = validate_export_destination(
+                Path::new("/evidence/source.raw"),
+                Path::new("/case"),
+                Path::new("/safe-export"),
+                &unproven,
+            )
+            .unwrap_err();
+            assert_eq!(error.0, "EXPORT_DESTINATION_UNVERIFIED");
         }
     }
 
