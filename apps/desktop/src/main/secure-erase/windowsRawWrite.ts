@@ -130,7 +130,17 @@ public static class RawWipe {
 }
 "@
 Add-Type -TypeDefinition $src -Language CSharp
-[RawWipe]::Run($Target, $TotalBytes, $ChunkSize, $volumes)
+try {
+  [RawWipe]::Run($Target, $TotalBytes, $ChunkSize, $volumes)
+} finally {
+  # Windows caches the partition table and keeps showing the old layout after a
+  # raw overwrite until the disk is rescanned. Force it here (also after an
+  # interrupted or failed write, since partial destruction is real) so Disk
+  # Management shows the disk as RAW / unallocated immediately.
+  if ($Target -match 'PhysicalDrive(\d+)') {
+    try { Update-Disk -Number ([int]$Matches[1]) -ErrorAction SilentlyContinue } catch {}
+  }
+}
 `;
 
 function friendlyWin32(detail: string): string | null {

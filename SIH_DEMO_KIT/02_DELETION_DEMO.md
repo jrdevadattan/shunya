@@ -56,7 +56,8 @@
 > *(say)* "This is the compliance artefact recyclers need — a certificate that proves the wipe **and cannot be forged or altered**. Edit one field and verification fails. That closes the loop."
 
 **6. (Optional) Prove destruction** *(do)*
-- Reopen **Disk Management** → the SanDisk now shows **unallocated / RAW** — partitions and files gone.
+- Reopen **Disk Management** → the SanDisk now shows **unallocated / RAW** — partitions and files gone. The app rescans the disk automatically when the wipe finishes; if Disk Management was already open and still shows the old partition, press **F5** (Action → Rescan Disks) or re‑plug the USB so it re‑reads the now‑random partition table.
+- **To reuse the pendrive for another run** (even after an interrupted wipe it has no filesystem): rescan, right‑click the unallocated space → **New Simple Volume** → quick format, then copy fresh dummy files before the next demo.
 
 **7. Close** *(say)*
 > "Recovery for investigation, provable secure destruction for safe disposal — both aligned to international standards, both fully offline."
