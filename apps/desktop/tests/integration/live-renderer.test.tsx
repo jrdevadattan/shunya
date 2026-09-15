@@ -774,7 +774,8 @@ describe('live renderer pages', () => {
     expect(container.textContent).not.toContain('Generic scan workflow');
   });
 
-  it('compares scan presets without invented timing and locks unsupported file-family controls', async () => {
+  it('compares scan presets without invented timing and offers every file family by default', async () => {
+    sessionStorage.removeItem('recovery:case-live:families');
     await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
 
     const comparison = container?.querySelector('table[aria-label="Scan preset comparison"]');
@@ -783,7 +784,36 @@ describe('live renderer pages', () => {
     expect(comparison?.textContent).toContain('Full Scan');
     expect(comparison?.textContent).toContain('Advanced');
     expect(comparison?.textContent).toContain('No duration estimate available');
-    expect(button('Choose file families').disabled).toBe(true);
+    const families = Array.from(container?.querySelectorAll<HTMLInputElement>('.family-selector input[type="checkbox"]') ?? []);
+    expect(families).toHaveLength(6);
+    expect(families.every((checkbox) => checkbox.checked)).toBe(true);
+    expect(container?.textContent).toContain('6 of 6 families');
+    expect(container?.textContent).toContain('Never previewed');
+  });
+
+  it('sends the chosen file families with the job and refuses an empty selection', async () => {
+    sessionStorage.removeItem('recovery:case-live:jobId');
+    sessionStorage.removeItem('recovery:case-live:families');
+    sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
+    sessionStorage.setItem('recovery:case-live:goal', 'recover_everything');
+    const createRecoveryJob = vi.fn().mockResolvedValue({ jobId: 'job-families', caseId: 'case-live', sourceId: 'source-live', goal: 'recover_everything', preset: 'full', stage: 'draft', createdAt, updatedAt: createdAt });
+    Object.assign(window, { recoveryApi: api({ createRecoveryJob, startJob: vi.fn().mockResolvedValue({ ...status, jobId: 'job-families', stage: 'preflight', partitions: null }) }) });
+    await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
+
+    await click(button('Clear'));
+    expect(container?.textContent).toContain('Select at least one family');
+    const fullCard = Array.from(container?.querySelectorAll('article') ?? []).find((element) => element.textContent?.includes('Full Scan'));
+    expect((fullCard?.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+
+    const checkbox = (label: string) => Array.from(container?.querySelectorAll<HTMLLabelElement>('.family-card') ?? []).find((element) => element.textContent?.includes(label))?.querySelector('input') as HTMLInputElement;
+    await click(checkbox('Documents'));
+    await click(checkbox('Images'));
+    expect(container?.textContent).toContain('2 of 6 families');
+    expect(JSON.parse(sessionStorage.getItem('recovery:case-live:families') ?? '[]')).toEqual(['documents', 'images']);
+
+    await click(fullCard?.querySelector('button') as HTMLButtonElement);
+    expect(createRecoveryJob).toHaveBeenCalledWith({ caseId: 'case-live', sourceId: 'source-live', goal: 'recover_everything', preset: 'full', families: ['documents', 'images'] });
+    expect(sessionStorage.getItem('recovery:case-live:jobId')).toBe('job-families');
   });
 
   it('shows destination topology as unverified and keeps assessment controls disabled', async () => {
@@ -1309,10 +1339,26 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('Content-signature recovery');
   });
 
-  it('does not present unsupported file-family controls as active scan inputs', async () => {
-    await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
-    expect(container?.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
-    expect(container?.textContent).toContain('File-family selection is unavailable');
+  it('groups results by file type and applies the family filter through the typed artifact query', async () => {
+    const docx: RecoveryArtifact = { ...artifact, artifactId: 'artifact-docx', displayName: 'Recovered DOCX 0000002', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', threatStatus: 'no_rule_match' };
+    const video: RecoveryArtifact = { ...artifact, artifactId: 'artifact-mp4', displayName: 'Recovered MP4 0000003', extension: 'mp4', mimeType: 'video/mp4', threatStatus: 'no_rule_match' };
+    const queryArtifacts = vi.fn().mockResolvedValue({ items: [artifact, docx, video], nextCursor: null, totalCount: 3 });
+    Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
+    await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
+    await findText('Recovered DOCX 0000002');
+
+    const typeFilters = container?.querySelector('.result-filter-list--families');
+    expect(typeFilters?.textContent).toContain('Images');
+    expect(typeFilters?.textContent).toContain('Documents');
+    expect(typeFilters?.textContent).toContain('Audio & video');
+    expect(container?.textContent).toContain('3 file types');
+    const badges = Array.from(container?.querySelectorAll('.type-badge') ?? []).map((element) => element.textContent);
+    expect(badges).toEqual(['JPEG', 'DOCX', 'MP4']);
+
+    await click(button('Documents'));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(queryArtifacts).toHaveBeenLastCalledWith({ search: undefined, family: 'documents', cursor: undefined, pageSize: 100 });
+    expect(container?.textContent).toContain('filtered by Documents');
   });
 
   it('renders export success and topology refusal from export.start', async () => {

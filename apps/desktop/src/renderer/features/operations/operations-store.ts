@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-export type OperationKind = 'wipe' | 'capture' | 'recovery';
+export type OperationKind = 'wipe' | 'capture' | 'recovery' | 'deletion';
 export type OperationStatus = 'running' | 'done' | 'error';
 
 export interface OperationState {
@@ -125,6 +125,10 @@ export function initOperationsBridge(): void {
   window.secureErase.onCaptureProgress((event) => {
     const e = event as { device?: string; percent?: number | null; statusText?: string };
     if (e?.device) updateByDevice('capture', e.device, e.percent, e.statusText);
+  });
+  window.deletionApi?.onProgress((event) => {
+    const e = event as { targetPath?: string; percent?: number | null; statusText?: string };
+    if (e?.targetPath) updateByDevice('deletion', e.targetPath, e.percent, e.statusText);
   });
 }
 

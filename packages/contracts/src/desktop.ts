@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   CapabilityFindingSchema,
   DecimalByteStringSchema,
+  FileFamilySchema,
   JobStageSchema,
   RecoveryArtifactSchema,
   RecoveryCaseSchema,
@@ -92,10 +93,14 @@ export const PartitionScanResultSchema = z.object({
 export const JobStatusSchema = RecoveryJobSchema.extend({
   limitations: z.array(CapabilityLimitationSchema),
   partitions: PartitionScanResultSchema.nullable(),
+  // File families the carving stage searches for; absent on daemons that predate family selection.
+  families: z.array(FileFamilySchema).optional(),
 });
 export const ArtifactQuerySchema = z.object({
   search: z.string().optional(), method: z.string().optional(), status: z.string().optional(),
   threat: z.string().optional(), mimeType: z.string().optional(), partitionId: z.string().optional(),
+  // A FileFamily value, or 'other' for artifacts whose detected type belongs to no family.
+  family: z.string().optional(),
   // Source filesystem sensitivity is not typed, so folder prefixes use SQLite NOCASE segment semantics on every platform to support the approved Windows flow.
   originalPathPrefix: z.string().transform((value) => value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\/{2,}/g, '/')).pipe(z.string().min(1)).optional(),
   minSize: z.number().int().nonnegative().optional(), maxSize: z.number().int().nonnegative().optional(),
@@ -132,6 +137,8 @@ export const CreateCaseInputSchema = z.object({
 export const AddImageSourceInputSchema = z.object({ path: z.string().min(1) });
 export const CreateRecoveryJobInputSchema = z.object({
   caseId: z.string().min(1), sourceId: z.string().min(1), goal: RecoveryGoalSchema, preset: ScanPresetSchema,
+  // File families to carve for. Omitted means every family the engine supports.
+  families: z.array(FileFamilySchema).min(1).optional(),
 });
 export const ExportArtifactsInputSchema = z.object({
   artifactIds: z.array(z.string().min(1)).min(1), destinationPath: z.string().min(1), acknowledgeUnsafe: z.boolean(),

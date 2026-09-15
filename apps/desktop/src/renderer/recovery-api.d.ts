@@ -3,6 +3,12 @@ import type { createRecoveryApi } from '../preload/recovery-api.js';
 declare global {
   interface Window {
     recoveryApi: ReturnType<typeof createRecoveryApi>;
+    deletionApi: {
+      chooseFolder(): Promise<string | null>;
+      plan(targetPath: string): Promise<import('../main/secure-erase/folderDeletion.js').DeletionPlan>;
+      execute(planId: string, options: { confirmation: string }): Promise<import('../main/secure-erase/folderDeletion.js').DeletionResult>;
+      onProgress(callback: (event: import('../main/secure-erase/folderDeletion.js').DeletionProgressEvent) => void): () => void;
+    };
     certificates: {
       generate(record: import('../main/certificate.js').CertificateRecord): Promise<import('../main/certificate.js').SignedCertificate>;
       verify(cert: import('../main/certificate.js').SignedCertificate): Promise<{ valid: boolean; reason?: string }>;

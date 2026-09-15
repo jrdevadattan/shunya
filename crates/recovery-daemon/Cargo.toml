@@ -28,6 +28,7 @@ source-inventory = { path = "../source-inventory" }
 threat-scan = { path = "../threat-scan" }
 tokio.workspace = true
 tokio-util.workspace = true
+tool-runner = { path = "../tool-runner" }
 uuid.workspace = true
 validation = { path = "../validation" }
 

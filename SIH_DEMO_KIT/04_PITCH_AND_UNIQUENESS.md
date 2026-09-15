@@ -45,7 +45,7 @@
 
 | Show live (works today) | Say is roadmap (don't fake) |
 |---|---|
-| Read‑only image recovery + JPEG carving | Multi‑format carving (PhotoRec) |
+| Read‑only image recovery + multi‑format carving (photos, PDF/Office, archives, video/audio, SQLite, executables) with selectable file families | Bundled PhotoRec binary (adapter is wired and tested; GPL redistribution review pending) |
 | SHA‑256 hashing + verified export + report | Metadata recovery / original filenames (Sleuth Kit) |
 | **Real YARA‑X** malware flag on recovered file | Memory analysis (Volatility) |
 | CSPRNG flash wipe (NIST Clear) + **tamper‑proof signed certificate** | Firmware Sanitize (Purge‑level assurance) |

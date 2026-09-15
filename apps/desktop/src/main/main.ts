@@ -8,6 +8,7 @@ import { registerIpcHandlers } from './ipc-handlers.js';
 import { hardenWindow } from './security.js';
 import { buildMainWindowOptions } from './windows.js';
 import { registerSecureEraseHandlers } from './secure-erase/ipc.js';
+import { registerDeletionHandlers } from './secure-erase/deletionIpc.js';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -48,6 +49,7 @@ app.whenReady().then(async () => {
   const daemon = await startDaemon();
   registerIpcHandlers(daemon);
   registerSecureEraseHandlers();
+  registerDeletionHandlers();
   await createMainWindow();
 });
 
@@ -73,7 +75,16 @@ async function startDaemon(): Promise<DaemonSupervisor | undefined> {
       return undefined;
     }
     console.info(`[recovery] Using development recovery daemon at ${devDaemon.executablePath}`);
-    return startSupervisor(devDaemon);
+    // In development the verified tool catalog lives in the repository, not next
+    // to the daemon binary, so point the daemon at it explicitly.
+    const repoRoot = path.resolve(app.getAppPath(), '..', '..');
+    return startSupervisor({
+      ...devDaemon,
+      environment: {
+        RECOVERY_TOOLS_ROOT: path.join(repoRoot, 'tools'),
+        RECOVERY_TOOLS_MANIFEST: path.join(repoRoot, 'tools', 'manifests', 'tools.lock.json'),
+      },
+    });
   }
 
   const bundledResources = path.join(process.resourcesPath, 'resources');
@@ -91,7 +102,7 @@ async function startDaemon(): Promise<DaemonSupervisor | undefined> {
 // Starts a supervisor and degrades loudly (returns undefined -> DAEMON_UNAVAILABLE)
 // instead of crashing the app when the daemon binary is missing or fails verification.
 async function startSupervisor(
-  options: { executablePath: string; expectedSha256: string },
+  options: { executablePath: string; expectedSha256: string; environment?: NodeJS.ProcessEnv },
 ): Promise<DaemonSupervisor | undefined> {
   try {
     const daemon = new DaemonSupervisor(options);

@@ -8,8 +8,16 @@ export const RecentDeletionCaseSchema = z.object({
   title: z.string(),
   targetPath: z.string(),
   totalFiles: z.number(),
-  markerPath: z.string(),
   createdAt: z.string(),
+  // Legacy records (the old marker-file stub) only carried the fields above.
+  markerPath: z.string().optional(),
+  status: z.enum(['completed', 'completed_with_failures']).optional(),
+  filesDeleted: z.number().optional(),
+  bytesOverwritten: z.number().optional(),
+  failures: z.number().optional(),
+  deviceModel: z.string().optional(),
+  auditLogPath: z.string().optional(),
+  completedAt: z.string().optional(),
 });
 
 export type RecentDeletionCase = z.infer<typeof RecentDeletionCaseSchema>;
@@ -18,11 +26,11 @@ export function loadRecentDeletions(storage: Storage = localStorage): RecentDele
   try {
     const raw = storage.getItem(RECENT_DELETIONS_STORAGE_KEY);
     if (!raw) return [];
-    const value: unknown = JSON.parse(raw);
-    if (!Array.isArray(value)) return [];
-    return value.flatMap((entry) => {
-      const parsed = RecentDeletionCaseSchema.safeParse(entry);
-      return parsed.success ? [parsed.data] : [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      const result = RecentDeletionCaseSchema.safeParse(entry);
+      return result.success ? [result.data] : [];
     }).slice(0, MAX_RECENT_DELETIONS);
   } catch {
     return [];
@@ -33,12 +41,12 @@ export function rememberRecentDeletion(deletionCase: RecentDeletionCase, storage
   const parsedCase = RecentDeletionCaseSchema.parse(deletionCase);
   const recentDeletions = [
     parsedCase,
-    ...loadRecentDeletions(storage).filter((entry) => entry.targetPath !== parsedCase.targetPath),
+    ...loadRecentDeletions(storage).filter((entry) => entry.id !== parsedCase.id),
   ].slice(0, MAX_RECENT_DELETIONS);
   try {
     storage.setItem(RECENT_DELETIONS_STORAGE_KEY, JSON.stringify(recentDeletions));
   } catch {
-    // Ignore storage errors
+    // Storage is a convenience; the audit log in the main process is the record.
   }
   return recentDeletions;
 }

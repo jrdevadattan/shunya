@@ -42,11 +42,27 @@ impl ValidatorRegistry {
             )
         } else if bytes.starts_with(b"PK\x03\x04") {
             let (state, findings) = validators::zip_container::validate(&bytes);
+            let (mime_type, active) = validators::containers::zip_mime_type(&bytes);
             (
                 state,
                 findings,
-                Some("application/zip"),
-                SafePreviewKind::MetadataOnly,
+                Some(mime_type),
+                if active {
+                    SafePreviewKind::Blocked
+                } else {
+                    SafePreviewKind::MetadataOnly
+                },
+            )
+        } else if let Some(detection) = validators::containers::detect(&bytes) {
+            (
+                detection.state,
+                detection.findings,
+                Some(detection.mime_type),
+                if detection.active_content {
+                    SafePreviewKind::Blocked
+                } else {
+                    SafePreviewKind::MetadataOnly
+                },
             )
         } else if validators::text::looks_like_text(&bytes) {
             let (state, findings) = validators::text::validate(&bytes);

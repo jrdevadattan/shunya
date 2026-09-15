@@ -21,9 +21,15 @@ certificate, and refreshes the interface.
   detects any modification. Certificates can be saved as a self‑contained HTML
   document and printed to PDF.
 - **Read‑only recovery with chain of custody.** RAW/dd images, GPT/MBR discovery,
-  bounded JPEG signature carving, deterministic validation, SHA‑256 of the source
-  before/after, verified export (refuses a same‑device destination), and JSON/Markdown
-  reporting — all offline.
+  **multi‑format signature carving** (JPEG, PNG, GIF, BMP, WebP, PDF, DOCX/XLSX/PPTX,
+  DOC/XLS/PPT, ODT, ZIP, 7z, RAR, GZIP, MP4/MOV/M4A, MP3, WAV, AVI, SQLite, EXE/DLL, ELF)
+  bounded by each format's own structure, operator‑selectable file families,
+  per‑format structural validation, SHA‑256 of the source before/after, verified export
+  (refuses a same‑device destination), and JSON/Markdown reporting — all offline.
+- **PhotoRec adapter.** When a verified PhotoRec binary is vendored through the tool
+  manifest, the daemon runs it sandboxed (no shell, no network, hash re‑checked before
+  every spawn), preserves its transcript, and maps its DFXML byte runs onto the same
+  evidence model. Without it the built‑in engine runs and the report says so.
 - **Refreshed UI.** A premium visual foundation (depth, gradients, motion), an
   animated live‑recovery view, and honest "unavailable" states for capabilities not
   in this build.
@@ -39,9 +45,12 @@ show a SmartScreen warning.
 
 ## Honest capability limits
 
-The packaged slice recovers content by **JPEG signature carving** from RAW images; it
-does not restore original filenames/folders and reports The Sleuth Kit, PhotoRec, and
-broader tooling as **unavailable** (shown honestly in the UI, never faked). Volatility
+The packaged slice recovers content by **multi‑format signature carving** from RAW
+images (21 format groups across images, documents, archives, audio/video, databases
+and executables); it does not restore original filenames/folders and reports The Sleuth
+Kit as **unavailable** (shown honestly in the UI, never faked). PhotoRec is used only
+when a verified binary has been vendored through `tools/manifests`; otherwise the
+built‑in engine runs and the limitation says so. Volatility
 memory analysis and physical‑device acquisition are not in this build. The CSPRNG
 overwrite is a **Clear**; firmware **Sanitize** (ATA Secure Erase / NVMe Sanitize) for
 **Purge**‑level assurance is roadmap. SSD TRIM, overwriting, and physical damage can make

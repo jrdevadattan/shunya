@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Check, HardDriveDownload, Loader2, ShieldAlert, TriangleAlert, X } from 'lucide-react';
+import { Check, HardDriveDownload, Loader2, ShieldAlert, Trash2, TriangleAlert, X } from 'lucide-react';
 import { dismissOperation, useOperations, type OperationState } from './operations-store.js';
 
 const KIND_ICON = {
   wipe: ShieldAlert,
   capture: HardDriveDownload,
   recovery: Loader2,
+  deletion: Trash2,
 } as const;
 
 function overallPercent(running: OperationState[]): number {

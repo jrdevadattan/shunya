@@ -10,6 +10,8 @@ export const RecoveryGoalSchema = z.enum([
   'recently_deleted', 'specific_target', 'recover_everything', 'partition_loss', 'damaged_device', 'memory_analysis',
 ]);
 export const ScanPresetSchema = z.enum(['quick', 'full', 'advanced']);
+/** Coarse file families the carving engines search for; mirrors the daemon's `FileFamily`. */
+export const FileFamilySchema = z.enum(['images', 'documents', 'archives', 'audio_video', 'databases', 'executables']);
 export const JobStageSchema = z.enum([
   'draft', 'preflight', 'waiting_for_destination', 'acquiring', 'verifying_image',
   'partition_scan', 'metadata_scan', 'carving', 'validating', 'threat_scan', 'indexing',
@@ -77,6 +79,7 @@ export type SourceKind = z.infer<typeof SourceKindSchema>;
 export type CapabilityLevel = z.infer<typeof CapabilityLevelSchema>;
 export type RecoveryGoal = z.infer<typeof RecoveryGoalSchema>;
 export type ScanPreset = z.infer<typeof ScanPresetSchema>;
+export type FileFamily = z.infer<typeof FileFamilySchema>;
 export type JobStage = z.infer<typeof JobStageSchema>;
 export type CapabilityFinding = z.infer<typeof CapabilityFindingSchema>;
 export type SourceDescriptor = z.infer<typeof SourceDescriptorSchema>;

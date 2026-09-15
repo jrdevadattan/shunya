@@ -1,4 +1,7 @@
-use carving::normalize_carved_file;
+use carving::{
+    CarveRequest, FileFamily, build_invocation, carve_signatures, collect_output,
+    normalize_carved_file, supported_formats,
+};
 use case_store::{AuditEventInput, CaseInput, CaseStore};
 use exporter::{ExportItem, ExportRequest, Exporter};
 use image_io::RawImageReader;
@@ -17,6 +20,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use source_inventory::{ImageSource, SourceInventory};
 use threat_scan::ThreatScanner;
+use tool_runner::{ProcessStatus, ToolInvocation, ToolRegistry, ToolRunner};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Read;
@@ -24,6 +28,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use validation::ValidatorRegistry;
@@ -56,6 +61,40 @@ struct CreateJobParams {
     source_id: String,
     goal: RecoveryGoal,
     preset: ScanPreset,
+    /// File families to search for during signature carving. Omitted means all.
+    #[serde(default)]
+    families: Option<Vec<FileFamily>>,
+}
+
+/// Persisted per job as `carve-options.json` so a resumed job carves the same families.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CarveOptions {
+    families: Vec<FileFamily>,
+}
+
+impl Default for CarveOptions {
+    fn default() -> Self {
+        Self {
+            families: FileFamily::ALL.to_vec(),
+        }
+    }
+}
+
+/// Persisted per job as `carve-engine.json`: which carving engine actually ran.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CarveEngineRecord {
+    engine: String,
+    version: String,
+    formats: Vec<String>,
+}
+
+/// A verified PhotoRec entry from the tool catalog next to the daemon.
+struct PhotoRecTool {
+    tools_root: PathBuf,
+    manifest_path: PathBuf,
+    version: String,
 }
 
 #[derive(Deserialize)]
@@ -399,6 +438,20 @@ impl DaemonState {
                 "The source assessment contains a hard safety block".into(),
             ));
         }
+        let families = match params.families {
+            Some(families) if families.is_empty() => {
+                return Err((
+                    "INVALID_JOB_INPUT",
+                    "Select at least one file family to search for".into(),
+                ));
+            }
+            Some(mut families) => {
+                families.sort();
+                families.dedup();
+                families
+            }
+            None => FileFamily::ALL.to_vec(),
+        };
         let mut engine =
             JobEngine::open(&root).map_err(|error| ("JOB_CREATE_FAILED", error.to_string()))?;
         let job = engine
@@ -406,6 +459,11 @@ impl DaemonState {
             .map_err(|error| ("JOB_CREATE_FAILED", error.to_string()))?;
         fs::create_dir_all(job_directory(&root, job.job_id))
             .map_err(|error| ("JOB_CREATE_FAILED", error.to_string()))?;
+        write_json_atomic(
+            &job_directory(&root, job.job_id).join("carve-options.json"),
+            &CarveOptions { families },
+        )
+        .map_err(|error| ("JOB_CREATE_FAILED", error.to_string()))?;
         self.jobs.insert(job.job_id, root);
         self.latest_job = Some(job.job_id);
         serde_json::to_value(job).map_err(|error| ("JOB_CREATE_FAILED", error.to_string()))
@@ -541,8 +599,35 @@ impl DaemonState {
     fn query_artifacts(&self, request: &RpcRequest) -> RouteResult {
         let job_id = self.latest_job()?;
         let root = self.job_root(job_id, None)?;
-        let query: ArtifactQuery = serde_json::from_value(request.params.clone())
+        let mut query: ArtifactQuery = serde_json::from_value(request.params.clone())
             .map_err(|error| ("INVALID_ARTIFACT_QUERY", error.to_string()))?;
+        if let Some(family) = request.params.get("family").and_then(Value::as_str) {
+            if family == "other" {
+                query.exclude_mime_types = Some(
+                    FileFamily::ALL
+                        .iter()
+                        .flat_map(|family| {
+                            family.mime_types().iter().map(|mime| (*mime).to_owned())
+                        })
+                        .collect(),
+                );
+            } else {
+                let family: FileFamily = serde_json::from_value(Value::String(family.into()))
+                    .map_err(|_| {
+                        (
+                            "INVALID_ARTIFACT_QUERY",
+                            format!("unknown file family: {family}"),
+                        )
+                    })?;
+                query.mime_types = Some(
+                    family
+                        .mime_types()
+                        .iter()
+                        .map(|mime| (*mime).to_owned())
+                        .collect(),
+                );
+            }
+        }
         let index = ArtifactIndex::open(&job_directory(&root, job_id).join("results.sqlite"))
             .map_err(|error| ("ARTIFACT_QUERY_FAILED", error.to_string()))?;
         let total_count = index
@@ -720,7 +805,15 @@ impl DaemonState {
             source_hash_after: Some(hash_after),
             tools: vec![
                 tool_record("partition-scan-built-in"),
-                tool_record("signature-carver-built-in"),
+                match read_json::<CarveEngineRecord>(
+                    &job_directory(&root, job_id).join("carve-engine.json"),
+                ) {
+                    Ok(record) => ToolRecord {
+                        id: record.engine,
+                        version: record.version,
+                    },
+                    Err(_) => tool_record("signature-carver-built-in"),
+                },
                 ToolRecord {
                     id: "yara-x".into(),
                     version: "1.20.0".into(),
@@ -809,18 +902,18 @@ impl DaemonState {
             }
         }
 
-        if let Ok(root) = self.active_case() {
-            if let Ok(mut store) = CaseStore::open(root) {
-                let _ = store.append_event(AuditEventInput {
-                    event_type: "deletion_task_started".to_string(),
-                    actor: "recovery_daemon".to_string(),
-                    payload: json!({
-                        "targetPath": params.target_path,
-                        "totalFiles": total_files,
-                        "markerCreated": true
-                    }),
-                });
-            }
+        if let Ok(root) = self.active_case()
+            && let Ok(mut store) = CaseStore::open(root)
+        {
+            let _ = store.append_event(AuditEventInput {
+                event_type: "deletion_task_started".to_string(),
+                actor: "recovery_daemon".to_string(),
+                payload: json!({
+                    "targetPath": params.target_path,
+                    "totalFiles": total_files,
+                    "markerCreated": true
+                }),
+            });
         }
 
         Ok(json!({ "markerPath": marker, "totalFiles": total_files }))
@@ -867,6 +960,8 @@ impl DaemonState {
         } else {
             Value::Null
         };
+        value["families"] = serde_json::to_value(carve_options(root, job_id).families)
+            .map_err(|error| ("JOB_STATUS_FAILED", error.to_string()))?;
         Ok(value)
     }
 
@@ -1120,15 +1215,22 @@ fn run_recovery_worker(
         ));
     }
 
-    add_limitation(
-        &mut limitations,
-        limitation(
-            "PHOTOREC_UNAVAILABLE",
-            JobStage::Carving,
-            "PhotoRec is unavailable; the built-in bounded JPEG signature engine was used.",
-            "Install and verify PhotoRec for broader content-signature coverage.",
-        ),
-    );
+    let options = carve_options(root, job_id);
+    let photorec = photorec_tool();
+    if photorec.is_none() {
+        add_limitation(
+            &mut limitations,
+            limitation(
+                "PHOTOREC_UNAVAILABLE",
+                JobStage::Carving,
+                &format!(
+                    "PhotoRec is not in the verified tool catalog; the built-in multi-format signature engine was used ({}).",
+                    supported_formats().join(", ")
+                ),
+                "Vendor and verify PhotoRec through tools/manifests to extend content-signature coverage beyond the built-in engine.",
+            ),
+        );
+    }
     add_limitation(
         &mut limitations,
         limitation(
@@ -1160,7 +1262,39 @@ fn run_recovery_worker(
             if !begin_stage(&mut engine, job_id, JobStage::Carving, control)? {
                 return Ok(());
             }
-            let artifacts = carve_jpegs(root, job_id, source, control)?;
+            let artifacts = match &photorec {
+                Some(tool) => {
+                    match carve_with_photorec(root, job_id, source, &options, control, tool) {
+                        Ok(artifacts) => artifacts,
+                        Err(message) => {
+                            add_limitation(
+                                &mut limitations,
+                                limitation(
+                                    "PHOTOREC_FAILED",
+                                    JobStage::Carving,
+                                    &format!(
+                                        "PhotoRec did not complete ({message}); the built-in multi-format signature engine was used instead."
+                                    ),
+                                    "Review the PhotoRec transcript in the job workspace and re-verify the vendored binary.",
+                                ),
+                            );
+                            write_json_atomic(
+                                &job_directory(root, job_id).join("limitations.json"),
+                                &limitations,
+                            )
+                            .map_err(|error| {
+                                WorkerFailure::failed(
+                                    JobStage::Carving,
+                                    "LIMITATION_STORE_FAILED",
+                                    error.to_string(),
+                                )
+                            })?;
+                            carve_builtin(root, job_id, source, &options, control)?
+                        }
+                    }
+                }
+                None => carve_builtin(root, job_id, source, &options, control)?,
+            };
             write_json_atomic(&artifacts_path, &artifacts).map_err(|error| {
                 WorkerFailure::failed(
                     JobStage::Carving,
@@ -1382,10 +1516,59 @@ fn add_limitation(limitations: &mut Vec<CapabilityLimitation>, value: Capability
     }
 }
 
-fn carve_jpegs(
+fn carve_options(root: &Path, job_id: Uuid) -> CarveOptions {
+    read_json(&job_directory(root, job_id).join("carve-options.json")).unwrap_or_default()
+}
+
+/// Locates the verified tool catalog: `RECOVERY_TOOLS_ROOT` (+ optional
+/// `RECOVERY_TOOLS_MANIFEST`) for development, otherwise the packaged layout
+/// next to the daemon executable (`tools.lock.json` + `tools/`).
+fn tool_catalog_paths() -> Option<(PathBuf, PathBuf)> {
+    if let Some(root) = std::env::var_os("RECOVERY_TOOLS_ROOT") {
+        let root = PathBuf::from(root);
+        let manifest = std::env::var_os("RECOVERY_TOOLS_MANIFEST")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.join("tools.lock.json"));
+        return Some((root, manifest));
+    }
+    let executable_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let manifest = executable_dir.join("tools.lock.json");
+    manifest
+        .exists()
+        .then(|| (executable_dir.join("tools"), manifest))
+}
+
+/// PhotoRec is only used when the catalog next to the daemon lists a verified,
+/// redistributable binary for this platform. Nothing on `PATH` is ever trusted.
+fn photorec_tool() -> Option<PhotoRecTool> {
+    let (tools_root, manifest_path) = tool_catalog_paths()?;
+    let registry = ToolRegistry::load(&tools_root, &manifest_path).ok()?;
+    let version = registry.entry("photorec")?.version.clone();
+    Some(PhotoRecTool {
+        tools_root,
+        manifest_path,
+        version,
+    })
+}
+
+fn record_carve_engine(
+    root: &Path,
+    job_id: Uuid,
+    record: &CarveEngineRecord,
+) -> Result<(), WorkerFailure> {
+    write_json_atomic(
+        &job_directory(root, job_id).join("carve-engine.json"),
+        record,
+    )
+    .map_err(|error| WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string()))
+}
+
+/// Built-in multi-format signature carving over the whole source.
+fn carve_builtin(
     root: &Path,
     job_id: Uuid,
     source: &ImageSource,
+    options: &CarveOptions,
     control: &JobControl,
 ) -> Result<Vec<RecoveryArtifact>, WorkerFailure> {
     let bytes = read_source_controlled(&source.canonical_path, control).map_err(|error| {
@@ -1395,44 +1578,140 @@ fn carve_jpegs(
     fs::create_dir_all(&carved).map_err(|error| {
         WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
     })?;
+    let hits = carve_signatures(&bytes, &options.families, &mut || {
+        control.requested() == CONTROL_RUNNING
+    });
     let mut artifacts = Vec::new();
-    let mut cursor = 0;
-    while cursor + 3 <= bytes.len() {
-        if control.requested() != CONTROL_RUNNING {
-            break;
-        }
-        let Some(relative_start) = bytes[cursor..]
-            .windows(3)
-            .position(|window| window == [0xff, 0xd8, 0xff])
-        else {
-            break;
-        };
-        let start = cursor + relative_start;
-        let Some(relative_end) = bytes[start + 3..]
-            .windows(2)
-            .position(|window| window == [0xff, 0xd9])
-        else {
-            break;
-        };
-        let end = start + 3 + relative_end + 2;
-        let path = carved.join(format!("f{:07}.jpg", artifacts.len() + 1));
-        fs::write(&path, &bytes[start..end]).map_err(|error| {
+    for hit in hits {
+        let path = carved.join(format!("f{:07}.{}", artifacts.len() + 1, hit.extension));
+        fs::write(&path, &bytes[hit.offset..hit.offset + hit.length]).map_err(|error| {
             WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
         })?;
-        let mut artifact = normalize_carved_file(&source.descriptor.source_id, &path, "jpeg")
+        let mut artifact = normalize_carved_file(&source.descriptor.source_id, &path, hit.kind)
             .map_err(|error| {
                 WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
             })?;
         artifact.source_ranges = vec![SourceRange {
-            offset: start as u64,
-            length: (end - start) as u64,
+            offset: hit.offset as u64,
+            length: hit.length as u64,
         }];
         fs::copy(&path, artifact_payload_path(root, &artifact)).map_err(|error| {
             WorkerFailure::failed(JobStage::Carving, "CARVING_FAILED", error.to_string())
         })?;
         artifacts.push(artifact);
-        cursor = end;
     }
+    record_carve_engine(
+        root,
+        job_id,
+        &CarveEngineRecord {
+            engine: "signature-carver-built-in".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            formats: supported_formats()
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+        },
+    )?;
+    Ok(artifacts)
+}
+
+/// Runs the verified PhotoRec binary through the sandboxed tool runner and
+/// normalises whatever it wrote. Any failure returns a message so the caller
+/// can fall back to the built-in engine and record the limitation.
+fn carve_with_photorec(
+    root: &Path,
+    job_id: Uuid,
+    source: &ImageSource,
+    options: &CarveOptions,
+    control: &JobControl,
+    tool: &PhotoRecTool,
+) -> Result<Vec<RecoveryArtifact>, String> {
+    let request = CarveRequest {
+        image_path: source.canonical_path.clone(),
+        job_directory: job_directory(root, job_id),
+        families: options.families.clone(),
+    };
+    let invocation = build_invocation(&request).map_err(|error| error.to_string())?;
+    let _ = fs::remove_dir_all(&invocation.output_root);
+    fs::create_dir_all(&invocation.output_root).map_err(|error| error.to_string())?;
+    let registry = ToolRegistry::load(&tool.tools_root, &tool.manifest_path)
+        .map_err(|error| error.to_string())?;
+    let runner = ToolRunner::new(registry, 4 * 1024 * 1024);
+    let transcript_dir = job_directory(root, job_id).join("photorec-run");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| error.to_string())?;
+    let token = CancellationToken::new();
+    let outcome = runtime
+        .block_on(async {
+            let execution = runner.execute(
+                ToolInvocation {
+                    tool_id: invocation.tool_id.clone(),
+                    args: invocation.args.clone(),
+                    working_directory: transcript_dir,
+                    timeout: Duration::from_secs(12 * 60 * 60),
+                    environment: Vec::new(),
+                },
+                token.clone(),
+            );
+            tokio::pin!(execution);
+            loop {
+                tokio::select! {
+                    result = &mut execution => break result,
+                    _ = tokio::time::sleep(Duration::from_millis(250)) => {
+                        if control.requested() != CONTROL_RUNNING {
+                            token.cancel();
+                        }
+                    }
+                }
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    match outcome.status {
+        ProcessStatus::Exited(Some(0)) | ProcessStatus::Cancelled => {}
+        ProcessStatus::Exited(code) => {
+            return Err(format!(
+                "exit status {}; {}",
+                code.map(|value| value.to_string())
+                    .unwrap_or_else(|| "unknown".into()),
+                outcome.stderr.last().cloned().unwrap_or_default()
+            ));
+        }
+        ProcessStatus::TimedOut => return Err("timed out".into()),
+    }
+    let files = collect_output(&invocation.output_root).map_err(|error| error.to_string())?;
+    let mut artifacts = Vec::new();
+    for file in files {
+        let kind = file.extension.clone().unwrap_or_else(|| "bin".into());
+        let mut artifact = normalize_carved_file(&source.descriptor.source_id, &file.path, &kind)
+            .map_err(|error| error.to_string())?;
+        artifact.source_ranges = file
+            .byte_runs
+            .iter()
+            .map(|(offset, length)| SourceRange {
+                offset: *offset,
+                length: *length,
+            })
+            .collect();
+        fs::copy(&file.path, artifact_payload_path(root, &artifact))
+            .map_err(|error| error.to_string())?;
+        artifacts.push(artifact);
+    }
+    record_carve_engine(
+        root,
+        job_id,
+        &CarveEngineRecord {
+            engine: "photorec".into(),
+            version: tool.version.clone(),
+            formats: options
+                .families
+                .iter()
+                .map(|family| family.label().to_owned())
+                .collect(),
+        },
+    )
+    .map_err(|failure| failure.message)?;
     Ok(artifacts)
 }
 
@@ -1728,6 +2007,10 @@ fn is_active_or_unsupported(artifact: &RecoveryArtifact) -> bool {
                 | "htm"
                 | "jar"
                 | "msi"
+                | "elf"
+                | "apk"
+                | "scr"
+                | "vbs"
         )
     );
     let passive_preview_input = matches!(

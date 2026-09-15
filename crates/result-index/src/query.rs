@@ -9,6 +9,12 @@ pub struct ArtifactQuery {
     pub status: Option<String>,
     pub threat: Option<String>,
     pub mime_type: Option<String>,
+    /// Restrict to artifacts whose detected MIME type is one of these values.
+    #[serde(default)]
+    pub mime_types: Option<Vec<String>>,
+    /// Restrict to artifacts whose MIME type is unknown or outside this list.
+    #[serde(default)]
+    pub exclude_mime_types: Option<Vec<String>>,
     pub partition_id: Option<String>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
@@ -33,6 +39,22 @@ pub(crate) fn append_filters(
             clauses.push(format!("{table}.{column} = ?"));
             parameters.push(value.clone().into());
         }
+    }
+    if let Some(mime_types) = query.mime_types.as_ref().filter(|list| !list.is_empty()) {
+        let placeholders = vec!["?"; mime_types.len()].join(",");
+        clauses.push(format!("{table}.mime_type IN ({placeholders})"));
+        parameters.extend(mime_types.iter().cloned().map(Into::into));
+    }
+    if let Some(excluded) = query
+        .exclude_mime_types
+        .as_ref()
+        .filter(|list| !list.is_empty())
+    {
+        let placeholders = vec!["?"; excluded.len()].join(",");
+        clauses.push(format!(
+            "({table}.mime_type IS NULL OR {table}.mime_type NOT IN ({placeholders}))"
+        ));
+        parameters.extend(excluded.iter().cloned().map(Into::into));
     }
     if let Some(minimum) = query.min_size {
         clauses.push(format!("{table}.size_bytes >= ?"));

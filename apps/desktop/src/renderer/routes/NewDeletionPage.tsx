@@ -1,148 +1,212 @@
-import { useState } from 'react';
-import { ArrowLeft, FolderOpen, ShieldAlert } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import type { WorkspaceSelection } from '@recovery/contracts';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, FolderOpen, Loader2, ShieldAlert, ShieldCheck, Trash2, Usb } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import type { DeletionPlan, DeletionResult } from '../../main/secure-erase/folderDeletion.js';
 import { rememberRecentDeletion } from '../features/cases/recent-deletions.js';
+import { CertificatePanel } from '../features/certificate/CertificatePanel.js';
+import { trackOperation, useOperationByKind } from '../features/operations/operations-store.js';
 import { ApplicationShell } from './ApplicationShell.js';
 
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+const REASONS: Record<string, string> = {
+  DELETION_TARGET_NOT_FOUND: 'The folder could not be found.',
+  DELETION_TARGET_NOT_A_FOLDER: 'The selected path is not a folder.',
+  DELETION_DEVICE_UNRESOLVED: 'The physical device hosting this folder could not be identified.',
+  DELETION_SYSTEM_DEVICE_BLOCKED: 'This folder is on the system disk. Secure deletion is limited to removable media.',
+  DELETION_NON_REMOVABLE_BLOCKED: 'This folder is on an internal drive. Secure deletion is limited to removable (USB) media.',
+  DELETION_DRIVE_ROOT_BLOCKED: 'The whole drive was selected. Use "Erase a device" to sanitize an entire drive.',
+  DELETION_CONFIRMATION_MISMATCH: 'The typed confirmation did not match the folder path.',
+  DELETION_DEVICE_CHANGED: 'The device changed after planning. Re-plan the deletion.',
+  DELETION_PLAN_NOT_FOUND: 'The plan expired. Choose the folder again.',
+  DELETION_UNSUPPORTED_PLATFORM: 'Folder deletion is not supported on this platform.',
+};
+
+export function explainDeletionError(message: string): string {
+  // Electron wraps main-process errors ("Error invoking remote method 'x': Error: CODE"),
+  // so look for a known code anywhere in the text.
+  const code = /DELETION_[A-Z_]+/.exec(message)?.[0];
+  return (code && REASONS[code]) ?? message;
+}
+
 export function NewDeletionPage() {
-  const navigate = useNavigate();
-  const [selection, setSelection] = useState<WorkspaceSelection | null>(null);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [selectingFolder, setSelectingFolder] = useState(false);
+  const [targetPath, setTargetPath] = useState<string>();
+  const [plan, setPlan] = useState<DeletionPlan>();
+  const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string>();
+  const [confirmText, setConfirmText] = useState('');
+  const [taskTitle, setTaskTitle] = useState('');
+
+  const latest = useOperationByKind('deletion');
+  const op = latest && plan && latest.device === plan.targetPath ? latest : undefined;
+  const running = op?.status === 'running';
+  const result = op?.status === 'done' ? (op.result as DeletionResult | undefined) : undefined;
+  const runError = op?.status === 'error' ? op.error : undefined;
+
+  useEffect(() => {
+    if (result) {
+      rememberRecentDeletion({
+        id: result.planId, title: taskTitle || `Deletion: ${folderName(result.targetPath)}`, targetPath: result.targetPath,
+        totalFiles: result.fileCount, createdAt: result.startedAt, completedAt: result.completedAt,
+        status: result.failures.length ? 'completed_with_failures' : 'completed', filesDeleted: result.filesDeleted,
+        bytesOverwritten: result.bytesOverwritten, failures: result.failures.length, deviceModel: result.device.device.model,
+        auditLogPath: result.auditLogPath,
+      });
+    }
+    // The title is captured when the result lands; later edits are not re-saved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   async function chooseFolder() {
-    setSelectingFolder(true);
     setError(undefined);
+    let selected: string | null;
     try {
-      const selected = await window.recoveryApi.chooseWorkspaceFolder();
-      if (selected) {
-        setSelection(selected);
-        // Auto create deletion task with folder name as title
-        const folderName = selected.selectedPath.split(/[\\/]/).pop() || 'Unknown Folder';
-        setTaskTitle(`Deletion Task: ${folderName}`);
-      }
+      selected = await window.deletionApi.chooseFolder();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not inspect the selected folder.');
+      setError(cause instanceof Error ? explainDeletionError(cause.message) : 'The folder picker could not be opened.');
+      return;
+    }
+    if (!selected) return;
+    await planFolder(selected);
+  }
+
+  async function planFolder(selected: string) {
+    setTargetPath(selected);
+    setPlan(undefined);
+    setConfirmText('');
+    setPlanning(true);
+    try {
+      const next = await window.deletionApi.plan(selected);
+      setPlan(next);
+      setTaskTitle(`Deletion: ${folderName(next.targetPath)}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? explainDeletionError(cause.message) : 'The folder could not be planned for deletion.');
     } finally {
-      setSelectingFolder(false);
+      setPlanning(false);
     }
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selection) return;
-    
+  const confirmed = Boolean(plan) && confirmText === plan?.targetPath;
+
+  async function execute() {
+    if (!plan || !confirmed) return;
+    setError(undefined);
     try {
-      const sources = await window.recoveryApi.listSources();
-      // Match the physical device. Fallback to the first USB drive since only USB is allowed.
-      let match = sources.find(s => 
-        selection.rootPath.startsWith(s.displayName) || 
-        s.displayName.startsWith(selection.rootPath) ||
-        selection.selectedPath.startsWith(s.displayName)
+      await trackOperation(
+        { id: `deletion:${plan.targetPath}`, kind: 'deletion', label: `Deleting ${folderName(plan.targetPath)}`, route: '/deletion/new', device: plan.targetPath },
+        window.deletionApi.execute(plan.planId, { confirmation: plan.targetPath }),
       );
-      if (!match) {
-         match = sources.find(s => s.bus?.toUpperCase() === 'USB');
-      }
-      if (!match) throw new Error("Could not identify the physical device for the selected folder. Is it a USB drive?");
-
-      const result = await window.recoveryApi.startDeletion({
-        sourceId: match.sourceId,
-        targetPath: selection.selectedPath
-      });
-
-      rememberRecentDeletion({
-        id: crypto.randomUUID(),
-        title: taskTitle,
-        targetPath: selection.selectedPath,
-        totalFiles: result.totalFiles,
-        markerPath: result.markerPath,
-        createdAt: new Date().toISOString(),
-      });
-
-      navigate('/');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    } catch { /* surfaced through the operation store */ }
   }
 
   return (
-    <ApplicationShell title="New Deletion">
-      <div className="form-page" style={{ padding: '36px 52px 28px', maxWidth: '800px', margin: '0 auto' }}>
-        <Link to="/" className="back-link" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', textDecoration: 'none', marginBottom: '24px', fontWeight: 600 }}>
-          <ArrowLeft aria-hidden="true" size={16} />Back to workspace
-        </Link>
-        
+    <ApplicationShell title="New deletion">
+      <div className="flash-erase deletion-page">
+        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" size={16} />Back to workspace</Link>
+
         <header className="page-heading">
           <div>
-            <p className="eyebrow" style={{ color: 'var(--status-danger)', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>Secure Deletion</p>
-            <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', letterSpacing: '-0.02em' }}>Start a new deletion task</h1>
-            <p className="page-heading__description" style={{ color: 'var(--text-secondary)' }}>
-              Choose a folder. We will securely traverse it and list its contents for deletion.
-            </p>
+            <p className="eyebrow flash-erase__eyebrow">Secure deletion</p>
+            <h1>Securely delete a folder</h1>
+            <p className="page-heading__description">Every file under the folder is overwritten in place with CSPRNG data, renamed, and removed. Only folders on removable (USB) media are accepted; the system disk is never touched.</p>
           </div>
         </header>
 
-        <form onSubmit={submit} className="case-form" style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--surface-panel)', padding: '28px', border: '1px solid var(--border-subtle)', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          {error && <p className="form-error" role="alert" style={{ color: 'var(--status-danger)', padding: '12px', background: 'rgba(255,0,0,0.05)', borderRadius: '6px' }}>{error}</p>}
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label style={{ fontWeight: 600, fontSize: '14px' }}>1. Select Target Folder</label>
-            {!selection ? (
-              <button type="button" className="button button--secondary" onClick={chooseFolder} disabled={selectingFolder} style={{ alignSelf: 'flex-start' }}>
-                <FolderOpen size={16} style={{ marginRight: '8px' }} />
-                {selectingFolder ? 'Opening picker...' : 'Choose folder'}
-              </button>
-            ) : (
-              <div style={{ padding: '16px', background: 'var(--surface-app)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                    <FolderOpen size={18} /> {selection.selectedPath}
-                  </strong>
-                  <button type="button" className="button button--secondary" onClick={chooseFolder}>Change folder</button>
-                </div>
-                
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingBottom: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <p style={{ margin: 0 }}><strong>Drive:</strong> {selection.rootLabel}</p>
-                  <p style={{ margin: 0 }}><strong>Subdirectories found:</strong> {selection.directories.length}</p>
-                </div>
-                
-                {selection.directories.length > 0 && (
-                  <div style={{ marginTop: '16px' }}>
-                    <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Traversal Preview:</p>
-                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', maxHeight: '200px', overflowY: 'auto' }}>
-                      {selection.directories.map(d => (
-                        <li key={d.relativePath} style={{ padding: '4px 0' }}>{d.relativePath}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+        {error ? <p role="alert" className="form-error">{error}</p> : null}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label htmlFor="taskTitle" style={{ fontWeight: 600, fontSize: '14px' }}>2. Task Title</label>
-            <input 
-              id="taskTitle"
-              value={taskTitle} 
-              onChange={e => setTaskTitle(e.target.value)} 
-              placeholder="Select a folder to auto-fill..."
-              style={{ padding: '12px 14px', border: '1px solid var(--border-subtle)', borderRadius: '8px', width: '100%', fontSize: '14px', background: 'var(--surface-app)', color: 'var(--text-primary)' }}
-              disabled={!selection}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px', paddingTop: '24px', borderTop: '1px solid var(--border-subtle)' }}>
-            <button type="submit" className="button button--primary" disabled={!selection} style={{ background: 'var(--status-danger)', border: 'none', gap: '8px', padding: '0 24px', height: '40px' }}>
-              <ShieldAlert size={18} />
-              Create Deletion Task
+        <section className="flash-erase__panel" aria-label="Deletion target">
+          <div className="deletion-page__step"><span className="deletion-page__step-number">1</span><div><strong>Choose the folder</strong><p>The folder is inspected read-only first: nothing is changed until you confirm.</p></div></div>
+          <div className="deletion-page__target">
+            <button type="button" className="button button--secondary" onClick={() => void chooseFolder()} disabled={planning || running}>
+              {planning ? <Loader2 className="spin" aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
+              {planning ? 'Inspecting folder…' : plan ? 'Change folder' : 'Choose folder'}
             </button>
+            {targetPath ? <code className="flash-erase__path deletion-page__path">{targetPath}</code> : <span className="deletion-page__hint">No folder selected.</span>}
           </div>
-        </form>
+
+          {plan ? <>
+            <div className="deletion-page__facts" aria-label="Deletion plan">
+              <article><Usb aria-hidden="true" /><span><strong>{plan.device.device.model}</strong><small>{plan.device.device.busType ?? 'Removable'} · {formatBytes(plan.device.device.sizeBytes)} · mounted at {plan.device.mountRoot}</small></span><em data-tone="eligible">Removable</em></article>
+              <article><Trash2 aria-hidden="true" /><span><strong>{plan.fileCount.toLocaleString('en-US')} files · {formatBytes(plan.totalBytes)}</strong><small>{plan.directoryCount.toLocaleString('en-US')} subfolders will be removed once emptied</small></span></article>
+            </div>
+            {plan.sample.length ? <details className="deletion-page__sample"><summary>Preview of files to delete ({Math.min(plan.sample.length, plan.fileCount)} of {plan.fileCount})</summary><ul>{plan.sample.map((file) => <li key={file}>{file}</li>)}</ul></details> : <p className="deletion-page__hint">The folder contains no files; its empty subfolders will be removed.</p>}
+            {plan.skipped.length ? <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" />{plan.skipped.length} entries will be skipped (links, special files, or unreadable) and left in place.</p> : null}
+
+            <div className="deletion-page__step"><span className="deletion-page__step-number">2</span><div><strong>Name the task</strong><p>Shown in your deletion history and on the certificate.</p></div></div>
+            <input className="flash-erase__confirm" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} aria-label="Deletion task title" disabled={running || Boolean(result)} />
+
+            <div className="deletion-page__step"><span className="deletion-page__step-number">3</span><div><strong>Confirm</strong><p>Type the full folder path exactly as shown to enable deletion.</p></div></div>
+            <div className="flash-erase__danger">
+              <ShieldAlert aria-hidden="true" />
+              <div>
+                <strong>This cannot be undone</strong>
+                <p>File contents are overwritten with an AES-256-CTR keystream before removal (NIST SP 800-88 Rev. 2 Clear, per file). On flash media, wear-levelling can leave stale copies in unmapped cells; for full assurance, erase the whole device instead.</p>
+                <input
+                  className="flash-erase__confirm"
+                  aria-label="Type the folder path to confirm"
+                  placeholder={plan.targetPath}
+                  value={confirmText}
+                  onChange={(event) => setConfirmText(event.target.value)}
+                  spellCheck={false}
+                  autoComplete="off"
+                  disabled={running || Boolean(result)}
+                />
+              </div>
+            </div>
+
+            <div className="flash-erase__actions">
+              <button type="button" className="button button--danger" disabled={!confirmed || running || Boolean(result)} onClick={() => void execute()}>
+                <Trash2 aria-hidden="true" />{running ? 'Deleting…' : `Securely delete ${plan.fileCount.toLocaleString('en-US')} files`}
+              </button>
+            </div>
+
+            {running || result ? (
+              <div className="flash-erase__progress">
+                <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Deletion progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(op?.percent ?? 0)}>
+                  <span style={{ width: `${op?.percent ?? 0}%` }} />
+                </div>
+                <p className="flash-erase__status">{op?.statusText ?? 'Working…'} ({Math.round(op?.percent ?? 0)}%)</p>
+              </div>
+            ) : null}
+
+            {runError ? <p role="alert" className="form-error">{explainDeletionError(runError)}</p> : null}
+
+            {result ? (
+              <div className="flash-erase__result" data-tone={result.failures.length ? 'warning' : undefined}>
+                <ShieldCheck aria-hidden="true" />
+                <div>
+                  <strong>{result.failures.length ? `Deletion finished with ${result.failures.length} failure(s)` : 'Secure deletion complete'}</strong>
+                  <small>{result.filesDeleted.toLocaleString('en-US')} of {result.fileCount.toLocaleString('en-US')} files overwritten and removed · {formatBytes(result.bytesOverwritten)} of CSPRNG data written · {result.directoriesRemoved} folders removed</small>
+                  <small>Audit log: <code className="flash-erase__path">{result.auditLogPath}</code></small>
+                  {result.failures.length ? <ul className="deletion-page__failures">{result.failures.slice(0, 8).map((failure) => <li key={failure.path}><code>{failure.path}</code> — {failure.error}</li>)}</ul> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {result ? <CertificatePanel record={{
+              kind: 'sanitization',
+              title: taskTitle || `Secure deletion of ${folderName(result.targetPath)}`,
+              device: result.device.device.device,
+              model: result.device.device.model,
+              serial: result.device.device.serial ?? undefined,
+              method: 'Per-file CSPRNG overwrite (AES-256-CTR keystream), rename and unlink',
+              assurance: result.failures.length ? 'clear (partial: see audit log)' : 'clear',
+              standard: 'NIST SP 800-88 Rev. 2 · Clear (file level)',
+              details: `${result.filesDeleted} of ${result.fileCount} files, ${formatBytes(result.bytesOverwritten)} overwritten under ${result.targetPath}`,
+              completedAt: result.completedAt,
+            }} /> : null}
+          </> : null}
+        </section>
       </div>
     </ApplicationShell>
   );
+}
+
+function folderName(target: string): string {
+  return target.split(/[\\/]/).filter(Boolean).pop() ?? target;
 }

@@ -1,9 +1,10 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
 import { CapabilityBanner, StageTimeline, SurfaceCard, type TimelineStage } from '@recovery/ui';
-import { ArrowRight, CheckCircle2, Clock3, Database, FileText, Files, FolderLock, HardDrive, Pause, Play, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, Database, FileText, Files, FolderLock, HardDrive, Pause, Play, ScanSearch, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { activeJobId, activeWorkspace } from '../../application-state.js';
+import { familyMeta, formatCount } from '../recovery/file-families.js';
 import { ReadErrorMap } from './ReadErrorMap.js';
 
 const stageLabels: Record<string, string> = {
@@ -134,6 +135,11 @@ export function JobProgressPage() {
         <div><FolderLock aria-hidden="true" /><span><strong>{workspacePath ?? 'Workspace path unavailable'}</strong><small>Case workspace</small></span>{workspacePath ? <CheckCircle2 aria-hidden="true" /> : null}</div>
         <figcaption className="sr-only">Recovery moves from the read-only source into the case workspace through the selected scan preset.</figcaption>
       </figure>
+      {status.families?.length ? <div className="job-progress__families" aria-label="File families being searched for">
+        <span className="job-progress__families-label"><ScanSearch aria-hidden="true" />Searching for</span>
+        {status.families.map((family) => { const { Icon, label } = familyMeta(family); return <span className="family-chip" data-family={family} key={family}><Icon aria-hidden="true" />{label}</span>; })}
+        <small>{formatCount(status.families)} content signatures</small>
+      </div> : null}
       <div className="job-progress__workspace">
         <div className="job-progress__main">
           <section className="job-progress__telemetry" aria-label="Recovery telemetry">

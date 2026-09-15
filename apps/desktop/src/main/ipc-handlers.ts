@@ -117,30 +117,9 @@ function isSafeDirectoryName(name: string): boolean {
   return name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\\') && !name.includes('\0');
 }
 
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-const execAsync = promisify(exec);
-
 export function registerIpcHandlers(daemon?: DaemonSupervisor): void {
   const generatedReportPaths = new Set<string>();
 
-  ipcMain.handle('deletion.run', async (event, scriptName: string) => {
-    validateIpcSender(event);
-    
-    // WARNING: In a real app, validate the scriptName securely!
-    // For development, we'll just simulate or run a safe command.
-    try {
-      if (process.platform === 'win32') {
-        const { stdout, stderr } = await execAsync(`cmd.exe /c echo "Simulated deletion script: ${scriptName}"`);
-        return stdout || stderr;
-      } else {
-        const { stdout, stderr } = await execAsync(`echo "Simulated deletion script: ${scriptName}"`);
-        return stdout || stderr;
-      }
-    } catch (err: any) {
-      throw new Error(`Failed to run script: ${err.message}`);
-    }
-  });
   ipcMain.handle('dialog.choose_workspace', async (event) => {
     validateIpcSender(event);
     const owner = BrowserWindow.fromWebContents(event.sender);

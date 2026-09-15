@@ -86,10 +86,10 @@ export function WelcomePage() {
           </header>
           {recentDeletions.length ? <ul className="recent-cases__list">
             {recentDeletions.map((recentCase) => <li key={recentCase.id}>
-              <div className="recent-case__identity"><strong>{recentCase.title}</strong><small>{recentCase.targetPath}</small></div>
+              <div className="recent-case__identity"><strong>{recentCase.title}</strong><small>{recentCase.targetPath}{recentCase.deviceModel ? ` · ${recentCase.deviceModel}` : ''}</small></div>
               <div className="recent-case__details">
-                <span>Total Files: {recentCase.totalFiles}</span>
-                <span><CalendarDays aria-hidden="true" />{formatDate(recentCase.createdAt)}</span>
+                <span className="deletion-status" data-tone={recentCase.status === 'completed' ? 'done' : recentCase.status === 'completed_with_failures' ? 'warning' : 'legacy'}>{deletionStatusLabel(recentCase)}</span>
+                <span><CalendarDays aria-hidden="true" />{formatDate(recentCase.completedAt ?? recentCase.createdAt)}</span>
               </div>
             </li>)}
           </ul> : <div className="recent-cases__empty">
@@ -99,6 +99,12 @@ export function WelcomePage() {
       </div>
     </ApplicationShell>
   );
+}
+
+function deletionStatusLabel(entry: RecentDeletionCase): string {
+  if (entry.status === 'completed') return `${(entry.filesDeleted ?? entry.totalFiles).toLocaleString('en-US')} files securely deleted`;
+  if (entry.status === 'completed_with_failures') return `${(entry.filesDeleted ?? 0).toLocaleString('en-US')} of ${entry.totalFiles.toLocaleString('en-US')} deleted · ${entry.failures ?? 0} failed`;
+  return `${entry.totalFiles.toLocaleString('en-US')} files listed · not deleted (legacy task)`;
 }
 
 function formatDate(createdAt: string): string {

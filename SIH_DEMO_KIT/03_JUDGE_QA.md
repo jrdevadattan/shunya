@@ -68,7 +68,10 @@
 > Yes — read‑only sources, SHA‑256 of the source **before and after** (proving we didn't alter it), per‑file hashes, every action logged against a case and operator, exports re‑verified byte‑for‑byte, and a report that documents method **and** limitations. It's designed to survive cross‑examination.
 
 **Q. What can it *not* do (and how do you handle that)?**
-> It **fails safe**: unsupported filesystems, damaged media, or missing metadata produce an explicit *limited/unsupported* outcome that preserves evidence and suggests a next step — never a silent guess. Not in this build (and shown honestly as unavailable): multi‑format carving (PhotoRec), metadata recovery (Sleuth Kit), memory analysis (Volatility). All on the roadmap behind the same sandboxed adapter design.
+> It **fails safe**: unsupported filesystems, damaged media, or missing metadata produce an explicit *limited/unsupported* outcome that preserves evidence and suggests a next step — never a silent guess. Not in this build (and shown honestly as unavailable): metadata recovery (Sleuth Kit) and memory analysis (Volatility). Both are on the roadmap behind the same sandboxed adapter design that already runs YARA‑X and PhotoRec.
+
+**Q. Which file types can you carve?**
+> Twenty‑one format groups across six families the operator can switch on or off: images (JPEG, PNG, GIF, BMP, WebP), documents (PDF, DOCX/XLSX/PPTX, DOC/XLS/PPT, ODT), archives (ZIP, 7z, RAR, GZIP), audio/video (MP4/MOV/M4A/3GP, MP3, WAV, AVI), databases (SQLite) and executables (EXE/DLL, ELF, JAR, APK). Every hit is bounded by the format's own structure — a JPEG ends at its real EOI even when an EXIF thumbnail sits inside it, a ZIP ends at the central directory that matches its own start, an MP4 at the end of its box table — and then validated. If a verified PhotoRec binary is vendored, it runs sandboxed instead and its byte runs feed the same evidence model.
 
 ---
 

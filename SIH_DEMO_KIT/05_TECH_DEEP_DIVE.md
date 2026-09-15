@@ -26,8 +26,8 @@
 1. **Preflight** — re‑validate the source and compute its **SHA‑256** (baseline for chain of custody).
 2. **Partition discovery** — native **GPT/MBR** parsing (no third‑party binary).
 3. **Metadata scan** — *(roadmap: Sleuth Kit)* — currently reports "unavailable" honestly.
-4. **Carving** — **JPEG signature carving** (`FFD8FF … FFD9`) from unallocated space.
-5. **Validation** — each carved file is validated → `complete_validated` / partial / corrupt.
+4. **Carving** — **multi‑format signature carving** from unallocated space. The operator picks file families (images, documents, archives, audio/video, databases, executables); each hit is bounded by the format's own structure (JPEG marker walk to the real EOI, PNG chunk table, ZIP central directory, MP4 box walk, PE section table, SQLite page count…) — never by guessing a length. If a verified **PhotoRec** binary is vendored, it runs sandboxed instead and its DFXML byte runs are mapped onto the same evidence model.
+5. **Validation** — each carved file is validated per format → `complete_validated` / partial / corrupt; executables are never previewed.
 6. **Threat scan** — **real YARA‑X** scans every recovered file; matches → `potential_threat`, preview blocked.
 7. **Indexing** — results written to a **SQLite** result index (millions‑of‑rows target).
 8. **Review / Complete** — jobs are **checkpointed**: pause, resume, cancel, and survive a restart.
@@ -55,12 +55,13 @@ Recovery **never writes to the source**; it re‑hashes the source **after** the
 
 | Capability | State |
 |---|---|
-| RAW/dd image recovery, GPT/MBR, JPEG carving | ✅ working |
+| RAW/dd image recovery, GPT/MBR, multi‑format carving (21 format groups, selectable families) | ✅ working |
+| PhotoRec adapter (sandboxed, hash‑verified, DFXML byte runs) — runs when a verified binary is vendored | ✅ wired (binary not bundled: GPL redistribution review pending) |
 | SHA‑256 chain of custody, verified export, report | ✅ working |
 | Real YARA‑X threat scanning + quarantine | ✅ working |
 | CSPRNG flash wipe (NIST Clear) + audit, system‑disk protection | ✅ working |
 | Ed25519‑signed, verifiable, tamper‑evident certificate (erase + recovery) | ✅ working |
-| PhotoRec multi‑format carving, Sleuth Kit metadata, Volatility memory | 🚧 roadmap (shown as "unavailable", never faked) |
+| Sleuth Kit metadata recovery, Volatility memory analysis | 🚧 roadmap (shown as "unavailable", never faked) |
 | NVMe Sanitize (Purge‑level assurance) | 🚧 roadmap (hooks in place) |
 | Linux / macOS / Rescue‑ISO builds | 🚧 roadmap (architecture ready) |
 

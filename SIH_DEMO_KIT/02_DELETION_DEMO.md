@@ -22,6 +22,18 @@
 
 ---
 
+## Optional warm‑up — delete a folder, not the whole drive (no admin needed)
+
+- Welcome screen → **Your deletion cases** → **New deletion** → **Choose folder** → pick a folder **on the pendrive** (e.g. `D:\old-exports`).
+- The app resolves the folder to its physical device and shows **SanDisk Ultra · USB · Removable**, the file count and size, and a preview of the files. Picking a folder on **C:** is refused: *"This folder is on the system disk"*. Picking the drive root is refused too: *"Use Erase a device"*.
+- Type the **full folder path** in the red box → **Securely delete N files** → watch the per‑file progress → *"Secure deletion complete"* with the audit‑log path, then **Generate signed certificate**.
+
+> *(say)* "Every file is overwritten in place with an AES‑256‑CTR keystream, renamed, and unlinked — a NIST 800‑88 **Clear** at file level. On flash we say plainly that wear‑levelling can leave stale copies in unmapped cells, which is exactly why the whole‑device erase exists."
+
+> **Note:** after a real whole‑device wipe the pendrive has no filesystem, so folder deletion needs a quick format first (Disk Management → right‑click D: → Format, or `Format-Volume -DriveLetter D -FileSystem FAT32`).
+
+---
+
 ## The script (do + say)
 
 **1. Frame it** *(say)*

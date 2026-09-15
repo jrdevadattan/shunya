@@ -11,9 +11,17 @@ const api = createRecoveryApi({
 });
 
 contextBridge.exposeInMainWorld('recoveryApi', api);
-contextBridge.exposeInMainWorld('deletionApi', {
-  runScript: (scriptName: string) => ipcRenderer.invoke('deletion.run', scriptName)
-});
+// Folder-level secure deletion on removable media: plan → typed confirmation → execute.
+contextBridge.exposeInMainWorld('deletionApi', Object.freeze({
+  chooseFolder: () => ipcRenderer.invoke('deletion.chooseFolder'),
+  plan: (targetPath: string) => ipcRenderer.invoke('deletion.plan', targetPath),
+  execute: (planId: string, options: { confirmation: string }) => ipcRenderer.invoke('deletion.execute', planId, options),
+  onProgress: (callback: (event: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('deletion.progress', listener);
+    return () => ipcRenderer.removeListener('deletion.progress', listener);
+  },
+}));
 
 contextBridge.exposeInMainWorld('certificates', Object.freeze({
   generate: (record: unknown) => ipcRenderer.invoke('certificate.generate', record),
