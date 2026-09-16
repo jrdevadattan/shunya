@@ -63,7 +63,7 @@ export function FlashErasePage() {
         <PageHeader
           eyebrow="Securely delete"
           title="Erase a removable drive"
-          description="Overwrites every byte of a USB drive with random data in a single pass, then issues a signed certificate. Your system drive can never be selected."
+          description="Overwrites every byte with random data, then issues a signed certificate. USB drives only."
           actions={<button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}><RefreshCw aria-hidden="true" />Rescan</button>}
         />
 
@@ -76,7 +76,7 @@ export function FlashErasePage() {
               <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} disabled={running} />
               <span>
                 <strong>Dry run (safe)</strong>
-                <small>Runs the whole pipeline against a scratch file so you can see it work. <em>{target.model} is not changed.</em> Untick to perform the real, irreversible wipe.</small>
+                <small>Shows the whole process without touching {target.model}. Untick for the real, irreversible wipe.</small>
               </span>
             </label>
 
@@ -89,7 +89,7 @@ export function FlashErasePage() {
                 <ShieldAlert aria-hidden="true" />
                 <div>
                   <strong>This permanently destroys everything on {target.model} ({formatDeviceBytes(target.sizeBytes)}).</strong>
-                  <p>To confirm, type the device path exactly: <code className="flash-erase__path">{target.device}</code></p>
+                  <p>Type <code className="flash-erase__path">{target.device}</code> to confirm.</p>
                   <input
                     className="flash-erase__confirm"
                     value={confirmText}
@@ -146,9 +146,9 @@ export function FlashErasePage() {
               completedAt: result.completedAt,
             }} /> : null}
 
-            <AdvancedSection title="How the erase works" summary="Method, standards and the honest limitation for flash media" icon={BookOpen} quiet>
-              <p className="form-hint"><strong>CSPRNG overwrite — NIST SP 800-88 Rev. 2 Clear.</strong> A single sequential AES-256-CTR keystream pass over all {formatDeviceBytes(target.sizeBytes)}. No key is stored or reused; the transient key exists only in memory and is zeroed afterwards.</p>
-              <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />Honest limitation: on flash media, wear-levelling and over-provisioning mean a logical overwrite may not reach every physical NAND cell. For NIST <strong>Purge</strong> assurance, use a firmware command (ATA Secure Erase / NVMe Sanitize).</p>
+            <AdvancedSection title="How the erase works" summary="Method and standard" icon={BookOpen} quiet>
+              <p className="form-hint"><strong>CSPRNG overwrite — NIST SP 800-88 Rev. 2 Clear.</strong> One AES-256-CTR keystream pass over all {formatDeviceBytes(target.sizeBytes)}. No key is stored or reused.</p>
+              <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />On flash media, wear-levelling means an overwrite may not reach every cell. Firmware Sanitize gives NIST <strong>Purge</strong> assurance.</p>
             </AdvancedSection>
           </section>
         ) : null}

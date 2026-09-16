@@ -164,8 +164,7 @@ describe('live renderer pages', () => {
     expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
     expect(await findText('What would you like to do?')).toBeTruthy();
     expect(container?.querySelector('a[href="/cases/new"]')?.textContent).toContain('Recover files');
-    expect(container?.textContent).toContain('No recent cases are stored on this device yet.');
-    expect(container?.textContent).toContain('Start a recovery above, or open a case folder to add it here.');
+    expect(container?.textContent).toContain('No recent cases yet.');
     expect(container?.textContent).toContain('Source writes blocked');
     expect(container?.textContent).not.toContain('Device connected');
     expect(container?.textContent).not.toContain('Finance Laptop Recovery');
@@ -306,14 +305,14 @@ describe('live renderer pages', () => {
       root?.render(<RouterProvider router={memoryRouter} />);
     });
     expect(await findText('Settings')).toBeTruthy();
-    expect(container.textContent).toContain('Theme and sidebar choices are stored on this device.');
+    expect(container.textContent).toContain('Appearance');
 
     act(() => root?.unmount());
     root = createRoot(container);
     memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/help'] });
     await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
     expect(await findText('Help')).toBeTruthy();
-    expect(container.textContent).toContain('Open or create a case before using case recovery tools.');
+    expect(container.textContent).toContain('Create a case, choose a drive image');
 
     act(() => root?.unmount());
     root = createRoot(container);
@@ -736,7 +735,7 @@ describe('live renderer pages', () => {
     expect(container?.textContent).not.toContain('Continue to scan options');
     await click(input('Lost or damaged partition'));
     expect(sessionStorage.getItem('recovery:case-live:goal')).toBe('partition_loss');
-    expect(container?.textContent).toContain('needs a metadata engine that is not part of this build');
+    expect(container?.textContent).toContain('needs a metadata engine');
   });
 
   it('offers every file family by default and keeps scan depth under advanced options', async () => {
@@ -1636,15 +1635,15 @@ describe('live renderer pages', () => {
     const memoryRouter = createMemoryRouter(router.routes, { initialEntries: ['/settings'] });
     await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
 
-    await click(input('Dark theme'));
-    await click(input('Collapse navigation sidebar'));
+    await click(input('Dark'));
+    await click(input('Collapse sidebar'));
 
     expect(JSON.parse(localStorage.getItem('recovery:ui-preferences')!)).toEqual({ theme: 'dark', sidebarCollapsed: true });
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(container.querySelector('[data-testid="app-shell"]')?.getAttribute('data-collapsed')).toBe('true');
-    expect(container.textContent).toContain('Always open evidence sources read-only');
+    expect(container.textContent).toContain('Evidence sources open read-only');
     expect(container.textContent).toContain('Enforced and cannot be changed');
-    expect(container.textContent).toContain('Additional recovery defaults are unavailable because the daemon has no persisted settings API.');
+    expect(container.textContent).toContain('The recovery service has no settings API');
     expect(container.querySelectorAll('.settings-invariant input')).toHaveLength(0);
   });
 
@@ -1664,11 +1663,11 @@ describe('live renderer pages', () => {
     await act(async () => { root?.render(<RouterProvider router={memoryRouter} />); });
 
     expect(document.documentElement.dataset.theme).toBe('light');
-    await click(input('Light theme'));
+    await click(input('Light'));
     await act(async () => listeners.forEach((listener) => listener({ matches: true } as MediaQueryListEvent)));
     expect(document.documentElement.dataset.theme).toBe('light');
 
-    await click(input('Dark theme'));
+    await click(input('Dark'));
     await act(async () => listeners.forEach((listener) => listener({ matches: false } as MediaQueryListEvent)));
     expect(document.documentElement.dataset.theme).toBe('dark');
   });

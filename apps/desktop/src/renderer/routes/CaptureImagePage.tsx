@@ -95,7 +95,7 @@ export function CaptureImagePage() {
         <PageHeader
           eyebrow="Prepare"
           title="Make a disk image"
-          description="Copies a USB drive into a read-only image file so you can recover from the copy and keep the original untouched. Nothing is ever written to the drive."
+          description="Copies a USB drive to an image file so you can recover from the copy. The drive is only read."
           actions={<button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}><RefreshCw aria-hidden="true" />Rescan</button>}
         />
 
@@ -106,14 +106,14 @@ export function CaptureImagePage() {
           <section className="card stack stack--loose" aria-label="Capture options">
             <fieldset className="scope-options">
               <legend>How much to copy</legend>
-              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={running} /><span><strong>Entire drive</strong><small>{formatDeviceBytes(target.sizeBytes)} — an exact copy. Slower for large drives.</small></span></label>
-              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={running} /><span><strong>First 2 GB</strong><small>Fast — for a prepared demo drive where the files sit at the start.</small></span></label>
-              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={running} /><span><strong>First 4 GB</strong><small>A larger leading slice.</small></span></label>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={running} /><span><strong>Entire drive</strong><small>{formatDeviceBytes(target.sizeBytes)} — exact copy</small></span></label>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={running} /><span><strong>First 2 GB</strong><small>Faster</small></span></label>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={running} /><span><strong>First 4 GB</strong><small>Larger slice</small></span></label>
             </fieldset>
 
             <div className="output-row">
               <button type="button" className="button button--secondary" onClick={() => void chooseOutput()} disabled={running}>Choose where to save…</button>
-              {imagePath ? <code className="flash-erase__path">{imagePath}</code> : <small>Save the <code>.raw</code> file on a different drive than the one you are copying.</small>}
+              {imagePath ? <code className="flash-erase__path">{imagePath}</code> : <small>Save it on a different drive.</small>}
             </div>
 
             {elevated === false ? (
@@ -156,7 +156,7 @@ export function CaptureImagePage() {
                 </div>
               </div>
             ) : null}
-            <p className="note"><ShieldCheck aria-hidden="true" />The drive is opened read-only and the image is hashed (SHA-256) as it is written, so it can be verified later.</p>
+            <p className="note"><ShieldCheck aria-hidden="true" />Opened read-only and hashed (SHA-256) as it is written.</p>
           </section>
         ) : null}
       </div>

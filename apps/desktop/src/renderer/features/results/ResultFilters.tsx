@@ -23,7 +23,7 @@ export function ResultFilters({ artifacts, search, method, family, originalPathP
         <li><button type="button" aria-pressed={method === 'metadata'} onClick={() => onMethod('metadata')}><FolderOpen aria-hidden="true" /><span>Original folders</span></button><small>{metadataCount}</small></li>
         {folders.map((folder) => <FolderBranch key={folder.path} folder={folder} selectedPath={originalPathPrefix} onFolder={onFolder} />)}
         <li><button type="button" aria-pressed={method === 'carving'} onClick={() => onMethod('carving')}><Shapes aria-hidden="true" /><span>Content-signature recovery</span></button><small>{carvedCount}</small></li>
-        <li className="result-filter-list__truth"><FileQuestion aria-hidden="true" /><span>Carved artifacts stay outside original folders because their folder provenance is unavailable.</span></li>
+        <li className="result-filter-list__truth"><FileQuestion aria-hidden="true" /><span>Files found by content have no original folder.</span></li>
       </ul></section>
       <section aria-labelledby="file-types-title" className="results-filters__families"><header><h2 id="file-types-title">File types</h2><span>{familyRows.length ? `${familyRows.length} ${familyRows.length === 1 ? 'family' : 'families'}` : 'None loaded'}</span></header>
         {familyRows.length ? <ul className="result-filter-list result-filter-list--families">

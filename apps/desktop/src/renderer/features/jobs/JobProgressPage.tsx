@@ -15,18 +15,18 @@ const stageLabels: Record<string, string> = {
   needs_attention: 'Recovery needs attention', cancelling: 'Cancelling recovery', cancelled: 'Recovery cancelled', failed: 'Recovery failed',
 };
 const stageHints: Record<string, string> = {
-  preflight: 'Making sure the source can be read safely and recording its fingerprint.',
-  partition_scan: 'Reading the partition table without changing it.',
-  metadata_scan: 'Looking for records of deleted files that still name them.',
-  carving: 'Scanning the whole image for the file types you selected.',
-  validating: 'Making sure each recovered file is complete.',
-  threat_scan: 'Scanning recovered files for known threats before you open anything.',
-  indexing: 'Building the searchable list of results.',
-  completed: 'Recovered files are indexed and a report was generated automatically.',
-  paused: 'Nothing is running. Resume whenever you are ready.',
-  needs_attention: 'The recovery stopped and needs you to look at the notes below.',
-  cancelled: 'The recovery was cancelled. Files found before that are kept.',
-  failed: 'The recovery could not finish. See the notes below.',
+  preflight: 'Checking the source and recording its fingerprint.',
+  partition_scan: 'Reading the partition table.',
+  metadata_scan: 'Looking for records of deleted files.',
+  carving: 'Scanning for the file types you selected.',
+  validating: 'Checking each recovered file is complete.',
+  threat_scan: 'Scanning recovered files for threats.',
+  indexing: 'Building the list of results.',
+  completed: 'Your files are ready, and a report was generated.',
+  paused: 'Paused. Resume when you are ready.',
+  needs_attention: 'Stopped — see the notes below.',
+  cancelled: 'Cancelled. Files found before that are kept.',
+  failed: 'Could not finish — see the notes below.',
 };
 const terminalStages = new Set<JobStatus['stage']>(['completed', 'cancelled', 'failed']);
 const progressByStage: Record<JobStatus['stage'], number> = {
@@ -166,21 +166,21 @@ export function JobProgressPage() {
         <figcaption className="sr-only">Recovery moves from the read-only source into the case workspace through the {status.preset} scan preset.</figcaption>
       </figure>
 
-      {status.limitations.length ? <AdvancedSection title={`Notes from the recovery service (${status.limitations.length})`} summary="What this build could and could not do for this recovery" icon={ListChecks} quiet>
+      {status.limitations.length ? <AdvancedSection title={`Notes (${status.limitations.length})`} summary="How this recovery ran" icon={ListChecks} quiet>
         <div className="notes-list">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={friendlyLimitation(limitation.code)} explanation={limitation.explanation} action={<code className="diagnostic-code">{limitation.code}</code>} />)}</div>
       </AdvancedSection> : null}
 
-      <AdvancedSection title="Details" summary="Live event log, checkpoints and read-error map" icon={Clock3} quiet>
+      <AdvancedSection title="Details" summary="Event log and read coverage" icon={Clock3} quiet>
         <section className="job-progress__log stack stack--tight" aria-labelledby="event-stream-title">
           <h2 id="event-stream-title">Event stream</h2>
           <ol className="event-log" aria-label="Recovery event stream" ref={logRef}>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
           {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
         </section>
         <div className="grid-2">
-          <div className="card card--muted"><strong>Checkpoint detail unavailable</strong><p className="form-hint">No checkpoint time or byte range is reported by the current job API. Pause and resume remain service-controlled.</p></div>
+          <div className="card card--muted"><strong>Checkpoint detail unavailable</strong><p className="form-hint">No checkpoint time or byte range is reported.</p></div>
           <div className="card card--muted"><ReadErrorMap /></div>
         </div>
-        <p className="note"><ShieldCheck aria-hidden="true" />Last update from the recovery service: {formatTime(status.updatedAt)}.</p>
+        <p className="note"><ShieldCheck aria-hidden="true" />Last update: {formatTime(status.updatedAt)}.</p>
       </AdvancedSection>
     </> : null}
   </section>;

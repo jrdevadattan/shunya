@@ -112,7 +112,7 @@ export function NewDeletionPage() {
         <PageHeader
           eyebrow="Securely delete"
           title="Securely delete a folder"
-          description="Every file in the folder is overwritten with random data, renamed and removed, so it cannot be recovered. Works on USB drives only; your system drive is never touched."
+          description="Files are overwritten with random data, then removed. USB drives only."
           actions={<Link className="button button--secondary" to="/secure-erase"><ShieldAlert aria-hidden="true" />Wipe a whole drive instead</Link>}
         />
 
@@ -128,12 +128,12 @@ export function NewDeletionPage() {
                   {planning ? <Loader2 className="spin" aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
                   {planning ? 'Inspecting folder…' : plan ? 'Change folder' : 'Choose folder'}
                 </button>
-                {targetPath ? <code className="deletion-page__path">{targetPath}</code> : <span className="deletion-page__hint">Nothing is changed until you confirm in step 3.</span>}
+                {targetPath ? <code className="deletion-page__path">{targetPath}</code> : <span className="deletion-page__hint">Nothing changes until you confirm.</span>}
               </div>
               {plan ? <>
                 <div className="deletion-page__facts" aria-label="Deletion plan">
                   <article><Usb aria-hidden="true" /><span><strong>{plan.device.device.model}</strong><small>{plan.device.device.busType ?? 'Removable'} · {formatBytes(plan.device.device.sizeBytes)} · mounted at {plan.device.mountRoot}</small></span><em>Removable</em></article>
-                  <article><Trash2 aria-hidden="true" /><span><strong>{plan.fileCount.toLocaleString('en-US')} files · {formatBytes(plan.totalBytes)}</strong><small>{plan.directoryCount.toLocaleString('en-US')} subfolders will be removed once emptied</small></span></article>
+                  <article><Trash2 aria-hidden="true" /><span><strong>{plan.fileCount.toLocaleString('en-US')} files · {formatBytes(plan.totalBytes)}</strong><small>{plan.directoryCount.toLocaleString('en-US')} subfolders</small></span></article>
                 </div>
                 {plan.sample.length ? <details className="deletion-page__sample"><summary>Preview of files to delete ({Math.min(plan.sample.length, plan.fileCount)} of {plan.fileCount})</summary><ul>{plan.sample.map((file) => <li key={file}>{file}</li>)}</ul></details> : <p className="deletion-page__hint">The folder contains no files; its empty subfolders will be removed.</p>}
                 {plan.skipped.length ? <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" />{plan.skipped.length} entries will be skipped (links, special files, or unreadable) and left in place.</p> : null}
@@ -146,7 +146,6 @@ export function NewDeletionPage() {
               <span className="deletion-step__number" aria-hidden="true">2</span>
               <div className="deletion-step__body">
                 <strong>Name this deletion</strong>
-                <p>Shown in your history and on the certificate.</p>
                 <input className="input" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} aria-label="Deletion task title" disabled={running || Boolean(result)} />
               </div>
             </div>
@@ -159,7 +158,7 @@ export function NewDeletionPage() {
                   <ShieldAlert aria-hidden="true" />
                   <div>
                     <strong>This cannot be undone</strong>
-                    <p>Type the full folder path exactly as shown to enable deletion.</p>
+                    <p>Type the folder path to confirm.</p>
                     <input
                       className="flash-erase__confirm"
                       aria-label="Type the folder path to confirm"
@@ -218,9 +217,9 @@ export function NewDeletionPage() {
           </> : null}
         </section>
 
-        <AdvancedSection title="How deletion works" summary="Method, standard and the honest limitation for flash media" icon={BookOpen} quiet>
-          <p className="form-hint">File contents are overwritten with an AES-256-CTR keystream before removal — a NIST SP 800-88 Rev. 2 <strong>Clear</strong> at file level. The file is then truncated, renamed to a random name and unlinked, and emptied folders are removed.</p>
-          <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />On flash media, wear-levelling can leave stale copies in unmapped cells. For full assurance, erase the whole drive instead.</p>
+        <AdvancedSection title="How deletion works" summary="Method and standard" icon={BookOpen} quiet>
+          <p className="form-hint">Each file is overwritten with an AES-256-CTR keystream, truncated, renamed and unlinked — a NIST SP 800-88 Rev. 2 <strong>Clear</strong> at file level. Emptied folders are removed.</p>
+          <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />On flash media, wear-levelling can leave stale copies. Erase the whole drive for full assurance.</p>
         </AdvancedSection>
       </div>
     </ApplicationShell>

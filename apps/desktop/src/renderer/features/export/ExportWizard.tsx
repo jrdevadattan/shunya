@@ -70,28 +70,28 @@ export function ExportWizard() {
   const sourceLabel = !selection ? 'Loading source identity…' : selection.sourceIds.length === 1 ? selection.sourceIds[0] : `${selection.sourceIds.length} source identities`;
 
   return <section className="page export-wizard">
-    <PageHeader eyebrow="Recovered files" title="Export recovered files" description="Copies the selected files to a folder of your choice and verifies every copy. The destination must be a different drive from the source." />
+    <PageHeader eyebrow="Recovered files" title="Export recovered files" description="Every copy is verified. Save to a different drive from the source." />
     {error ? <p className="form-error" role="alert">{error}</p> : null}
     <form className="export-flow" onSubmit={submit}>
       <section className="card stack" aria-labelledby="export-selection-title">
-        <div className="section-title"><h2 id="export-selection-title">What will be exported</h2>{selection ? <span className="badge" data-tone="accent">{selectedCount.toLocaleString('en-US')} {selectedCount === 1 ? 'item' : 'items'} selected</span> : <LoaderCircle className="spin" aria-label="Loading complete artifact selection" style={{ width: 18, height: 18 }} />}</div>
+        <div className="section-title"><h2 id="export-selection-title">Selected files</h2>{selection ? <span className="badge" data-tone="accent">{selectedCount.toLocaleString('en-US')} {selectedCount === 1 ? 'item' : 'items'} selected</span> : <LoaderCircle className="spin" aria-label="Loading complete artifact selection" style={{ width: 18, height: 18 }} />}</div>
         {!selection ? <p role="status" className="empty-state">Loading all recovered artifacts… {loadingCount.toLocaleString('en-US')} indexed</p> : <>
           <div className="export-selection__summary"><span><CheckSquare2 aria-hidden="true" /><strong>{selectedCount.toLocaleString('en-US')} items selected</strong></span><strong>{formatBytes(selection.totalBytes)}</strong></div>
           {ineligibleCount > 0 ? <p className="form-error" role="alert">{verifiedSelectionMessage(ineligibleCount, selectedCount)} Return to Results and review the selection.</p> : null}
           <ul className="export-selection-list">{selection.previewItems.map((artifact) => <li key={artifact.artifactId}><File aria-hidden="true" /><span><strong>{artifact.displayName}</strong><small>{artifact.recoveryMethod === 'carving' ? 'Original folder unavailable' : artifact.originalPath ?? 'Original path unavailable'}</small></span><em>{formatBytes(BigInt(artifact.sizeBytes))}</em></li>)}</ul>
           {selectedCount > selection.previewItems.length ? <p className="export-selection__bounded">Showing {selection.previewItems.length} representative items. All {selectedCount.toLocaleString('en-US')} selected identifiers will be submitted.</p> : null}
-          <AdvancedSection title="Condition breakdown" summary="How many selected files are complete, partial or corrupt" quiet><ConditionSummary conditions={selection.conditions} /></AdvancedSection>
+          <AdvancedSection title="Condition breakdown" summary="Complete, partial or corrupt" quiet><ConditionSummary conditions={selection.conditions} /></AdvancedSection>
         </>}
       </section>
 
       <aside className="card stack" aria-labelledby="export-destination-title">
-        <div><h2 id="export-destination-title">Where to save</h2><p className="form-hint">From <strong>{sourceLabel}</strong>{selection ? ' (read-only)' : ''}. Pick a folder on a separate drive; the service checks this before writing.</p></div>
+        <div><h2 id="export-destination-title">Where to save</h2><p className="form-hint">From <strong>{sourceLabel}</strong>{selection ? ' (read-only)' : ''}.</p></div>
         <label className="field"><span>Export destination path</span><div className="input-group"><input name="destinationPath" required placeholder="Choose a folder on another drive" value={destinationPath} onChange={(event) => setDestinationPath(event.target.value)} disabled={running || selectingDestination} /><button className="button button--secondary" type="button" onClick={() => void chooseDestination()} disabled={running || selectingDestination}><FolderOpen aria-hidden="true" />{selectingDestination ? 'Opening…' : 'Choose export folder'}</button></div></label>
-        <AdvancedSection title="Include flagged files" summary="Files marked as potentially unsafe are skipped unless you allow them" icon={ShieldAlert} quiet>
-          <label className="check"><input name="acknowledgeUnsafe" type="checkbox" /><span><strong>I authorize controlled export of selected artifacts marked potentially unsafe.</strong><small>They are still never opened by this app. Handle them in a controlled environment.</small></span></label>
+        <AdvancedSection title="Include flagged files" summary="Skipped unless you allow them" icon={ShieldAlert} quiet>
+          <label className="check"><input name="acknowledgeUnsafe" type="checkbox" /><span><strong>Export files marked potentially unsafe</strong><small>They are never opened by this app.</small></span></label>
         </AdvancedSection>
         <button className="button button--primary button--large" type="submit" disabled={!selection || running || selectingDestination || selectedCount === 0 || ineligibleCount > 0}>{running ? 'Exporting and verifying…' : 'Start verified export'}<ArrowRight aria-hidden="true" /></button>
-        <p className="note"><ShieldCheck aria-hidden="true" />Every copied file is hashed and compared with the original. Nothing is written to the source.</p>
+        <p className="note"><ShieldCheck aria-hidden="true" />Each copy is hashed and compared with the original.</p>
       </aside>
     </form>
     {result ? <section className={completelyVerified ? 'export-verification is-complete' : 'export-verification is-incomplete'} role={completelyVerified ? 'status' : 'alert'} aria-labelledby="export-verification-title"><header>{completelyVerified ? <CheckCircle2 aria-hidden="true" /> : <TriangleAlert aria-hidden="true" />}<span><h2 id="export-verification-title">{completelyVerified ? 'Export complete and verified' : 'Verification incomplete'}</h2><p>{completelyVerified ? `${verifiedCount} ${verifiedCount === 1 ? 'file' : 'files'} exported and verified.` : `${verifiedCount} of ${submittedCount} selected files were returned and verified. Treat the export as incomplete.`}</p></span><code>{result.exportId}</code></header><ul>{result.items.map((item) => <li key={item.artifactId}><span>{item.outputPath}</span><strong>{item.verified ? 'SHA-256 verified' : 'Verification failed'}</strong></li>)}</ul><p>The destination folder was not opened automatically.</p></section> : null}

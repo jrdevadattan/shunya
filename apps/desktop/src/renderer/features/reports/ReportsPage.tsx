@@ -25,7 +25,7 @@ export function ReportsPage() {
     finally { setRevealing(false); }
   }
   return <section className="page page--narrow reports-page">
-    <PageHeader eyebrow="Case documentation" title="Report" description="A written record of this recovery: what was read, what was found, and what could not be done. Generated from the case records, never estimated."
+    <PageHeader eyebrow="Case documentation" title="Report" description="A written record of this recovery, generated from the case files."
       actions={<button className="button button--secondary" type="button" onClick={() => void generate()} disabled={running}><RefreshCw aria-hidden="true" className={running ? 'spin' : undefined} />{running ? 'Generating report…' : report ? 'Regenerate report' : 'Generate report'}</button>} />
     {error ? <p role="alert" className="form-error">{error}</p> : null}
     {revealError ? <p role="alert" className="form-error">{revealError}</p> : null}
@@ -33,14 +33,14 @@ export function ReportsPage() {
       <section className="card stack" role="status" aria-labelledby="report-ready-title">
         <div className="verdict" data-tone="success" style={{ padding: 0, border: 0, boxShadow: 'none' }}>
           <span className="verdict__icon" aria-hidden="true"><CheckCircle2 /></span>
-          <div className="verdict__text"><h2 id="report-ready-title">Report ready</h2><p>Two files were written to the case folder: a machine-readable record and a readable summary.</p></div>
+          <div className="verdict__text"><h2 id="report-ready-title">Report ready</h2><p>Two files were written to the case folder.</p></div>
           <button className="button button--primary" type="button" onClick={() => void reveal()} disabled={revealing}><FolderOpen aria-hidden="true" />{revealing ? 'Opening…' : 'Open report folder'}</button>
         </div>
         <div className="grid-2">
-          <article className="report-file"><FileJson2 aria-hidden="true" /><span><strong>JSON evidence record</strong><small>Machine-readable, for verification</small><code>{report.jsonPath}</code></span></article>
-          <article className="report-file"><FileText aria-hidden="true" /><span><strong>Markdown summary</strong><small>Human-readable recovery report</small><code>{report.markdownPath}</code></span></article>
+          <article className="report-file"><FileJson2 aria-hidden="true" /><span><strong>JSON evidence record</strong><code>{report.jsonPath}</code></span></article>
+          <article className="report-file"><FileText aria-hidden="true" /><span><strong>Markdown summary</strong><code>{report.markdownPath}</code></span></article>
         </div>
-        <p className="note"><ShieldCheck aria-hidden="true" />The folder is opened without launching either report file or any recovered content.</p>
+        <p className="note"><ShieldCheck aria-hidden="true" />Opening the folder does not launch any file.</p>
       </section>
 
       <CertificatePanel record={{
@@ -53,10 +53,10 @@ export function ReportsPage() {
         completedAt: new Date().toISOString(),
       }} />
 
-      <AdvancedSection title={`Notes and limitations (${report.limitations.length})`} summary="What this build could not do for this case — also included in the report" icon={ListChecks} quiet>
+      <AdvancedSection title={`Notes (${report.limitations.length})`} summary="Also included in the report" icon={ListChecks} quiet>
         <div className="notes-list">{report.limitations.length ? report.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level="warning" title={limitation.code} explanation={limitation.explanation} />) : <p className="empty-state">No limitations were recorded.</p>}</div>
       </AdvancedSection>
-    </> : <EmptyState icon={FileText} title={running ? 'Generating the report…' : 'No report yet'} description={running ? 'Writing the JSON and Markdown files from the case records.' : 'Press Generate report to write the JSON and Markdown files from the case records.'} />}
+    </> : <EmptyState icon={FileText} title={running ? 'Generating the report…' : 'No report yet'} description={running ? 'Writing the report files…' : 'Press Generate report to create it.'} />}
   </section>;
 }
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'The report could not be generated.'; }

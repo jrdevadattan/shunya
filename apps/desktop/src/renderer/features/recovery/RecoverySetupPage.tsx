@@ -78,9 +78,9 @@ export function RecoverySetupPage() {
   return <WorkflowFrame
     eyebrow="Recover · step 3 of 3"
     title="Set up the recovery"
-    description="Choose which kinds of files to look for, then start. Everything else has a safe default."
+    description="Choose which kinds of files to look for, then start."
     steps={[{ id: 'source', label: 'Source', state: 'complete' }, { id: 'setup', label: 'Set up', state: 'current' }, { id: 'recovery', label: 'Recover', state: 'upcoming' }]}
-    aside={<div className="workflow-truth workflow-truth--safe"><ShieldCheck aria-hidden="true" /><span><strong>Read-only, checked, and scanned</strong><small>Every recovered file is checked for completeness and scanned for threats before you see it. {formatCount(families)} content signatures enabled.</small></span></div>}
+    aside={<div className="workflow-truth workflow-truth--safe"><ShieldCheck aria-hidden="true" /><span><strong>Read-only</strong><small>Recovered files are checked and threat-scanned before you see them.</small></span></div>}
   >
     <Verdict source={source} assessment={assessment} error={assessmentError} />
 
@@ -90,12 +90,12 @@ export function RecoverySetupPage() {
     <div className="start-panel">
       <div>
         <h2>Ready to recover</h2>
-        <p>{blocked ? 'This source cannot be scanned. See the notes above.' : families.length ? `Scans the ${presetLabel(preset)} for ${families.length === 6 ? 'all file types' : `${families.length} file ${families.length === 1 ? 'type' : 'types'}`}. You can pause or cancel at any time.` : 'Select at least one file type to start.'}</p>
+        <p>{blocked ? 'This source cannot be scanned.' : families.length ? `${families.length === 6 ? 'All file types' : `${families.length} file ${families.length === 1 ? 'type' : 'types'}`} · ${presetLabel(preset)}. You can pause or cancel any time.` : 'Select at least one file type.'}</p>
       </div>
       <button className="button button--primary button--large" type="button" disabled={!canStart} onClick={() => void start()}><Play aria-hidden="true" />{starting ? 'Starting…' : 'Start recovery'}</button>
     </div>
 
-    <AdvancedSection title="Advanced options" summary="Recovery goal and scan depth — the defaults work for most drives">
+    <AdvancedSection title="Advanced options" summary="Recovery goal and scan depth">
       <fieldset className="preset-list" aria-label="Recovery goal">
         <legend className="sr-only">Recovery goal</legend>
         {goals.map(({ value, label, detail, Icon }) => <label className="preset" key={value}><input type="radio" name="recovery-goal" value={value} checked={goal === value} onChange={() => changeGoal(value)} disabled={starting} /><span className="preset__icon" aria-hidden="true"><Icon /></span><span className="preset__text"><strong>{label}</strong><small>{detail}</small></span></label>)}
@@ -104,7 +104,7 @@ export function RecoverySetupPage() {
         <legend className="sr-only">Scan depth</legend>
         {presets.map(({ value, label, detail, Icon }) => <label className="preset" key={value}><input type="radio" name="scan-preset" value={value} checked={preset === value} onChange={() => setPreset(value)} disabled={starting} /><span className="preset__icon" aria-hidden="true"><Icon /></span><span className="preset__text"><strong>{label}</strong><small>{detail}</small></span></label>)}
       </fieldset>
-      <p className="form-hint">Recovering recently deleted files by name, or finding one specific file, needs a metadata engine that is not part of this build.</p>
+      <p className="form-hint">Recovering files by their original name needs a metadata engine, which is not in this build.</p>
     </AdvancedSection>
   </WorkflowFrame>;
 }

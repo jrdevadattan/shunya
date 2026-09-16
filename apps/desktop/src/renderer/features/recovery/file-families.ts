@@ -17,7 +17,7 @@ export const FILE_FAMILIES: readonly FileFamilyMeta[] = [
   { id: 'archives', label: 'Archives', description: 'Compressed containers.', formats: 'ZIP · 7z · RAR · GZIP', Icon: Archive },
   { id: 'audio_video', label: 'Audio & video', description: 'Recordings and media containers.', formats: 'MP4 · MOV · M4A · 3GP · MP3 · WAV · AVI', Icon: Film },
   { id: 'databases', label: 'Databases', description: 'Application data stores.', formats: 'SQLite', Icon: Database },
-  { id: 'executables', label: 'Executables', description: 'Programs and packages.', formats: 'EXE · DLL · ELF · JAR · APK', Icon: TerminalSquare, caution: 'Never previewed. Quarantined and threat-scanned before export.' },
+  { id: 'executables', label: 'Executables', description: 'Programs and packages.', formats: 'EXE · DLL · ELF · JAR · APK', Icon: TerminalSquare, caution: 'Never previewed' },
 ];
 
 export const ALL_FILE_FAMILIES: readonly FileFamily[] = FILE_FAMILIES.map((family) => family.id);

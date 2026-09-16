@@ -75,11 +75,11 @@ export function ResultsPage() {
   const activeFilters = [method === 'metadata' ? 'File records' : method === 'carving' ? 'Content signatures' : undefined, family ? familyLabel(family) : undefined, originalPathPrefix, search ? `“${search}”` : undefined].filter(Boolean);
 
   return <section className="results-page">
-    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovered files</h1><p className="page-heading__description">Everything found in this recovery, already checked and threat-scanned. Tick the files you want, then export them.</p></div>
+    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovered files</h1><p className="page-heading__description">Tick the files you want, then export them.</p></div>
       <div className="results-page__summary">
-        <div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Indexed by the recovery service</small></span></div>
+        <div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Found in this recovery</small></span></div>
         <div className="results-page__stat"><Layers aria-hidden="true" /><span><strong>{familyCount} {familyCount === 1 ? 'file type' : 'file types'}</strong><small>{validatedCount.toLocaleString('en-US')} validated of {page.items.length.toLocaleString('en-US')} loaded</small></span></div>
-        {threatCount > 0 ? <div className="results-page__threats"><ShieldAlert aria-hidden="true" /><span><strong>{threatCount} potential threat{threatCount === 1 ? '' : 's'}</strong><small>Flagged by YARA-X · quarantined</small></span></div> : null}
+        {threatCount > 0 ? <div className="results-page__threats"><ShieldAlert aria-hidden="true" /><span><strong>{threatCount} potential threat{threatCount === 1 ? '' : 's'}</strong><small>Quarantined</small></span></div> : null}
       </div>
     </header>
     {error ? <p role="alert" className="form-error">{error}</p> : null}

@@ -71,7 +71,7 @@ export function ApplicationShell({ title, children }: { title: string; children:
         footer={(
           <div className="sidebar-safety-status" role="status">
             <CircleCheck aria-hidden="true" />
-            <span><strong>Source writes blocked</strong><small>Your evidence is never modified</small></span>
+            <span>Source writes blocked</span>
           </div>
         )}
       >

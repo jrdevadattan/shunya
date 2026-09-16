@@ -1,5 +1,5 @@
 import { AdvancedSection, PageHeader } from '@recovery/ui';
-import { CircleHelp, FolderSearch, Info, LockKeyhole, Monitor, Moon, PanelLeftClose, RotateCcw, ShieldCheck, Sun, Trash2 } from 'lucide-react';
+import { CircleHelp, FolderSearch, Info, LockKeyhole, Monitor, Moon, RotateCcw, ShieldCheck, Sun, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ApplicationShell, useApplicationPreferences } from './ApplicationShell.js';
 
@@ -12,35 +12,44 @@ export function SettingsPage() {
 }
 
 const themes = [
-  { value: 'light', label: 'Light theme', Icon: Sun },
-  { value: 'system', label: 'System theme', Icon: Monitor },
-  { value: 'dark', label: 'Dark theme', Icon: Moon },
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'system', label: 'System', Icon: Monitor },
+  { value: 'dark', label: 'Dark', Icon: Moon },
 ] as const;
+
+const invariants = [
+  'Evidence sources open read-only',
+  'Exports need a separate destination',
+  'Active content is never previewed',
+];
 
 function SettingsWorkspace() {
   const { preferences, updatePreferences } = useApplicationPreferences();
   return (
     <section className="page page--narrow" aria-labelledby="settings-title">
-      <PageHeader title="Settings" titleId="settings-title" description="Theme and sidebar choices are stored on this device. Changes apply immediately." />
+      <PageHeader title="Settings" titleId="settings-title" />
       <div className="settings-grid">
         <section className="card stack" aria-labelledby="appearance-title">
           <h2 id="appearance-title">Appearance</h2>
-          <fieldset className="settings-theme"><legend>Theme</legend>{themes.map(({ value, label, Icon }) => <label key={value}><input type="radio" name="settings-theme" checked={preferences.theme === value} onChange={() => updatePreferences({ ...preferences, theme: value })} /><Icon aria-hidden="true" />{label}</label>)}</fieldset>
-          <label className="check check--boxed"><input type="checkbox" checked={preferences.sidebarCollapsed} onChange={(event) => updatePreferences({ ...preferences, sidebarCollapsed: event.target.checked })} /><span><strong><PanelLeftClose aria-hidden="true" style={{ width: 14, height: 14, verticalAlign: '-2px' }} /> Collapse navigation sidebar</strong><small>Keep the compact sidebar between launches.</small></span></label>
-          <button className="button button--ghost button--small" type="button" onClick={() => updatePreferences({ theme: 'system', sidebarCollapsed: false })}><RotateCcw aria-hidden="true" />Restore appearance defaults</button>
+          <fieldset className="settings-theme">
+            <legend>Theme</legend>
+            {themes.map(({ value, label, Icon }) => (
+              <label key={value}><input type="radio" name="settings-theme" checked={preferences.theme === value} onChange={() => updatePreferences({ ...preferences, theme: value })} /><Icon aria-hidden="true" />{label}</label>
+            ))}
+          </fieldset>
+          <label className="check"><input type="checkbox" checked={preferences.sidebarCollapsed} onChange={(event) => updatePreferences({ ...preferences, sidebarCollapsed: event.target.checked })} /><span><strong>Collapse sidebar</strong></span></label>
+          <button className="button button--ghost button--small" type="button" onClick={() => updatePreferences({ theme: 'system', sidebarCollapsed: false })}><RotateCcw aria-hidden="true" />Reset</button>
         </section>
 
         <section className="card stack" aria-labelledby="safety-title">
-          <div><h2 id="safety-title">Built-in safety</h2><p className="form-hint">These protections are always on. They are part of how SHUNYA works, not options.</p></div>
-          <div className="settings-invariants">
-            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Always open evidence sources read-only</strong><small>Nothing is ever written to the drive you recover from.</small></span><em>Enforced and cannot be changed</em></article>
-            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Require a separate export destination</strong><small>Exports are refused onto the source or the case folder.</small></span><em>Enforced and cannot be changed</em></article>
-            <article className="settings-invariant"><ShieldCheck aria-hidden="true" /><span><strong>Keep active-content preview protected</strong><small>Programs and flagged files are never opened in the app.</small></span><em>Enforced and cannot be changed</em></article>
-          </div>
+          <div className="section-title"><h2 id="safety-title">Built-in safety</h2><span className="badge" data-tone="success">Enforced and cannot be changed</span></div>
+          <ul className="settings-invariants">
+            {invariants.map((invariant) => <li key={invariant} className="settings-invariant"><ShieldCheck aria-hidden="true" />{invariant}</li>)}
+          </ul>
         </section>
       </div>
-      <AdvancedSection title="Advanced recovery defaults" summary="Checkpoint cadence, verification policy, storage headroom and tool runtimes" icon={LockKeyhole} quiet>
-        <p className="form-hint">Additional recovery defaults are unavailable because the daemon has no persisted settings API. Checkpoint cadence, verification policy, storage headroom, and tool runtimes therefore have no editable controls here.</p>
+      <AdvancedSection title="Advanced recovery defaults" summary="Not configurable in this build" icon={LockKeyhole} quiet>
+        <p className="form-hint">The recovery service has no settings API, so checkpoint cadence, verification policy, storage headroom and tool runtimes cannot be changed here.</p>
       </AdvancedSection>
     </section>
   );
@@ -50,12 +59,12 @@ export function HelpPage() {
   return (
     <ApplicationShell title="Help">
       <section className="page page--narrow" aria-labelledby="help-title">
-        <PageHeader title="Help" titleId="help-title" description="Three things to know before you start." />
+        <PageHeader title="Help" titleId="help-title" />
         <div className="support-grid">
-          <article className="support-card"><FolderSearch aria-hidden="true" /><div><h2>Recovering files</h2><p>Open or create a case before using case recovery tools. Then choose the drive image, pick the file types you want back, and press Start.</p></div></article>
-          <article className="support-card"><ShieldCheck aria-hidden="true" /><div><h2>Protect the original</h2><p>Keep evidence sources read-only and choose a separate destination for case data and exports. Making a disk image first is the safest path.</p></div></article>
-          <article className="support-card"><Trash2 aria-hidden="true" /><div><h2>Securely deleting</h2><p>Folder deletion and whole-drive wipes only work on removable USB media. Your system drive can never be selected.</p></div></article>
-          <article className="support-card"><CircleHelp aria-hidden="true" /><div><h2>When something is unavailable</h2><p>Some capabilities show as unavailable rather than guessing. The message at that spot explains what is missing and what to do.</p></div></article>
+          <article className="support-card"><FolderSearch aria-hidden="true" /><div><h2>Recovering files</h2><p>Create a case, choose a drive image, pick the file types you want, then press Start.</p></div></article>
+          <article className="support-card"><ShieldCheck aria-hidden="true" /><div><h2>Protecting the original</h2><p>Make a disk image first and export to a different drive. The original is never written to.</p></div></article>
+          <article className="support-card"><Trash2 aria-hidden="true" /><div><h2>Deleting securely</h2><p>Folder deletion and drive wipes work on USB media only. Your system drive can never be selected.</p></div></article>
+          <article className="support-card"><CircleHelp aria-hidden="true" /><div><h2>When something is unavailable</h2><p>Capabilities that are missing say so instead of guessing. The message explains what is needed.</p></div></article>
         </div>
         <div><Link className="button button--primary" to="/cases/new">Create a recovery case</Link></div>
       </section>
@@ -69,8 +78,8 @@ export function AboutPage() {
       <section className="page page--narrow" aria-labelledby="about-title">
         <PageHeader title="About SHUNYA Recovery" titleId="about-title" description="Offline-first, read-only recovery workspace" />
         <div className="support-grid">
-          <article className="support-card"><Info aria-hidden="true" /><div><h2>What it does</h2><p>SHUNYA Recovery coordinates case work through the local recovery service and displays only typed service results — nothing is estimated in the interface.</p></div></article>
-          <article className="support-card"><ShieldCheck aria-hidden="true" /><div><h2>Truthful by design</h2><p>Unsupported capabilities stay unavailable instead of producing simulated findings, device health, or forensic evidence.</p></div></article>
+          <article className="support-card"><Info aria-hidden="true" /><div><h2>What it does</h2><p>Recovers deleted files from drive images and securely destroys data, entirely offline.</p></div></article>
+          <article className="support-card"><ShieldCheck aria-hidden="true" /><div><h2>Truthful by design</h2><p>Nothing is estimated or simulated. Unsupported capabilities stay unavailable.</p></div></article>
         </div>
       </section>
     </ApplicationShell>
