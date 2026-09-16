@@ -69,27 +69,35 @@ export function ResultsPage() {
   const selectedBytes = Array.from(exportSelection.values()).reduce((total, item) => total + BigInt(item.sizeBytes), 0n);
   const selectedCount = exportSelection.size;
   const toggleExport = (item: RecoveryArtifact) => setExportSelection((current) => { const next = new Map(current); if (next.has(item.artifactId)) next.delete(item.artifactId); else next.set(item.artifactId, item); return next; });
+  const selectAllLoaded = () => setExportSelection(new Map(page.items.map((item) => [item.artifactId, item])));
+  const clearSelection = () => setExportSelection(new Map());
   const prepareExport = () => sessionStorage.setItem(`recovery:${caseId}:exportArtifactIds`, JSON.stringify(Array.from(exportSelection.keys())));
   const activeFilters = [method === 'metadata' ? 'File records' : method === 'carving' ? 'Content signatures' : undefined, family ? familyLabel(family) : undefined, originalPathPrefix, search ? `“${search}”` : undefined].filter(Boolean);
 
   return <section className="results-page">
-    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovery results</h1><p className="page-heading__description">Review indexed artifacts, their provenance, and protected preview status without launching recovered originals.</p></div>
+    <header className="page-heading"><div><p className="eyebrow">Recovered files</p><h1>Recovered files</h1><p className="page-heading__description">Everything found in this recovery, already checked and threat-scanned. Tick the files you want, then export them.</p></div>
       <div className="results-page__summary">
-        <div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Daemon-indexed evidence</small></span></div>
-        <div className="results-page__stat" data-tone="neutral"><Layers aria-hidden="true" /><span><strong>{familyCount} {familyCount === 1 ? 'file type' : 'file types'}</strong><small>{validatedCount.toLocaleString('en-US')} validated of {page.items.length.toLocaleString('en-US')} loaded</small></span></div>
+        <div className="results-page__status"><CheckCircle2 aria-hidden="true" /><span><strong>{artifactLabel}</strong><small>Indexed by the recovery service</small></span></div>
+        <div className="results-page__stat"><Layers aria-hidden="true" /><span><strong>{familyCount} {familyCount === 1 ? 'file type' : 'file types'}</strong><small>{validatedCount.toLocaleString('en-US')} validated of {page.items.length.toLocaleString('en-US')} loaded</small></span></div>
         {threatCount > 0 ? <div className="results-page__threats"><ShieldAlert aria-hidden="true" /><span><strong>{threatCount} potential threat{threatCount === 1 ? '' : 's'}</strong><small>Flagged by YARA-X · quarantined</small></span></div> : null}
       </div>
     </header>
     {error ? <p role="alert" className="form-error">{error}</p> : null}
     <div className="results-workspace" aria-label="Recovery result browser">
       <ResultFilters artifacts={page.items} search={search} method={method} family={family} originalPathPrefix={originalPathPrefix} onSearch={setSearch} onMethod={(value) => { setMethod(value); setOriginalPathPrefix(undefined); }} onFamily={setFamily} onFolder={(path) => { setMethod('metadata'); setOriginalPathPrefix(path); setSearch(''); }} />
-      <main className="results-browser" aria-label="Recovered artifact table"><header><div><Files aria-hidden="true" /><span><h2>Recovered artifacts</h2><p>{page.items.length.toLocaleString('en-US')} loaded of {artifactLabel}{activeFilters.length ? ` · filtered by ${activeFilters.join(' · ')}` : ''}</p></span></div><span><ShieldCheck aria-hidden="true" />Protected review</span></header>
-        {page.items.length ? <ArtifactTable artifacts={page.items} selected={selected} exportSelection={exportSelection} onSelect={setSelected} onToggleExport={toggleExport} /> : <p className="empty-state">{error ? 'Results unavailable.' : activeFilters.length ? 'No recovered artifacts match the current filters.' : 'No recovered artifacts were returned.'}</p>}
-        {page.nextCursor ? <button className="button button--secondary results-browser__more" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading more results…' : 'Load more results'}</button> : null}
+      <main className="results-browser" aria-label="Recovered artifact table"><header><div><Files aria-hidden="true" /><span><h2>Files</h2><p>{page.items.length.toLocaleString('en-US')} loaded of {artifactLabel}{activeFilters.length ? ` · filtered by ${activeFilters.join(' · ')}` : ''}</p></span></div><span><ShieldCheck aria-hidden="true" />Protected review</span></header>
+        {page.items.length ? <ArtifactTable artifacts={page.items} selected={selected} exportSelection={exportSelection} onSelect={setSelected} onToggleExport={toggleExport} /> : <p className="empty-state">{error ? 'Results unavailable.' : activeFilters.length ? 'No recovered files match the current filters.' : 'No recovered files were returned.'}</p>}
+        {page.nextCursor ? <button className="button button--secondary results-browser__more" type="button" disabled={loadingMore} onClick={() => void loadMore()}>{loadingMore ? 'Loading more…' : 'Load more'}</button> : null}
       </main>
       <ArtifactDetailsPanel artifact={artifact} preview={preview} previewError={previewError} />
     </div>
-    <footer className="results-selection" aria-label="Export selection summary"><div><strong>{selectedCount.toLocaleString('en-US')} {selectedCount === 1 ? 'item' : 'items'} selected</strong><span aria-hidden="true">·</span><span>{formatBytes(selectedBytes)} selected</span></div><Link className="button button--primary" to={`/cases/${caseId}/exports`} aria-disabled={selectedCount === 0} onClick={(event) => { if (!selectedCount) event.preventDefault(); else prepareExport(); }}>Review export <ArrowRight aria-hidden="true" /></Link></footer>
+    <footer className="results-selection" aria-label="Export selection summary">
+      <div>
+        <strong>{selectedCount.toLocaleString('en-US')} {selectedCount === 1 ? 'item' : 'items'} selected</strong><span aria-hidden="true">·</span><span>{formatBytes(selectedBytes)} selected</span>
+        <button type="button" className="button button--ghost button--small" onClick={selectedCount === page.items.length && page.items.length > 0 ? clearSelection : selectAllLoaded} disabled={!page.items.length}>{selectedCount === page.items.length && page.items.length > 0 ? 'Clear selection' : 'Select all loaded'}</button>
+      </div>
+      <Link className="button button--primary" to={`/cases/${caseId}/exports`} aria-disabled={selectedCount === 0} onClick={(event) => { if (!selectedCount) event.preventDefault(); else prepareExport(); }}>Review export <ArrowRight aria-hidden="true" /></Link>
+    </footer>
   </section>;
 }
 

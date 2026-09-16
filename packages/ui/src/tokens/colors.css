@@ -1,53 +1,106 @@
+/* SHUNYA design tokens — colour.
+   Light is the default; dark redefines the same names. Every colour a page uses
+   must come from here so both themes stay coherent. */
 :root {
   color-scheme: light;
-  --surface-app: #fbfaf7;
-  --surface-panel: oklch(1 0 0);
-  --surface-muted: #fff5ec;
-  --surface-hover: #f8ede4;
-  --text-primary: oklch(0.145 0 0);
-  --text-secondary: oklch(0.48 0 0);
-  --text-tertiary: oklch(0.62 0 0);
-  --border-subtle: #dfddd8;
+
+  --surface-app: #f4f6f9;
+  --surface-panel: #ffffff;
+  --surface-muted: #f1f3f7;
+  --surface-hover: #e9edf3;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eceff4;
+  --surface-overlay: rgba(15, 23, 42, 0.42);
+
+  --text-primary: #0f172a;
+  --text-secondary: #4b5565;
+  --text-tertiary: #7b8494;
+  --text-inverse: #ffffff;
+
+  --border-subtle: #e3e7ed;
+  --border-strong: #c9d1dc;
+
   --accent-primary: #f56600;
-  --accent-hover: #dc4f00;
+  --accent-hover: #dc5c00;
   --accent-contrast: #ffffff;
-  --focus-ring: #d94f00;
+  --accent-soft: #fff0e5;
+  --accent-soft-strong: #ffd9bf;
+  --accent-text: #c24f00;
+  --accent-ring: rgba(245, 102, 0, 0.28);
+  --accent-gradient: linear-gradient(135deg, #ff8a2b 0%, #f56600 100%);
+  --focus-ring: #f56600;
+
   --status-success: #2da44e;
-  --status-warning: oklch(0.666 0.179 58.318);
-  --status-danger: oklch(0.577 0.245 27.325);
-  --status-info: oklch(0.546 0.245 262.881);
-  --status-neutral: oklch(0.556 0 0);
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 5%), 0 1px 3px oklch(0 0 0 / 5%);
-  --shadow-md: 0 8px 20px oklch(0 0 0 / 8%), 0 2px 6px oklch(0 0 0 / 5%);
-  --shadow-lg: 0 20px 48px oklch(0 0 0 / 12%);
-  --shadow-accent: 0 6px 20px color-mix(in oklch, var(--accent-primary) 26%, transparent);
-  --accent-gradient: linear-gradient(135deg, var(--accent-primary), #ff9a3d);
-  --surface-raised: color-mix(in oklch, var(--surface-panel) 90%, var(--surface-app));
+  --status-success-soft: #e6f6eb;
+  --status-success-text: #1f7a3a;
+  --status-warning: #d97706;
+  --status-warning-soft: #fff3df;
+  --status-warning-text: #9a5300;
+  --status-danger: #dc2626;
+  --status-danger-soft: #feecec;
+  --status-danger-text: #b91c1c;
+  --status-info: #2563eb;
+  --status-info-soft: #e8f0fe;
+  --status-info-text: #1d4ed8;
+  --status-neutral: #64748b;
+  --status-neutral-soft: #eef1f5;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.16), 0 6px 16px rgba(15, 23, 42, 0.06);
+  --shadow-accent: 0 8px 22px rgba(245, 102, 0, 0.28);
+
+  --scrollbar-thumb: #cbd2dc;
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --surface-app: oklch(0.145 0 0);
-  --surface-panel: oklch(0.205 0 0);
-  --surface-muted: oklch(0.269 0 0);
-  --surface-hover: oklch(0.315 0 0);
-  --text-primary: oklch(0.985 0 0);
-  --text-secondary: oklch(0.74 0 0);
-  --text-tertiary: oklch(0.62 0 0);
-  --border-subtle: oklch(1 0 0 / 10%);
-  --accent-primary: #ff7a1a;
-  --accent-hover: #ff934d;
-  --accent-contrast: #1f1712;
-  --focus-ring: #ff9b57;
-  --status-success: #46b969;
-  --status-warning: oklch(0.78 0.16 66);
-  --status-danger: oklch(0.68 0.2 25);
-  --status-info: oklch(0.7 0.16 262);
-  --status-neutral: oklch(0.72 0 0);
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 40%);
-  --shadow-md: 0 10px 24px oklch(0 0 0 / 48%);
-  --shadow-lg: 0 22px 52px oklch(0 0 0 / 62%);
-  --shadow-accent: 0 8px 26px color-mix(in oklch, var(--accent-primary) 40%, transparent);
-  --accent-gradient: linear-gradient(135deg, var(--accent-primary), #ff9a4d);
-  --surface-raised: color-mix(in oklch, var(--surface-panel) 86%, var(--surface-hover));
+
+  --surface-app: #0c0f14;
+  --surface-panel: #141821;
+  --surface-muted: #1b2029;
+  --surface-hover: #232a35;
+  --surface-raised: #181d27;
+  --surface-sunken: #10141b;
+  --surface-overlay: rgba(2, 6, 12, 0.6);
+
+  --text-primary: #f1f4f8;
+  --text-secondary: #a3acba;
+  --text-tertiary: #737d8c;
+  --text-inverse: #0f172a;
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --accent-primary: #ff7a1f;
+  --accent-hover: #ff9147;
+  --accent-contrast: #1a0d04;
+  --accent-soft: rgba(255, 122, 31, 0.14);
+  --accent-soft-strong: rgba(255, 122, 31, 0.28);
+  --accent-text: #ffa163;
+  --accent-ring: rgba(255, 122, 31, 0.36);
+  --accent-gradient: linear-gradient(135deg, #ff9a4d 0%, #ff6a00 100%);
+  --focus-ring: #ff9a4d;
+
+  --status-success: #3fbf63;
+  --status-success-soft: rgba(63, 191, 99, 0.14);
+  --status-success-text: #7ddc97;
+  --status-warning: #f0a030;
+  --status-warning-soft: rgba(240, 160, 48, 0.14);
+  --status-warning-text: #ffc36b;
+  --status-danger: #f0554f;
+  --status-danger-soft: rgba(240, 85, 79, 0.14);
+  --status-danger-text: #ff8f8a;
+  --status-info: #5b8def;
+  --status-info-soft: rgba(91, 141, 239, 0.14);
+  --status-info-text: #9dbcff;
+  --status-neutral: #8b95a5;
+  --status-neutral-soft: rgba(139, 149, 165, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 26px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 26px 60px rgba(0, 0, 0, 0.65);
+  --shadow-accent: 0 10px 28px rgba(255, 122, 31, 0.32);
+
+  --scrollbar-thumb: #2e3542;
 }

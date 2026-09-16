@@ -1,3 +1,4 @@
+import { PageHeader } from '@recovery/ui';
 import { ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { NewCaseForm } from '../features/cases/NewCaseForm.js';
@@ -11,13 +12,11 @@ export function NewCasePage() {
   const intent = requestedSource === 'disk-image' || requestedSource === 'memory-image' ? requestedSource : undefined;
   return (
     <ApplicationShell title={opening ? 'Open case' : 'New case'}>
-      <div className="form-page">
-        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Back to workspace</Link>
-        <header className="page-heading">
-          {opening
-            ? <div><p className="eyebrow">Existing workspace</p><h1>Open an existing recovery case</h1><p className="page-heading__description">Choose a known case folder to validate and continue its persisted recovery state.</p></div>
-            : <div><p className="eyebrow">Case intake</p><h1>Start a new recovery case</h1><p className="page-heading__description">Add the case details, inspect a parent folder, and review everything before creating the workspace.</p></div>}
-        </header>
+      <div className="page page--narrow">
+        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Home</Link>
+        {opening
+          ? <PageHeader eyebrow="Existing case" title="Open an existing recovery case" description="Choose the folder of a case you created earlier to continue where you left off." />
+          : <PageHeader eyebrow="Step 1 of 3" title="Start a new recovery case" description="A case keeps everything recovered from one device together: the files, the report and the log." />}
         {opening ? <OpenCaseForm /> : <NewCaseForm intent={intent} />}
       </div>
     </ApplicationShell>

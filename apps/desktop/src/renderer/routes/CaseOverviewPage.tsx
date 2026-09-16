@@ -1,6 +1,6 @@
 import { ArtifactPageSchema, JobStatusSchema, SourceDescriptorSchema, type JobStatus, type SourceDescriptor } from '@recovery/contracts';
-import { MetricCard, SurfaceCard } from '@recovery/ui';
-import { Activity, Files, HardDrive, TriangleAlert } from 'lucide-react';
+import { AdvancedSection, MetricCard, PageHeader } from '@recovery/ui';
+import { Activity, ArrowRight, FileImage, Files, HardDrive, ListChecks, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { activeJobId } from '../application-state.js';
@@ -37,58 +37,52 @@ export function CaseOverviewPage() {
     return () => { active = false; };
   }, [caseId]);
 
-  if (error) return <section className="overview-page"><p className="form-error" role="alert">{error}</p></section>;
-  if (!data) return <section className="overview-page"><p role="status">Loading recovery overview…</p></section>;
+  if (error) return <section className="page"><p className="form-error" role="alert">{error}</p></section>;
+  if (!data) return <section className="page"><p role="status" className="empty-state">Loading recovery overview…</p></section>;
 
   const limitationCount = data.job?.limitations.length ?? 0;
   const next = nextAction(caseId, data);
 
   return (
-    <section className="overview-page">
-      <header className="page-heading">
-        <div><p className="eyebrow">Case workspace</p><h1>Recovery overview</h1></div>
-        <Link className="button button--primary" to={next.to}>{next.label}</Link>
-      </header>
-      <p className="page-heading__description">Live case state from the recovery daemon. No evidence or recovery values are estimated in the renderer.</p>
+    <section className="page">
+      <PageHeader eyebrow="Case" title="Recovery overview" description="Where this case stands and what to do next." />
 
-      {!data.job ? <section className="overview-job-empty" aria-labelledby="overview-job-empty-title">
-        <Activity aria-hidden="true" />
-        <div><h2 id="overview-job-empty-title">No recovery job yet</h2><p>Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.</p></div>
-        <Link className="button button--secondary" to={next.to}>{next.label}</Link>
-      </section> : null}
+      <section className="start-panel" aria-labelledby="overview-next-title">
+        <div>
+          <p className="eyebrow">Next step</p>
+          <h2 id="overview-next-title">{next.title}</h2>
+          <p>{next.detail}</p>
+        </div>
+        <Link className="button button--primary button--large" to={next.to}>{next.label}<ArrowRight aria-hidden="true" /></Link>
+      </section>
 
-      <div className="metric-grid metric-grid--overview">
-        <MetricCard label="Sources" value={data.sources.length} detail="Evidence sources in this case" icon={HardDrive} />
-        <MetricCard label="Recovery job" value={data.job ? stageLabel(data.job.stage) : 'Not started'} detail={data.job ? 'Persisted daemon state' : 'Add a source to begin'} icon={Activity} />
-        <MetricCard label="Recovered artifacts" value={data.totalArtifacts === null ? 'Unavailable' : data.totalArtifacts.toLocaleString()} detail={data.totalArtifacts === null ? 'Unavailable until indexing' : 'Indexed by the recovery daemon'} icon={Files} />
-        <MetricCard label="Limitations" value={limitationCount} detail="Capabilities requiring attention" icon={TriangleAlert} tone={limitationCount ? 'warning' : 'neutral'} />
+      <div className="grid-4">
+        <MetricCard label="Sources" value={data.sources.length} detail="Drive images in this case" icon={HardDrive} />
+        <MetricCard label="Recovery job" value={data.job ? stageLabel(data.job.stage) : 'Not started'} detail={data.job ? 'Current stage' : 'Add a source to begin'} icon={Activity} />
+        <MetricCard label="Recovered artifacts" value={data.totalArtifacts === null ? 'Unavailable' : data.totalArtifacts.toLocaleString()} detail={data.totalArtifacts === null ? 'Unavailable until indexing' : 'Files found so far'} icon={Files} tone={data.totalArtifacts ? 'success' : 'neutral'} />
+        <MetricCard label="Limitations" value={limitationCount} detail={limitationCount ? 'Notes from the recovery service' : 'Nothing to note'} icon={TriangleAlert} tone={limitationCount ? 'warning' : 'neutral'} />
       </div>
 
-      <div className="overview-grid">
-        <SurfaceCard title="Evidence sources" description="Read-only sources registered with this case">
-          {data.sources.length ? (
-            <ul className="overview-list">
-              {data.sources.map((source) => <li key={source.sourceId}><span>{source.displayName}</span><small>{source.kind.replaceAll('_', ' ')}</small></li>)}
-            </ul>
-          ) : <p className="empty-state">No evidence source has been added.</p>}
-        </SurfaceCard>
-        <SurfaceCard title="Current limitations" description="Capability statements reported by the active job">
-          {data.job?.limitations.length ? (
-            <ul className="overview-list overview-list--limitations">
-              {data.job.limitations.map((limitation) => <li key={limitation.code}><span>{limitation.code}</span><small>{limitation.explanation}</small></li>)}
-            </ul>
-          ) : <p className="empty-state">{data.job ? 'No limitations were reported for this job.' : 'No recovery job is active.'}</p>}
-        </SurfaceCard>
+      <div className="grid-2">
+        <section className="card stack stack--tight" aria-labelledby="overview-sources-title">
+          <h2 id="overview-sources-title">Sources</h2>
+          {data.sources.length ? <ul className="list-card__items" style={{ margin: '0 -20px -20px' }}>
+            {data.sources.map((source) => <li key={source.sourceId}><span className="list-card__icon" aria-hidden="true">{source.kind === 'physical_device' ? <HardDrive /> : <FileImage />}</span><div className="list-card__body"><strong>{source.displayName}</strong><small>{source.kind.replaceAll('_', ' ')} · read-only</small></div></li>)}
+          </ul> : <p className="empty-state">No evidence source has been added.</p>}
+        </section>
+        <AdvancedSection title={`Notes from the recovery service (${limitationCount})`} summary={data.job ? 'What this build could and could not do for this job' : 'Appear once a recovery has run'} icon={ListChecks} quiet>
+          {data.job?.limitations.length ? <ul className="kv">{data.job.limitations.map((limitation) => <li key={limitation.code} style={{ listStyle: 'none', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}><strong style={{ fontSize: 'var(--text-sm)' }}>{limitation.code}</strong><p className="form-hint">{limitation.explanation}</p></li>)}</ul> : <p className="empty-state">{data.job ? 'No limitations were reported for this job.' : 'No recovery job is active.'}</p>}
+        </AdvancedSection>
       </div>
     </section>
   );
 }
 
-function nextAction(caseId: string, data: OverviewData): { label: string; to: string } {
-  if (!data.sources.length) return { label: 'Add source', to: `/cases/${caseId}/sources` };
-  if (!data.job) return { label: 'Configure recovery', to: `/cases/${caseId}/recovery/goal` };
-  if (data.job.stage === 'completed' || data.job.stage === 'review_ready') return { label: 'Review recovered files', to: `/cases/${caseId}/results` };
-  return { label: 'View recovery job', to: `/cases/${caseId}/jobs` };
+function nextAction(caseId: string, data: OverviewData): { label: string; to: string; title: string; detail: string } {
+  if (!data.sources.length) return { label: 'Add source', to: `/cases/${caseId}/sources`, title: 'No recovery job yet', detail: 'Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.' };
+  if (!data.job) return { label: 'Set up recovery', to: `/cases/${caseId}/recovery/setup`, title: 'No recovery job yet', detail: 'Add a source, choose a recovery goal, and select a scan preset to create the first recovery job.' };
+  if (data.job.stage === 'completed' || data.job.stage === 'review_ready') return { label: 'Review recovered files', to: `/cases/${caseId}/results`, title: 'Recovery finished', detail: 'Look through what was found, pick the files you need, and export them.' };
+  return { label: 'View recovery job', to: `/cases/${caseId}/jobs`, title: 'Recovery in progress', detail: `Current stage: ${stageLabel(data.job.stage)}. Open the job to watch progress or pause it.` };
 }
 
 function stageLabel(stage: JobStatus['stage']): string {

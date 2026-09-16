@@ -1,6 +1,6 @@
 import { JobEventSchema, JobStatusSchema, type JobEvent, type JobStatus } from '@recovery/contracts';
-import { CapabilityBanner, StageTimeline, SurfaceCard, type TimelineStage } from '@recovery/ui';
-import { ArrowRight, CheckCircle2, Clock3, Database, FileText, Files, FolderLock, HardDrive, Pause, Play, ScanSearch, ShieldCheck, Square, Timer, Waypoints } from 'lucide-react';
+import { AdvancedSection, CapabilityBanner } from '@recovery/ui';
+import { AlertTriangle, CheckCircle2, Clock3, Database, FileText, Files, FolderLock, HardDrive, ListChecks, Loader2, Pause, PauseCircle, Play, ScanSearch, ShieldCheck, Square, Timer, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { activeJobId, activeWorkspace } from '../../application-state.js';
@@ -13,6 +13,20 @@ const stageLabels: Record<string, string> = {
   carving: 'Searching remaining disk space', validating: 'Checking recovered files', threat_scan: 'Checking for potentially unsafe content',
   indexing: 'Preparing results', review_ready: 'Results ready', completed: 'Recovery completed', paused: 'Recovery paused',
   needs_attention: 'Recovery needs attention', cancelling: 'Cancelling recovery', cancelled: 'Recovery cancelled', failed: 'Recovery failed',
+};
+const stageHints: Record<string, string> = {
+  preflight: 'Making sure the source can be read safely and recording its fingerprint.',
+  partition_scan: 'Reading the partition table without changing it.',
+  metadata_scan: 'Looking for records of deleted files that still name them.',
+  carving: 'Scanning the whole image for the file types you selected.',
+  validating: 'Making sure each recovered file is complete.',
+  threat_scan: 'Scanning recovered files for known threats before you open anything.',
+  indexing: 'Building the searchable list of results.',
+  completed: 'Recovered files are indexed and a report was generated automatically.',
+  paused: 'Nothing is running. Resume whenever you are ready.',
+  needs_attention: 'The recovery stopped and needs you to look at the notes below.',
+  cancelled: 'The recovery was cancelled. Files found before that are kept.',
+  failed: 'The recovery could not finish. See the notes below.',
 };
 const terminalStages = new Set<JobStatus['stage']>(['completed', 'cancelled', 'failed']);
 const progressByStage: Record<JobStatus['stage'], number> = {
@@ -83,7 +97,6 @@ export function JobProgressPage() {
     return () => { active = false; terminal.current = true; if (timer !== undefined) window.clearTimeout(timer); };
   }, [jobId]);
 
-  // Keep the append-only event feed scrolled to the newest entry as events stream in.
   useEffect(() => {
     const list = logRef.current;
     if (list) list.scrollTop = list.scrollHeight;
@@ -100,83 +113,91 @@ export function JobProgressPage() {
     } catch (cause) { setCommandError(message(cause)); }
   }
 
-  if (!jobId) return <section><h1>Recovery jobs</h1><p role="alert">No recovery job has been created for this case.</p></section>;
-  if (!status && !pollError) return <section><h1>Recovery jobs</h1><p role="status">Loading recovery status…</p></section>;
+  if (!jobId) return <section className="page"><h1>Recovery</h1><p role="alert" className="form-error">No recovery has been started for this case yet.</p></section>;
+  if (!status && !pollError) return <section className="page"><h1>Recovery</h1><p role="status" className="empty-state">Loading recovery status…</p></section>;
   const error = commandError ?? pollError;
   const progress = status && !stagesWithoutWorkflowPosition.has(status.stage) ? progressByStage[status.stage] : undefined;
-  // A job is actively working (worth animating) unless it is in a terminal or held state.
   const running = status ? !terminalStages.has(status.stage) && !stagesWithoutWorkflowPosition.has(status.stage) : false;
-  return <section className="job-progress">
-    <header className="page-heading job-progress__heading"><div><p className="eyebrow">Live recovery workspace</p><h1>{status ? stageLabels[status.stage] ?? status.stage : 'Recovery status unavailable'}</h1><p className="page-heading__description">Daemon-reported recovery state for job {status?.jobId}. Values that are not exposed remain visibly unavailable.</p></div>{status ? <div className="job-progress__headline" data-unavailable={progress === undefined || undefined}><strong>{progress === undefined ? 'Stage position unavailable' : `${progress}%`}</strong><span>{progress === undefined ? 'This state does not report a workflow position' : 'Stage-based position, not measured bytes'}</span></div> : null}</header>
+  const held = status?.stage === 'paused' || status?.stage === 'needs_attention';
+  const HeroIcon = !status ? Loader2 : status.stage === 'completed' ? CheckCircle2 : status.stage === 'failed' ? XCircle : status.stage === 'cancelled' ? Square : held ? PauseCircle : status.stage === 'needs_attention' ? AlertTriangle : Loader2;
+
+  return <section className="page job-page">
+    {status ? <section className="job-hero" data-state={status.stage} aria-label="Recovery status">
+      <div className="job-hero__row">
+        <span className="job-hero__icon" aria-hidden="true"><HeroIcon className={running ? 'spin' : undefined} /></span>
+        <div className="job-hero__text">
+          <h1>{stageLabels[status.stage] ?? status.stage}</h1>
+          <p>{stageHints[status.stage] ?? 'Working…'}</p>
+        </div>
+        <div className="job-hero__percent" data-unavailable={progress === undefined || undefined}>
+          <strong>{progress === undefined ? '—' : `${progress}%`}</strong>
+          <small>{progress === undefined ? 'Stage position unavailable' : 'Stage-based progress'}</small>
+        </div>
+      </div>
+      {progress !== undefined ? <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Stage-based workflow progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div> : null}
+      <ol className="job-hero__stages" aria-label="Recovery stage timeline">
+        {timelineFor(status.stage).map((stage) => <li key={stage.id} className="job-stage" data-status={stage.status}>{stage.label}<span className="sr-only"> — {stage.status}</span></li>)}
+      </ol>
+      <div className="job-hero__actions">
+        {status.families?.length ? <div className="job-progress__families" aria-label="File families being searched for">
+          <span className="job-progress__families-label"><ScanSearch aria-hidden="true" />Looking for</span>
+          {status.families.map((family) => { const { Icon, label } = familyMeta(family); return <span className="family-chip" data-family={family} key={family}><Icon aria-hidden="true" />{label}</span>; })}
+          <small>{formatCount(status.families)} signatures</small>
+        </div> : <span />}
+        <div className="button-row">
+          {status.stage === 'completed' ? <>
+            <Link className="button button--primary" to={`/cases/${caseId}/results`}><Files aria-hidden="true" />Review recovered files</Link>
+            <Link className="button button--secondary" to={`/cases/${caseId}/reports`}><FileText aria-hidden="true" />Open report</Link>
+          </> : null}
+          {held ? <button className="button button--primary" type="button" onClick={() => void command(window.recoveryApi.resumeJob)}><Play aria-hidden="true" />Resume recovery</button> : null}
+          {running ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.pauseJob)}><Pause aria-hidden="true" />Pause</button> : null}
+          {!terminalStages.has(status.stage) ? <button className="button button--danger-outline" type="button" onClick={() => void command(window.recoveryApi.cancelJob)}><Square aria-hidden="true" />Cancel scan</button> : null}
+        </div>
+      </div>
+    </section> : null}
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    {status?.stage === 'completed' ? (
-      <div className="job-progress__complete" role="status">
-        <CheckCircle2 aria-hidden="true" />
-        <div className="job-progress__complete-body">
-          <strong>Recovery complete</strong>
-          <p>Recovered files are indexed and a report was generated automatically. Review the files, then export what you need.</p>
-        </div>
-        <div className="job-progress__complete-actions">
-          <Link className="button button--primary" to={`/cases/${caseId}/results`}><Files aria-hidden="true" />Review recovered files</Link>
-          <Link className="button button--secondary" to={`/cases/${caseId}/reports`}><FileText aria-hidden="true" />Open report</Link>
-        </div>
-      </div>
-    ) : null}
+
     {status ? <>
-      <SurfaceCard className="job-progress__timeline" title="Recovery stages" description="Completed, active, and upcoming stages derived from the current daemon stage.">
-        <StageTimeline stages={timelineFor(status.stage)} ariaLabel="Recovery stage timeline" />
-      </SurfaceCard>
-      {progress !== undefined ? <div className={`job-progress__bar${running ? ' job-progress__bar--running' : ''}`} role="progressbar" aria-label="Stage-based workflow progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-        <span style={{ width: `${progress}%` }} />
-      </div> : null}
-      <figure className="job-progress__relationship" aria-label="Recovery data path">
-        <div><HardDrive aria-hidden="true" /><span><strong>{status.sourceId}</strong><small>Read-only source</small></span><ShieldCheck aria-hidden="true" /></div>
-        <div className="job-progress__path"><span aria-hidden="true" /><Waypoints aria-hidden="true" /><strong>{presetLabel(status.preset)}</strong><ArrowRight aria-hidden="true" /></div>
-        <div><FolderLock aria-hidden="true" /><span><strong>{workspacePath ?? 'Workspace path unavailable'}</strong><small>Case workspace</small></span>{workspacePath ? <CheckCircle2 aria-hidden="true" /> : null}</div>
-        <figcaption className="sr-only">Recovery moves from the read-only source into the case workspace through the selected scan preset.</figcaption>
+      <figure className="job-facts" aria-label="Recovery data path">
+        <div className="job-fact"><HardDrive aria-hidden="true" /><span><strong>{status.sourceId}</strong><small>Read-only source</small></span></div>
+        <div className="job-fact"><FolderLock aria-hidden="true" /><span><strong>{workspacePath ?? 'Workspace path unavailable'}</strong><small>Case workspace</small></span></div>
+        <div className="job-fact"><Timer aria-hidden="true" /><span><strong>{elapsedLabel(status.createdAt, status.updatedAt)}</strong><small>{running ? 'Elapsed · updating live' : 'Elapsed'}</small></span></div>
+        <div className="job-fact"><Database aria-hidden="true" /><span><strong>{status.partitions?.partitions.length ?? 'Not yet'}</strong><small>Partitions found</small></span></div>
+        <figcaption className="sr-only">Recovery moves from the read-only source into the case workspace through the {status.preset} scan preset.</figcaption>
       </figure>
-      {status.families?.length ? <div className="job-progress__families" aria-label="File families being searched for">
-        <span className="job-progress__families-label"><ScanSearch aria-hidden="true" />Searching for</span>
-        {status.families.map((family) => { const { Icon, label } = familyMeta(family); return <span className="family-chip" data-family={family} key={family}><Icon aria-hidden="true" />{label}</span>; })}
-        <small>{formatCount(status.families)} content signatures</small>
-      </div> : null}
-      <div className="job-progress__workspace">
-        <div className="job-progress__main">
-          <section className="job-progress__telemetry" aria-label="Recovery telemetry">
-            <article><Database aria-hidden="true" /><span><strong>{status.partitions?.partitions.length ?? 'Not reported'}</strong><small>Partitions recorded</small></span></article>
-            <article><Timer aria-hidden="true" /><span><strong>{elapsedLabel(status.createdAt, status.updatedAt)}</strong><small>{running ? 'Elapsed · updating live' : 'Elapsed'}</small></span></article>
-            <article><Clock3 aria-hidden="true" /><span><strong>{formatTime(status.updatedAt)}</strong><small>Last daemon update</small></span></article>
-          </section>
-          <ReadErrorMap />
+
+      {status.limitations.length ? <AdvancedSection title={`Notes from the recovery service (${status.limitations.length})`} summary="What this build could and could not do for this recovery" icon={ListChecks} quiet>
+        <div className="notes-list">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={friendlyLimitation(limitation.code)} explanation={limitation.explanation} action={<code className="diagnostic-code">{limitation.code}</code>} />)}</div>
+      </AdvancedSection> : null}
+
+      <AdvancedSection title="Details" summary="Live event log, checkpoints and read-error map" icon={Clock3} quiet>
+        <section className="job-progress__log stack stack--tight" aria-labelledby="event-stream-title">
+          <h2 id="event-stream-title">Event stream</h2>
+          <ol className="event-log" aria-label="Recovery event stream" ref={logRef}>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
+          {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
+        </section>
+        <div className="grid-2">
+          <div className="card card--muted"><strong>Checkpoint detail unavailable</strong><p className="form-hint">No checkpoint time or byte range is reported by the current job API. Pause and resume remain service-controlled.</p></div>
+          <div className="card card--muted"><ReadErrorMap /></div>
         </div>
-        <div className="job-progress__rail">
-          <SurfaceCard title="Checkpoint detail unavailable" description="No checkpoint time or byte range is reported by the current job API.">
-            <p className="job-progress__truth"><Clock3 aria-hidden="true" /> Pause and resume remain daemon-controlled. This screen does not infer a checkpoint.</p>
-          </SurfaceCard>
-          <SurfaceCard title="Job controls" description={`Daemon state: ${status.stage.replaceAll('_', ' ')}`}>
-            <div className="job-progress__actions">
-              {status.stage === 'paused' || status.stage === 'needs_attention' ? <button className="button button--primary" type="button" onClick={() => void command(window.recoveryApi.resumeJob)}><Play aria-hidden="true" />Resume recovery</button> : null}
-              {!['completed', 'cancelled', 'failed', 'paused', 'needs_attention'].includes(status.stage) ? <button className="button button--secondary" type="button" onClick={() => void command(window.recoveryApi.pauseJob)}><Pause aria-hidden="true" />Pause</button> : null}
-              {!['completed', 'cancelled', 'failed'].includes(status.stage) ? <button className="button button--danger" type="button" onClick={() => void command(window.recoveryApi.cancelJob)}><Square aria-hidden="true" />Cancel scan</button> : null}
-              {terminalStages.has(status.stage) ? <p className="empty-state">This job is in a terminal state. No further controls are available.</p> : null}
-            </div>
-          </SurfaceCard>
-        </div>
-      </div>
-      {status.limitations.length ? <div className="job-progress__limitations">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level={limitation.level === 'unsupported' ? 'warning' : 'info'} title={limitation.code} explanation={limitation.explanation} />)}</div> : null}
+        <p className="note"><ShieldCheck aria-hidden="true" />Last update from the recovery service: {formatTime(status.updatedAt)}.</p>
+      </AdvancedSection>
     </> : null}
-    <SurfaceCard title="Event stream" description="Append-only events returned by the recovery daemon." className="job-progress__log">
-      <ol aria-label="Recovery event stream" ref={logRef}>{events.map((event) => <li key={event.eventId}><code>{event.sequence}</code><span>{event.message ?? stageLabels[event.stage] ?? event.stage}</span><time dateTime={event.occurredAt}>{formatTime(event.occurredAt)}</time></li>)}</ol>
-      {!events.length ? <p className="empty-state">No recovery events have been recorded yet.</p> : null}
-    </SurfaceCard>
   </section>;
 }
 
-function presetLabel(preset: JobStatus['preset']): string {
-  return `${preset.replaceAll('_', ' ')} scan`;
+function friendlyLimitation(code: string): string {
+  const known: Record<string, string> = {
+    TSK_METADATA_UNAVAILABLE: 'Original file names could not be recovered',
+    PHOTOREC_UNAVAILABLE: 'Built-in carving engine was used',
+    PHOTOREC_FAILED: 'PhotoRec did not complete; built-in engine used',
+    YARA_X_LIMITED_RULESET: 'Threat scan used the built-in demonstration rules',
+    YARA_X_UNAVAILABLE: 'Recovered files were not threat-scanned',
+  };
+  return known[code] ?? code.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
 }
 
-function timelineFor(stage: JobStatus['stage']): TimelineStage[] {
+function timelineFor(stage: JobStatus['stage']): Array<{ id: string; label: string; status: 'pending' | 'running' | 'completed' | 'paused' | 'failed' }> {
   const currentIndex = stageOrder.indexOf(stage);
   const terminal = stage === 'completed';
   const groups = [
@@ -202,9 +223,6 @@ function formatTime(value: string): string {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Elapsed wall-clock time between the daemon-reported job start and its latest
-// update. Both timestamps are daemon-reported, so this stays truthful while the
-// last-update time advances on each poll, giving the live view a ticking value.
 function elapsedLabel(createdAt: string, updatedAt: string): string {
   const start = new Date(createdAt).getTime();
   const end = new Date(updatedAt).getTime();

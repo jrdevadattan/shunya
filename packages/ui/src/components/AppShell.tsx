@@ -1,4 +1,4 @@
-import { Menu } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
@@ -53,10 +53,13 @@ export function AppShell({ brand, collapsed, onCollapsedChange, header, navigati
     <div className="app-shell" data-collapsed={String(effectiveCollapsed)} data-responsive-collapsed={String(responsiveCollapsed)} data-testid="app-shell" style={approvedTokens}>
       <aside className="app-shell__sidebar" aria-label="Application sidebar">
         <div className="app-shell__brand">
-          <span className="app-shell__brand-wordmark" aria-label={brand}>
-            <strong>{wordmark}</strong>
-            {subtitle ? <small>{subtitle}</small> : null}
-          </span>
+          <a className="app-shell__brand-wordmark" href="#/" aria-label={brand}>
+            <span className="app-shell__brand-mark" aria-hidden="true">{wordmark.charAt(0)}</span>
+            <span className="app-shell__brand-text">
+              <strong>{wordmark}</strong>
+              {subtitle ? <small>{subtitle}</small> : null}
+            </span>
+          </a>
           <button
             type="button"
             className="app-shell__collapse"
@@ -67,7 +70,7 @@ export function AppShell({ brand, collapsed, onCollapsedChange, header, navigati
             title={collapseLabel}
             onClick={() => onCollapsedChange(!collapsed)}
           >
-            <Menu aria-hidden="true" />
+            <PanelLeft aria-hidden="true" />
           </button>
         </div>
 

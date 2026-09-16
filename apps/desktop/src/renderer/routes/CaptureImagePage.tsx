@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Check, Copy, HardDrive, HardDriveDownload, Loader2, ShieldAlert, ShieldCheck, Usb } from 'lucide-react';
+import { PageHeader } from '@recovery/ui';
+import { ArrowLeft, Check, Copy, HardDriveDownload, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { BlockDevice, CaptureResult } from '../../main/secure-erase/types.js';
 import { ApplicationShell } from './ApplicationShell.js';
+import { DevicePicker, formatDeviceBytes } from '../features/devices/DevicePicker.js';
 import { trackOperation, useOperationByKind } from '../features/operations/operations-store.js';
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${bytes} B`;
-}
 
 const GiB = 1024 ** 3;
 type Scope = 'full' | '2gb' | '4gb';
@@ -30,8 +26,6 @@ export function CaptureImagePage() {
   const [actionError, setActionError] = useState<string>();
   const [copied, setCopied] = useState(false);
 
-  // The running/finished capture lives in the global store, so progress and the
-  // result survive navigating away and back while the read runs in the main process.
   const latestCapture = useOperationByKind('capture');
   const op = latestCapture && latestCapture.device === selected ? latestCapture : undefined;
   const running = op?.status === 'running';
@@ -58,124 +52,78 @@ export function CaptureImagePage() {
 
   function selectDevice(device: BlockDevice) {
     setSelected(device.device);
-    setImagePath(undefined);
     setActionError(undefined);
-    setScope(device.sizeBytes > 8 * GiB ? '2gb' : 'full');
+    setCopied(false);
   }
 
   async function chooseOutput() {
-    const suggested = target ? `evidence-${target.model.replace(/[^a-z0-9]+/gi, '-')}-${new Date().toISOString().slice(0, 10)}.raw` : 'evidence.raw';
+    if (!target) return;
+    setActionError(undefined);
     try {
+      const suggested = `${target.model.replace(/[^A-Za-z0-9._-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.raw`;
       const chosen = await window.secureErase.chooseCaptureOutput(suggested);
-      if (chosen) { setImagePath(chosen); setActionError(undefined); }
+      if (chosen) setImagePath(chosen);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : 'The output file could not be chosen.');
     }
   }
 
+  const plannedBytes = target ? Math.min(target.sizeBytes, scopeBytes(scope) ?? target.sizeBytes) : 0;
+  const canCapture = Boolean(target && imagePath) && !running;
+
   async function capture() {
     if (!target || !imagePath) return;
     setActionError(undefined);
+    setCopied(false);
     try {
       await trackOperation(
         { id: `capture:${target.device}`, kind: 'capture', label: `Imaging ${target.model}`, route: '/capture-image', device: target.device },
         window.secureErase.captureImage(target.device, { imagePath, maxBytes: scopeBytes(scope) }),
       );
-    } catch { /* error surfaces via the store op */ }
+    } catch { /* surfaced through the store op */ }
   }
 
   async function copyPath() {
     if (!result) return;
-    try {
-      await navigator.clipboard.writeText(result.imagePath);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard may be unavailable; ignore */ }
+    try { await navigator.clipboard.writeText(result.imagePath); setCopied(true); } catch { setCopied(false); }
   }
 
-  const captureCap = scopeBytes(scope);
-  const plannedBytes = target ? (captureCap === null ? target.sizeBytes : Math.min(target.sizeBytes, captureCap)) : 0;
-  const canCapture = Boolean(target) && Boolean(imagePath) && !running;
-
   return (
-    <ApplicationShell title="Capture evidence image">
-      <div className="flash-erase">
-        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" size={16} />Back to workspace</Link>
-
-        <header className="page-heading">
-          <div>
-            <p className="eyebrow flash-erase__eyebrow">Read-only evidence imager</p>
-            <h1>Capture a device to a .raw image</h1>
-            <p className="page-heading__description">
-              Clones a USB device to a <strong>read-only</strong> RAW image (<code>.raw</code>/<code>.dd</code>) — the evidence is never
-              modified. Add the image to a recovery case to carve back deleted files. A SHA-256 of the image is recorded for chain of custody.
-            </p>
-          </div>
-          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}>Rescan devices</button>
-        </header>
+    <ApplicationShell title="Make a disk image">
+      <div className="page page--narrow">
+        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Home</Link>
+        <PageHeader
+          eyebrow="Prepare"
+          title="Make a disk image"
+          description="Copies a USB drive into a read-only image file so you can recover from the copy and keep the original untouched. Nothing is ever written to the drive."
+          actions={<button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}><RefreshCw aria-hidden="true" />Rescan</button>}
+        />
 
         {loadError ? <p role="alert" className="form-error">{loadError}</p> : null}
-
-        <section className="flash-erase__devices" aria-label="Detected devices">
-          {devices === null ? <p role="status" className="flash-erase__loading"><Loader2 aria-hidden="true" className="spin" /> Scanning connected devices…</p> : null}
-          {devices?.length === 0 ? <p className="empty-state">No physical devices were reported.</p> : null}
-          {devices?.map((device) => {
-            const eligible = device.removable && !device.system;
-            const active = selected === device.device;
-            return (
-              <button
-                key={device.device}
-                type="button"
-                className="flash-erase__device"
-                data-eligible={eligible || undefined}
-                data-active={active || undefined}
-                aria-pressed={active}
-                disabled={!eligible || running}
-                onClick={() => selectDevice(device)}
-              >
-                <span className="flash-erase__device-icon" aria-hidden="true">{device.removable ? <Usb /> : <HardDrive />}</span>
-                <span className="flash-erase__device-body">
-                  <strong>{device.model}</strong>
-                  <small>{formatBytes(device.sizeBytes)} · {device.busType ?? 'unknown bus'} · <code className="flash-erase__path">{device.device}</code></small>
-                </span>
-                <span className="flash-erase__device-badge" data-tone={device.system ? 'system' : eligible ? 'eligible' : 'blocked'}>
-                  {device.system ? 'System disk — protected' : eligible ? 'Removable' : 'Fixed disk — not eligible'}
-                </span>
-              </button>
-            );
-          })}
-        </section>
+        <DevicePicker devices={devices} selected={selected} busy={running} onSelect={selectDevice} />
 
         {target ? (
-          <section className="flash-erase__panel" aria-label="Capture options">
-            <div className="flash-erase__method">
-              <ShieldCheck aria-hidden="true" />
-              <div>
-                <strong>Read-only forensic image</strong>
-                <p>The device is opened <strong>read-only</strong> — nothing is ever written to the evidence. The image is hashed (SHA-256) as it is written so it can be verified later.</p>
-              </div>
-            </div>
-
-            <fieldset className="flash-erase__scope">
-              <legend>How much to capture</legend>
-              <label><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={running} /> <span><strong>Entire device</strong> <small>{formatBytes(target.sizeBytes)} — exact clone, slower for large drives.</small></span></label>
-              <label><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={running} /> <span><strong>First 2 GB</strong> <small>Fast — for a prepared demo drive where the files sit at the start.</small></span></label>
-              <label><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={running} /> <span><strong>First 4 GB</strong> <small>A larger leading slice.</small></span></label>
+          <section className="card stack stack--loose" aria-label="Capture options">
+            <fieldset className="scope-options">
+              <legend>How much to copy</legend>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === 'full'} onChange={() => setScope('full')} disabled={running} /><span><strong>Entire drive</strong><small>{formatDeviceBytes(target.sizeBytes)} — an exact copy. Slower for large drives.</small></span></label>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '2gb'} onChange={() => setScope('2gb')} disabled={running} /><span><strong>First 2 GB</strong><small>Fast — for a prepared demo drive where the files sit at the start.</small></span></label>
+              <label className="check check--boxed"><input type="radio" name="scope" checked={scope === '4gb'} onChange={() => setScope('4gb')} disabled={running} /><span><strong>First 4 GB</strong><small>A larger leading slice.</small></span></label>
             </fieldset>
 
-            <div className="flash-erase__output">
-              <button type="button" className="button button--secondary" onClick={() => void chooseOutput()} disabled={running}>Choose output file…</button>
-              {imagePath ? <code className="flash-erase__path">{imagePath}</code> : <small>Pick a <code>.raw</code> file on a different drive than the one you are imaging.</small>}
+            <div className="output-row">
+              <button type="button" className="button button--secondary" onClick={() => void chooseOutput()} disabled={running}>Choose where to save…</button>
+              {imagePath ? <code className="flash-erase__path">{imagePath}</code> : <small>Save the <code>.raw</code> file on a different drive than the one you are copying.</small>}
             </div>
 
             {elevated === false ? (
-              <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> Imaging a physical device needs administrator rights. If it fails with “access denied”, close the app and relaunch it as Administrator.</p>
+              <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> Reading a physical drive needs administrator rights. If it fails with “access denied”, close the app and relaunch it as Administrator.</p>
             ) : null}
 
             <div className="flash-erase__actions">
-              <button type="button" className="button button--primary" disabled={!canCapture} onClick={() => void capture()}>
+              <button type="button" className="button button--primary button--large" disabled={!canCapture} onClick={() => void capture()}>
                 <HardDriveDownload aria-hidden="true" />
-                {running ? 'Capturing…' : `Capture ${formatBytes(plannedBytes)} image`}
+                {running ? 'Copying…' : `Copy ${formatDeviceBytes(plannedBytes)} to image`}
               </button>
             </div>
 
@@ -194,20 +142,21 @@ export function CaptureImagePage() {
               <div className="flash-erase__result">
                 <ShieldCheck aria-hidden="true" />
                 <div>
-                  <strong>Image captured{result.truncated ? ' (leading portion)' : ''} — {formatBytes(result.bytesCaptured)}</strong>
+                  <strong>Image saved{result.truncated ? ' (leading portion)' : ''} — {formatDeviceBytes(result.bytesCaptured)}</strong>
                   <small>SHA-256: <code className="flash-erase__path">{result.sha256}</code></small>
                   <small>
                     Saved to: <code className="flash-erase__path">{result.imagePath}</code>
                     <button type="button" className="button button--ghost button--small" onClick={() => void copyPath()} style={{ marginLeft: 8 }}>
-                      {copied ? <Check aria-hidden="true" size={14} /> : <Copy aria-hidden="true" size={14} />}{copied ? 'Copied' : 'Copy path'}
+                      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}{copied ? 'Copied' : 'Copy path'}
                     </button>
                   </small>
                   <small style={{ marginTop: 6 }}>
-                    Next: <Link to="/cases/new?source=disk-image">create a recovery case → Analyze a disk image</Link>, paste this path as the disk-image source, and recover the deleted files.
+                    Next: <Link to="/cases/new?source=disk-image">start a recovery from this image</Link>.
                   </small>
                 </div>
               </div>
             ) : null}
+            <p className="note"><ShieldCheck aria-hidden="true" />The drive is opened read-only and the image is hashed (SHA-256) as it is written, so it can be verified later.</p>
           </section>
         ) : null}
       </div>

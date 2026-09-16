@@ -1,19 +1,19 @@
 import type { NavigationGroup, NavigationItem } from '@recovery/ui';
 import {
-  BadgeCheck,
   BriefcaseBusiness,
   CircleHelp,
   CirclePlus,
   Cpu,
   FileOutput,
   FileText,
-  Folder,
+  Files,
   FolderSearch,
   HardDrive,
   History,
+  Home,
   Info,
+  LayoutDashboard,
   Settings,
-  SlidersHorizontal,
 } from 'lucide-react';
 
 export function caseNavigation(caseId: string | null, pathname: string): NavigationGroup[] {
@@ -23,33 +23,33 @@ export function caseNavigation(caseId: string | null, pathname: string): Navigat
     active: activePaths.some((path) => pathname === path || pathname.startsWith(`${path}/`)),
   });
   const route = (suffix: string) => caseId ? `/cases/${caseId}/${suffix}` : '/case-unavailable';
-  const caseOnly = (value: Omit<NavigationItem, 'active'>): Omit<NavigationItem, 'active'> => caseId
-    ? value
-    : { ...value, href: '#/', disabledReason: 'Open or create a case to use this workspace.' };
+  // Outside a case the case group is simply not shown: five greyed-out items
+  // with the same explanation each is noise for a first-time user.
+  const caseGroup: NavigationGroup[] = caseId ? [{
+    id: 'recovery',
+    label: 'This case',
+    items: [
+      item({ id: 'case-setup', label: 'Overview', href: `${base}/overview`, icon: LayoutDashboard }, [route('overview')]),
+      item({ id: 'recovery', label: 'Recover', href: `${base}/sources`, icon: FolderSearch }, [route('sources'), route('recovery'), route('jobs'), route('memory')]),
+      item({ id: 'verify', label: 'Recovered files', href: `${base}/results`, icon: Files }, [route('results'), route('exports')]),
+      item({ id: 'reports', label: 'Report', href: `${base}/reports`, icon: FileText }, [route('reports')]),
+      item({ id: 'case-activity', label: 'Activity', href: `${base}/activity`, icon: History }, [route('activity')]),
+    ],
+  }] : [];
 
   return [
     {
       id: 'cases',
-      label: 'Cases',
+      label: 'Start',
       items: [
-        item({ id: 'cases', label: 'Cases', href: '#/', icon: Folder }, ['/', '/cases/open']),
+        item({ id: 'cases', label: 'Home', href: '#/', icon: Home }, ['/', '/cases/open']),
         item({ id: 'new-case', label: 'New case', href: '#/cases/new', icon: CirclePlus }, ['/cases/new']),
-        item(caseOnly({ id: 'case-setup', label: 'Case setup', href: `${base}/overview`, icon: SlidersHorizontal }), [route('overview')]),
-        item(caseOnly({ id: 'case-activity', label: 'Case activity', href: `${base}/activity`, icon: BriefcaseBusiness }), [route('activity')]),
       ],
     },
-    {
-      id: 'recovery',
-      label: 'Recovery',
-      items: [
-        item(caseOnly({ id: 'recovery', label: 'Recovery', href: `${base}/sources`, icon: History }), [route('sources'), route('recovery'), route('jobs'), route('memory')]),
-        item(caseOnly({ id: 'verify', label: 'Verify', href: `${base}/results`, icon: BadgeCheck }), [route('results'), route('exports')]),
-        item(caseOnly({ id: 'reports', label: 'Reports', href: `${base}/reports`, icon: FileText }), [route('reports')]),
-      ],
-    },
+    ...caseGroup,
     {
       id: 'support',
-      label: 'Support',
+      label: 'More',
       items: [
         item({ id: 'settings', label: 'Settings', href: '#/settings', icon: Settings }, ['/settings']),
         item({ id: 'help', label: 'Help', href: '#/help', icon: CircleHelp }, ['/help']),
@@ -82,8 +82,9 @@ export function caseCommandNavigation(caseId: string, pathname: string): Navigat
       label: 'Case tools',
       items: [
         command('sources', 'Sources', 'sources', HardDrive),
+        command('setup', 'Recovery setup', 'recovery/setup', FolderSearch),
         command('jobs', 'Recovery Jobs', 'jobs', History),
-        command('results', 'Recovered Files', 'results', FolderSearch),
+        command('results', 'Recovered Files', 'results', Files),
         command('memory', 'Memory Analysis', 'memory', Cpu),
         command('exports', 'Exports', 'exports', FileOutput),
         command('activity', 'Case Activity', 'activity', BriefcaseBusiness),

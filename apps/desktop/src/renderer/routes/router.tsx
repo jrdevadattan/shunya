@@ -10,6 +10,7 @@ import { AddSourcePage } from '../features/sources/AddSourcePage.js';
 import { SourceAssessmentPage } from '../features/sources/SourceAssessmentPage.js';
 import { DestinationPage } from '../features/recovery/DestinationPage.js';
 import { GoalPage } from '../features/recovery/GoalPage.js';
+import { RecoverySetupPage } from '../features/recovery/RecoverySetupPage.js';
 import { ScanOptionsPage } from '../features/recovery/ScanOptionsPage.js';
 import { PartitionList } from '../features/sources/PartitionList.js';
 import { ResultsPage } from '../features/results/ResultsPage.js';
@@ -43,6 +44,7 @@ export const router = createHashRouter([
       { path: 'sources', element: <AddSourcePage /> },
       { path: 'sources/add-image', element: <AddSourcePage /> },
       { path: 'sources/:sourceId/assessment', element: <SourceAssessmentPage /> },
+      { path: 'recovery/setup', element: <RecoverySetupPage /> },
       { path: 'recovery/destination', element: <DestinationPage /> },
       { path: 'recovery/acquisition', element: <AcquisitionOptions /> },
       { path: 'recovery/damaged', element: <DamagedDeviceWizard /> },

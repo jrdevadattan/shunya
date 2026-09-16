@@ -79,7 +79,7 @@ async function renderRoute(element: ReactNode, path: string, route: string) {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /><Route path="/cases/:caseId/overview" element={<p>Created case overview</p>} /><Route path="/cases/:caseId/sources" element={<p>Source setup</p>} /><Route path="/cases/:caseId/sources/:sourceId/assessment" element={<p>Source assessment</p>} /></Routes></MemoryRouter>);
+    root?.render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={element} /><Route path="/cases/:caseId/overview" element={<p>Created case overview</p>} /><Route path="/cases/:caseId/sources" element={<p>Source setup</p>} /><Route path="/cases/:caseId/sources/:sourceId/assessment" element={<p>Source assessment</p>} /><Route path="/cases/:caseId/recovery/setup" element={<p>Recovery setup</p>} /></Routes></MemoryRouter>);
   });
 }
 
@@ -162,10 +162,10 @@ describe('live renderer pages', () => {
     await renderRoute(<WelcomePage />, '/', '/');
 
     expect(container?.querySelector('[data-testid="app-shell"]')).toBeTruthy();
-    expect(await findText('Your recovery cases')).toBeTruthy();
-    expect(container?.querySelector('a[href="/cases/new"]')?.textContent).toContain('New recovery');
+    expect(await findText('What would you like to do?')).toBeTruthy();
+    expect(container?.querySelector('a[href="/cases/new"]')?.textContent).toContain('Recover files');
     expect(container?.textContent).toContain('No recent cases are stored on this device yet.');
-    expect(container?.textContent).toContain('The recovery service does not expose a global case index.');
+    expect(container?.textContent).toContain('Start a recovery above, or open a case folder to add it here.');
     expect(container?.textContent).toContain('Source writes blocked');
     expect(container?.textContent).not.toContain('Device connected');
     expect(container?.textContent).not.toContain('Finance Laptop Recovery');
@@ -186,7 +186,7 @@ describe('live renderer pages', () => {
     expect(await findText('Finance laptop recovery')).toBeTruthy();
     expect(container?.textContent).toContain('examiner-7');
     expect(container?.textContent).toContain('D:/cases/finance');
-    await click(button('Continue case'));
+    await click(button('Continue'));
 
     expect(openCase).toHaveBeenCalledWith('D:/cases/finance');
     expect(await findText('Created case overview')).toBeTruthy();
@@ -221,7 +221,7 @@ describe('live renderer pages', () => {
       <Route path="/cases/:caseId" element={<CaseLayout />}><Route path="overview" element={<CaseOverviewPage />} /></Route>
     </Routes></MemoryRouter>));
 
-    await click(button('Continue case'));
+    await click(button('Continue'));
 
     expect(await findText('Recovery overview')).toBeTruthy();
     expect(openCase).toHaveBeenCalledOnce();
@@ -269,7 +269,7 @@ describe('live renderer pages', () => {
 
     const current = container?.querySelector('a[aria-current="page"]');
     expect(current).toBeTruthy();
-    expect(current?.textContent).toContain('Cases');
+    expect(current?.textContent).toContain('Home');
     expect(await findText('Open an existing recovery case')).toBeTruthy();
     expect(button('Choose case workspace')).toBeTruthy();
   });
@@ -343,7 +343,7 @@ describe('live renderer pages', () => {
     expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Assessment');
     expect(container?.querySelector('[data-state="complete"]')?.getAttribute('aria-label')).toBe('Source — complete');
     expect(container?.querySelector('[data-state="current"]')?.getAttribute('aria-label')).toBe('Assessment — current step');
-    expect(container?.textContent).toContain('Complete');
+    expect(container?.querySelector('ol[aria-label="Recovery workflow progress"]')).toBeTruthy();
     expect(container?.querySelector('section[aria-labelledby]')).toBeTruthy();
     expect(await findText('Mounted source')).toBeTruthy();
   });
@@ -356,7 +356,7 @@ describe('live renderer pages', () => {
     expect(button('Choose image file')).toBeTruthy();
     expect(container?.textContent).not.toContain('Discover physical devices');
     const picker = button('Choose image file');
-    const inventory = container?.querySelector('[aria-labelledby="available-sources-title"]');
+    const inventory = container?.querySelector('[aria-label="Available recovery sources"]');
     expect(picker.compareDocumentPosition(inventory!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -367,29 +367,29 @@ describe('live renderer pages', () => {
 
     await click(button('Choose image file'));
 
-    expect(input('Disk image path').value).toBe('E:/evidence/demo.raw');
+    expect(input('Image file').value).toBe('E:/evidence/demo.raw');
     expect(chooseSourceImage).toHaveBeenCalledOnce();
   });
 
   it('preserves a manual evidence path when native image selection is cancelled', async () => {
     Object.assign(window, { recoveryApi: api({ chooseSourceImage: vi.fn().mockResolvedValue(null) }) });
     await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
-    await change(input('Disk image path'), 'D:/manual/demo.raw');
+    await change(input('Image file'), 'D:/manual/demo.raw');
 
     await click(button('Choose image file'));
 
-    expect(input('Disk image path').value).toBe('D:/manual/demo.raw');
+    expect(input('Image file').value).toBe('D:/manual/demo.raw');
   });
 
   it('shows image picker failures without discarding the current path', async () => {
     Object.assign(window, { recoveryApi: api({ chooseSourceImage: vi.fn().mockRejectedValue(new Error('The evidence image could not be selected.')) }) });
     await renderRoute(<AddSourcePage />, '/cases/case-live/sources', '/cases/:caseId/sources');
-    await change(input('Disk image path'), 'D:/manual/demo.raw');
+    await change(input('Image file'), 'D:/manual/demo.raw');
 
     await click(button('Choose image file'));
 
     expect((await findText('The evidence image could not be selected.')).getAttribute('role')).toBe('alert');
-    expect(input('Disk image path').value).toBe('D:/manual/demo.raw');
+    expect(input('Image file').value).toBe('D:/manual/demo.raw');
   });
 
   it('shows immediate pending feedback while source inventory and image actions run', async () => {
@@ -411,19 +411,19 @@ describe('live renderer pages', () => {
       button('Refresh').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(listSources).toHaveBeenCalledTimes(2);
-    await change(input('Disk image path'), 'D:/evidence/action.raw');
+    await change(input('Image file'), 'D:/evidence/action.raw');
     await act(async () => {
-      button('Add image source').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      button('Add image source').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      button('Continue').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      button('Continue').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(button('Adding image…').disabled).toBe(true);
+    expect(button('Checking image…').disabled).toBe(true);
     expect(addImageSource).toHaveBeenCalledOnce();
 
     await act(async () => added.resolve(source));
-    expect(await findText('Source assessment')).toBeTruthy();
+    expect(await findText('Recovery setup')).toBeTruthy();
   });
 
-  it('guides case intake through Details, Workspace, and Review using live selection data', async () => {
+  it('creates a case from one screen with optional details tucked away', async () => {
     const chooseWorkspaceFolder = vi.fn().mockResolvedValue({
       selectedPath: 'D:/recovery-cases', rootPath: 'D:/', rootLabel: 'D:',
       totalBytes: '2000000000000', freeBytes: '800000000000',
@@ -441,11 +441,10 @@ describe('live renderer pages', () => {
     Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder, createCase }) });
     await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
 
-    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Details');
     await change(input('Case title'), 'Finance laptop recovery');
-    await change(input('Operator name or ID'), 'examiner-7');
+    await change(input('Your name or operator ID'), 'examiner-7');
     await change(input('Reference number'), 'FIN-2026-08-30');
-    await change(input('Organization or unit'), 'Digital Lab');
+    await change(input('Organisation or unit'), 'Digital Lab');
     const notes = container?.querySelector<HTMLTextAreaElement>('textarea[name="notes"]');
     expect(notes).toBeTruthy();
     await act(async () => {
@@ -453,28 +452,16 @@ describe('live renderer pages', () => {
       notes?.dispatchEvent(new Event('input', { bubbles: true }));
       notes?.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await click(button('Continue to workspace'));
 
-    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
-    await click(button('Choose parent folder'));
+    await click(button('Choose folder'));
     expect(chooseWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(await findText('Prior Cases')).toBeTruthy();
-    expect(await findText('Case 004')).toBeTruthy();
-    expect(container?.querySelector('[role="tree"], [role="treeitem"]')).toBeNull();
-    expect(container?.querySelectorAll('ul[aria-label="Folder preview"]')).toHaveLength(1);
-    expect(container?.textContent).toContain('800 GB free');
+    expect(await findText('D:/recovery-cases')).toBeTruthy();
+    expect(container?.textContent).toContain('800 GB');
     expect(container?.textContent).toContain('2 TB total');
     expect(container?.textContent).not.toMatch(/estimated needed|required space|headroom/i);
+    // The folder name follows the title until edited.
+    expect(input('Case folder name').value).toBe('Finance laptop recovery');
     await change(input('Case folder name'), 'Finance Case');
-    expect(container?.textContent).toContain('D:/recovery-cases/Finance Case');
-    await click(button('Continue to review'));
-
-    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Review');
-    expect(container?.textContent).toContain('Finance laptop recovery');
-    expect(container?.textContent).toContain('examiner-7');
-    expect(container?.textContent).toContain('FIN-2026-08-30');
-    expect(container?.textContent).toContain('Digital Lab');
-    expect(container?.textContent).toContain('Priority recovery');
     expect(container?.textContent).toContain('D:/recovery-cases/Finance Case');
     await click(button('Create case'));
 
@@ -515,10 +502,8 @@ describe('live renderer pages', () => {
       <Route path="/cases/:caseId/memory" element={<DestinationProbe />} />
     </Routes></MemoryRouter>));
     await change(input('Case title'), 'Intent recovery');
-    await change(input('Operator name or ID'), 'examiner');
-    await click(button('Continue to workspace'));
-    await click(button('Choose parent folder'));
-    await click(button('Continue to review'));
+    await change(input('Your name or operator ID'), 'examiner');
+    await click(button('Choose folder'));
     await click(button('Create case'));
 
     expect(await findText(destination)).toBeTruthy();
@@ -532,13 +517,12 @@ describe('live renderer pages', () => {
     }) });
     await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
     await change(input('Case title'), 'Permission test case');
-    await change(input('Operator name or ID'), 'examiner-7');
-    await click(button('Continue to workspace'));
-    await click(button('Choose parent folder'));
+    await change(input('Your name or operator ID'), 'examiner-7');
+    await click(button('Choose folder'));
 
     const alert = await findText('The selected folder could not be inspected. Choose a folder you have permission to read.');
     expect(alert.getAttribute('role')).toBe('alert');
-    expect(container?.querySelector('[aria-current="step"]')?.textContent).toContain('Workspace');
+    expect(button('Choose folder')).toBeTruthy();
   });
 
   it('opens only one native folder picker when the control is activated twice rapidly', async () => {
@@ -550,10 +534,9 @@ describe('live renderer pages', () => {
     Object.assign(window, { recoveryApi: api({ chooseWorkspaceFolder }) });
     await renderRoute(<NewCaseForm />, '/cases/new', '/cases/new');
     await change(input('Case title'), 'Rapid picker case');
-    await change(input('Operator name or ID'), 'examiner-7');
-    await click(button('Continue to workspace'));
+    await change(input('Your name or operator ID'), 'examiner-7');
 
-    const pickerButton = button('Choose parent folder');
+    const pickerButton = button('Choose folder');
     await act(async () => {
       pickerButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       pickerButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -578,18 +561,18 @@ describe('live renderer pages', () => {
     await findText('Overview loaded');
 
     expect(Array.from(container.querySelectorAll('.navigation-item')).map((item) => item.textContent?.trim())).toEqual([
-      'Cases',
+      'Home',
       'New case',
-      'Case setup',
-      'Case activity',
-      'Recovery',
-      'Verify',
-      'Reports',
+      'Overview',
+      'Recover',
+      'Recovered files',
+      'Report',
+      'Activity',
       'Settings',
       'Help',
       'About',
     ]);
-    expect(container.querySelector('a[aria-current="page"]')?.textContent).toContain('Case setup');
+    expect(container.querySelector('a[aria-current="page"]')?.textContent).toContain('Overview');
     expect(container.querySelector('[role="status"]')?.textContent).toContain('Source writes blocked');
     const trigger = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.getAttribute('aria-label') === 'Search screens and actions');
     expect(trigger).toBeTruthy();
@@ -710,12 +693,11 @@ describe('live renderer pages', () => {
 
   it('renders source assessment findings returned by the daemon', async () => {
     await renderRoute(<SourceAssessmentPage />, '/cases/case-live/sources/source-live/assessment', '/cases/:caseId/sources/:sourceId/assessment');
-    expect(await findText('Live image ready')).toBeTruthy();
-    expect(await findText('live-evidence.raw')).toBeTruthy();
-    const relationship = container?.querySelector('figure[aria-label="Read-only source relationship"]');
-    expect(relationship).toBeTruthy();
-    expect(relationship?.textContent).toContain('Recovery workspace');
-    expect(relationship?.textContent).toContain('Read-only analysis path');
+    expect(await findText('Source is ready')).toBeTruthy();
+    expect(container?.textContent).toContain('live-evidence.raw');
+    expect(container?.textContent).toContain('Live image ready');
+    expect(container?.textContent).toContain('opened read-only');
+    expect(button('Start recovery')).toBeTruthy();
   });
 
   it('formats source sizes beyond Number precision with exact BigInt arithmetic', async () => {
@@ -724,7 +706,8 @@ describe('live renderer pages', () => {
 
     await renderRoute(<SourceAssessmentPage />, '/cases/case-live/sources/source-live/assessment', '/cases/:caseId/sources/:sourceId/assessment');
 
-    expect(await findText('18014398509481984.9 GiB · raw image')).toBeTruthy();
+    await findText('Source is ready');
+    expect(container?.textContent).toContain('18014398509481984.9 GB');
   });
 
   it('clears source assessment state when the case route changes with the same source id', async () => {
@@ -738,57 +721,38 @@ describe('live renderer pages', () => {
     expect(await findText('Case A source ready')).toBeTruthy();
 
     await click(Array.from(container.querySelectorAll('a')).find((item) => item.textContent === 'Open case B assessment')!);
-    expect(await findText('Assessing source…')).toBeTruthy();
+    expect(await findText('Checking the source…')).toBeTruthy();
     expect(container.textContent).not.toContain('Case A source ready');
     await act(async () => nextAssessment.resolve({ sourceId: source.sourceId, decision: 'ready', requiresAcknowledgement: false, findings: [] }));
   });
 
-  it('persists an explicit recovery goal selection before continuing to scan options', async () => {
-    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes><Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} /><Route path="/cases/:caseId/recovery/scan-options" element={<p>Scan options destination</p>} /></Routes></MemoryRouter>));
+  it('keeps the recovery goal under advanced options and persists an explicit choice', async () => {
+    sessionStorage.removeItem('recovery:case-live:goal');
+    sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
+    await renderRoute(<GoalPage />, '/cases/case-live/recovery/goal', '/cases/:caseId/recovery/goal');
+    await findText('Source is ready');
 
-    const goal = button(/Recover everything/);
-    expect(goal.getAttribute('aria-pressed')).toBe('false');
-    await click(goal);
-    expect(goal.getAttribute('aria-pressed')).toBe('true');
-    expect(sessionStorage.getItem('recovery:case-live:goal')).toBe('recover_everything');
-    await click(button('Continue to scan options'));
-    expect(await findText('Scan options destination')).toBeTruthy();
+    expect(input('Recover everything').checked).toBe(true);
+    expect(container?.textContent).not.toContain('Continue to scan options');
+    await click(input('Lost or damaged partition'));
+    expect(sessionStorage.getItem('recovery:case-live:goal')).toBe('partition_loss');
+    expect(container?.textContent).toContain('needs a metadata engine that is not part of this build');
   });
 
-  it.each([
-    ['Damaged or failing device', 'Continue to damaged-device recovery', 'Damaged-device workflow', '/cases/case-live/recovery/damaged'],
-    ['Memory analysis', 'Continue to memory analysis', 'Memory-analysis workflow', '/cases/case-live/memory'],
-  ] as const)('routes %s to its specialized recovery workflow', async (goalLabel, actionLabel, destination, destinationPath) => {
-    container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-    await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/goal']}><Routes>
-      <Route path="/cases/:caseId/recovery/goal" element={<GoalPage />} />
-      <Route path="/cases/:caseId/recovery/scan-options" element={<p>Generic scan workflow</p>} />
-      <Route path={destinationPath} element={<p>{destination}</p>} />
-    </Routes></MemoryRouter>));
-
-    await click(button(new RegExp(goalLabel)));
-    expect(container.textContent).not.toContain('Continue to scan options');
-    await click(button(actionLabel));
-    expect(await findText(destination)).toBeTruthy();
-    expect(container.textContent).not.toContain('Generic scan workflow');
-  });
-
-  it('compares scan presets without invented timing and offers every file family by default', async () => {
+  it('offers every file family by default and keeps scan depth under advanced options', async () => {
     sessionStorage.removeItem('recovery:case-live:families');
+    sessionStorage.setItem('recovery:case-live:sourceId', 'source-live');
     await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
+    await findText('Source is ready');
 
-    const comparison = container?.querySelector('table[aria-label="Scan preset comparison"]');
-    expect(comparison).toBeTruthy();
-    expect(comparison?.textContent).toContain('Quick Scan');
-    expect(comparison?.textContent).toContain('Full Scan');
-    expect(comparison?.textContent).toContain('Advanced');
-    expect(comparison?.textContent).toContain('No duration estimate available');
     const families = Array.from(container?.querySelectorAll<HTMLInputElement>('.family-selector input[type="checkbox"]') ?? []);
     expect(families).toHaveLength(6);
     expect(families.every((checkbox) => checkbox.checked)).toBe(true);
     expect(container?.textContent).toContain('6 of 6 families');
     expect(container?.textContent).toContain('Never previewed');
+    expect(input('Full scan').checked).toBe(true);
+    expect(container?.textContent).not.toMatch(/minutes remaining|estimated duration/i);
+    expect(button('Start recovery').disabled).toBe(false);
   });
 
   it('sends the chosen file families with the job and refuses an empty selection', async () => {
@@ -799,11 +763,11 @@ describe('live renderer pages', () => {
     const createRecoveryJob = vi.fn().mockResolvedValue({ jobId: 'job-families', caseId: 'case-live', sourceId: 'source-live', goal: 'recover_everything', preset: 'full', stage: 'draft', createdAt, updatedAt: createdAt });
     Object.assign(window, { recoveryApi: api({ createRecoveryJob, startJob: vi.fn().mockResolvedValue({ ...status, jobId: 'job-families', stage: 'preflight', partitions: null }) }) });
     await renderRoute(<ScanOptionsPage />, '/cases/case-live/recovery/scan-options', '/cases/:caseId/recovery/scan-options');
+    await findText('Source is ready');
 
     await click(button('Clear'));
     expect(container?.textContent).toContain('Select at least one family');
-    const fullCard = Array.from(container?.querySelectorAll('article') ?? []).find((element) => element.textContent?.includes('Full Scan'));
-    expect((fullCard?.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+    expect(button('Start recovery').disabled).toBe(true);
 
     const checkbox = (label: string) => Array.from(container?.querySelectorAll<HTMLLabelElement>('.family-card') ?? []).find((element) => element.textContent?.includes(label))?.querySelector('input') as HTMLInputElement;
     await click(checkbox('Documents'));
@@ -811,7 +775,7 @@ describe('live renderer pages', () => {
     expect(container?.textContent).toContain('2 of 6 families');
     expect(JSON.parse(sessionStorage.getItem('recovery:case-live:families') ?? '[]')).toEqual(['documents', 'images']);
 
-    await click(fullCard?.querySelector('button') as HTMLButtonElement);
+    await click(button('Start recovery'));
     expect(createRecoveryJob).toHaveBeenCalledWith({ caseId: 'case-live', sourceId: 'source-live', goal: 'recover_everything', preset: 'full', families: ['documents', 'images'] });
     expect(sessionStorage.getItem('recovery:case-live:jobId')).toBe('job-families');
   });
@@ -954,10 +918,8 @@ describe('live renderer pages', () => {
     }) });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
     await act(async () => root?.render(<MemoryRouter initialEntries={['/cases/case-live/recovery/scan-options']}><Routes><Route path="/cases/:caseId/recovery/scan-options" element={<ScanOptionsPage />} /><Route path="/cases/:caseId/jobs" element={<JobProgressPage />} /></Routes></MemoryRouter>));
-    const fullCard = Array.from(container.querySelectorAll('article')).find((element) => element.textContent?.includes('Full Scan'));
-    const usePreset = fullCard?.querySelector('a,button') as HTMLElement | null;
-    if (!usePreset) throw new Error('Full Scan action not found');
-    await click(usePreset);
+    await findText('Source is ready');
+    await click(button('Start recovery'));
     expect(sessionStorage.getItem('recovery:case-live:jobId')).toBe('job-new');
     expect(await findText('Recovery completed')).toBeTruthy();
   });
@@ -980,7 +942,7 @@ describe('live renderer pages', () => {
     expect(timeline?.querySelectorAll('li')).toHaveLength(5);
     expect(timeline?.querySelector('li[data-status="running"]')?.textContent).toContain('Recover and validate files');
     expect(container?.querySelector('[role="progressbar"][aria-label="Stage-based workflow progress"]')?.getAttribute('aria-valuenow')).toBe('68');
-    expect(container?.textContent).toContain('Stage-based position, not measured bytes');
+    expect(container?.textContent).toContain('Stage-based progress');
     expect(container?.textContent).not.toMatch(/MB\/s|minutes remaining|files found/i);
   });
 
@@ -1263,7 +1225,7 @@ describe('live renderer pages', () => {
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
-    await click(button('Load more results'));
+    await click(button('Load more'));
     expect(await findText('Recovered JPEG 0000002')).toBeTruthy();
     expect(queryArtifacts).toHaveBeenLastCalledWith({ search: undefined, cursor: 'cursor-live', pageSize: 100 });
   });
@@ -1305,7 +1267,7 @@ describe('live renderer pages', () => {
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
-    const loadMore = button('Load more results');
+    const loadMore = button('Load more');
     await click(loadMore);
     await click(loadMore);
     expect(queryArtifacts).toHaveBeenCalledTimes(2);
@@ -1322,10 +1284,10 @@ describe('live renderer pages', () => {
     Object.assign(window, { recoveryApi: api({ queryArtifacts }) });
     await renderRoute(<ResultsPage />, '/cases/case-live/results', '/cases/:caseId/results');
     await findText('JPEG_live.jpg');
-    await click(button('Load more results'));
+    await click(button('Load more'));
     await change(input('Search recovered files'), 'replacement');
     await findText('replacement.jpg');
-    expect(button('Load more results').disabled).toBe(false);
+    expect(button('Load more').disabled).toBe(false);
     await act(async () => staleAppend.resolve({ items: [], nextCursor: null, totalCount: 1 }));
   });
 
@@ -1464,7 +1426,7 @@ describe('live renderer pages', () => {
     expect(await findText('1,001 items selected')).toBeTruthy();
     expect(queryArtifacts).toHaveBeenCalledTimes(3);
     expect(container?.querySelectorAll('.export-selection-list > li')).toHaveLength(50);
-    expect(container?.textContent).toContain('Complete cursor traversal');
+    expect(container?.textContent).toContain('Showing 50 representative items');
   });
 
   it.each(['complete_unverified', 'partial_validated', 'partial_unverified', 'corrupt'] as const)(
@@ -1552,13 +1514,12 @@ describe('live renderer pages', () => {
     const revealReportInFolder = vi.fn().mockResolvedValue(undefined);
     Object.assign(window, { recoveryApi: api({ revealReportInFolder }) });
     await renderRoute(<ReportsPage />, '/cases/case-live/reports', '/cases/:caseId/reports');
-    await click(button('Generate report'));
     expect(await findText('D:/case/case-live-recovery-report.json')).toBeTruthy();
     expect(await findText(/Recovered content was not threat-scanned/)).toBeTruthy();
-    expect(container?.textContent).toContain('Report output ready');
+    expect(container?.textContent).toContain('Report ready');
     expect(container?.textContent).toContain('JSON evidence record');
-    expect(container?.textContent).toContain('Markdown recovery summary');
-    expect(container?.textContent).toContain('Only daemon-recorded evidence is included');
+    expect(container?.textContent).toContain('Markdown summary');
+    expect(button('Regenerate report')).toBeTruthy();
 
     await click(button('Open report folder'));
 
@@ -1651,7 +1612,7 @@ describe('live renderer pages', () => {
 
     await findText('Case created');
     const current = container.querySelector<HTMLAnchorElement>('nav a[aria-current="page"]');
-    expect(current?.textContent).toContain('Case activity');
+    expect(current?.textContent).toContain('Activity');
     expect(current?.getAttribute('href')).toBe('#/cases/case-live/activity');
   });
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, FolderOpen, Loader2, ShieldAlert, ShieldCheck, Trash2, Usb } from 'lucide-react';
+import { AdvancedSection, PageHeader } from '@recovery/ui';
+import { ArrowLeft, BookOpen, FolderOpen, Loader2, ShieldAlert, ShieldCheck, Trash2, Usb } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { DeletionPlan, DeletionResult } from '../../main/secure-erase/folderDeletion.js';
 import { rememberRecentDeletion } from '../features/cases/recent-deletions.js';
@@ -105,64 +106,78 @@ export function NewDeletionPage() {
   }
 
   return (
-    <ApplicationShell title="New deletion">
-      <div className="flash-erase deletion-page">
-        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" size={16} />Back to workspace</Link>
-
-        <header className="page-heading">
-          <div>
-            <p className="eyebrow flash-erase__eyebrow">Secure deletion</p>
-            <h1>Securely delete a folder</h1>
-            <p className="page-heading__description">Every file under the folder is overwritten in place with CSPRNG data, renamed, and removed. Only folders on removable (USB) media are accepted; the system disk is never touched.</p>
-          </div>
-        </header>
+    <ApplicationShell title="Securely delete">
+      <div className="page page--narrow">
+        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Home</Link>
+        <PageHeader
+          eyebrow="Securely delete"
+          title="Securely delete a folder"
+          description="Every file in the folder is overwritten with random data, renamed and removed, so it cannot be recovered. Works on USB drives only; your system drive is never touched."
+          actions={<Link className="button button--secondary" to="/secure-erase"><ShieldAlert aria-hidden="true" />Wipe a whole drive instead</Link>}
+        />
 
         {error ? <p role="alert" className="form-error">{error}</p> : null}
 
-        <section className="flash-erase__panel" aria-label="Deletion target">
-          <div className="deletion-page__step"><span className="deletion-page__step-number">1</span><div><strong>Choose the folder</strong><p>The folder is inspected read-only first: nothing is changed until you confirm.</p></div></div>
-          <div className="deletion-page__target">
-            <button type="button" className="button button--secondary" onClick={() => void chooseFolder()} disabled={planning || running}>
-              {planning ? <Loader2 className="spin" aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
-              {planning ? 'Inspecting folder…' : plan ? 'Change folder' : 'Choose folder'}
-            </button>
-            {targetPath ? <code className="flash-erase__path deletion-page__path">{targetPath}</code> : <span className="deletion-page__hint">No folder selected.</span>}
+        <section className="card deletion-steps" aria-label="Deletion">
+          <div className="deletion-step">
+            <span className="deletion-step__number" aria-hidden="true">1</span>
+            <div className="deletion-step__body">
+              <strong>Choose the folder</strong>
+              <div className="deletion-page__target">
+                <button type="button" className="button button--secondary" onClick={() => void chooseFolder()} disabled={planning || running}>
+                  {planning ? <Loader2 className="spin" aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
+                  {planning ? 'Inspecting folder…' : plan ? 'Change folder' : 'Choose folder'}
+                </button>
+                {targetPath ? <code className="deletion-page__path">{targetPath}</code> : <span className="deletion-page__hint">Nothing is changed until you confirm in step 3.</span>}
+              </div>
+              {plan ? <>
+                <div className="deletion-page__facts" aria-label="Deletion plan">
+                  <article><Usb aria-hidden="true" /><span><strong>{plan.device.device.model}</strong><small>{plan.device.device.busType ?? 'Removable'} · {formatBytes(plan.device.device.sizeBytes)} · mounted at {plan.device.mountRoot}</small></span><em>Removable</em></article>
+                  <article><Trash2 aria-hidden="true" /><span><strong>{plan.fileCount.toLocaleString('en-US')} files · {formatBytes(plan.totalBytes)}</strong><small>{plan.directoryCount.toLocaleString('en-US')} subfolders will be removed once emptied</small></span></article>
+                </div>
+                {plan.sample.length ? <details className="deletion-page__sample"><summary>Preview of files to delete ({Math.min(plan.sample.length, plan.fileCount)} of {plan.fileCount})</summary><ul>{plan.sample.map((file) => <li key={file}>{file}</li>)}</ul></details> : <p className="deletion-page__hint">The folder contains no files; its empty subfolders will be removed.</p>}
+                {plan.skipped.length ? <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" />{plan.skipped.length} entries will be skipped (links, special files, or unreadable) and left in place.</p> : null}
+              </> : null}
+            </div>
           </div>
 
           {plan ? <>
-            <div className="deletion-page__facts" aria-label="Deletion plan">
-              <article><Usb aria-hidden="true" /><span><strong>{plan.device.device.model}</strong><small>{plan.device.device.busType ?? 'Removable'} · {formatBytes(plan.device.device.sizeBytes)} · mounted at {plan.device.mountRoot}</small></span><em data-tone="eligible">Removable</em></article>
-              <article><Trash2 aria-hidden="true" /><span><strong>{plan.fileCount.toLocaleString('en-US')} files · {formatBytes(plan.totalBytes)}</strong><small>{plan.directoryCount.toLocaleString('en-US')} subfolders will be removed once emptied</small></span></article>
-            </div>
-            {plan.sample.length ? <details className="deletion-page__sample"><summary>Preview of files to delete ({Math.min(plan.sample.length, plan.fileCount)} of {plan.fileCount})</summary><ul>{plan.sample.map((file) => <li key={file}>{file}</li>)}</ul></details> : <p className="deletion-page__hint">The folder contains no files; its empty subfolders will be removed.</p>}
-            {plan.skipped.length ? <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" />{plan.skipped.length} entries will be skipped (links, special files, or unreadable) and left in place.</p> : null}
-
-            <div className="deletion-page__step"><span className="deletion-page__step-number">2</span><div><strong>Name the task</strong><p>Shown in your deletion history and on the certificate.</p></div></div>
-            <input className="flash-erase__confirm" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} aria-label="Deletion task title" disabled={running || Boolean(result)} />
-
-            <div className="deletion-page__step"><span className="deletion-page__step-number">3</span><div><strong>Confirm</strong><p>Type the full folder path exactly as shown to enable deletion.</p></div></div>
-            <div className="flash-erase__danger">
-              <ShieldAlert aria-hidden="true" />
-              <div>
-                <strong>This cannot be undone</strong>
-                <p>File contents are overwritten with an AES-256-CTR keystream before removal (NIST SP 800-88 Rev. 2 Clear, per file). On flash media, wear-levelling can leave stale copies in unmapped cells; for full assurance, erase the whole device instead.</p>
-                <input
-                  className="flash-erase__confirm"
-                  aria-label="Type the folder path to confirm"
-                  placeholder={plan.targetPath}
-                  value={confirmText}
-                  onChange={(event) => setConfirmText(event.target.value)}
-                  spellCheck={false}
-                  autoComplete="off"
-                  disabled={running || Boolean(result)}
-                />
+            <div className="deletion-step">
+              <span className="deletion-step__number" aria-hidden="true">2</span>
+              <div className="deletion-step__body">
+                <strong>Name this deletion</strong>
+                <p>Shown in your history and on the certificate.</p>
+                <input className="input" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} aria-label="Deletion task title" disabled={running || Boolean(result)} />
               </div>
             </div>
 
-            <div className="flash-erase__actions">
-              <button type="button" className="button button--danger" disabled={!confirmed || running || Boolean(result)} onClick={() => void execute()}>
-                <Trash2 aria-hidden="true" />{running ? 'Deleting…' : `Securely delete ${plan.fileCount.toLocaleString('en-US')} files`}
-              </button>
+            <div className="deletion-step">
+              <span className="deletion-step__number" aria-hidden="true">3</span>
+              <div className="deletion-step__body">
+                <strong>Confirm</strong>
+                <div className="danger-zone">
+                  <ShieldAlert aria-hidden="true" />
+                  <div>
+                    <strong>This cannot be undone</strong>
+                    <p>Type the full folder path exactly as shown to enable deletion.</p>
+                    <input
+                      className="flash-erase__confirm"
+                      aria-label="Type the folder path to confirm"
+                      placeholder={plan.targetPath}
+                      value={confirmText}
+                      onChange={(event) => setConfirmText(event.target.value)}
+                      spellCheck={false}
+                      autoComplete="off"
+                      disabled={running || Boolean(result)}
+                    />
+                  </div>
+                </div>
+                <div className="flash-erase__actions">
+                  <button type="button" className="button button--danger button--large" disabled={!confirmed || running || Boolean(result)} onClick={() => void execute()}>
+                    <Trash2 aria-hidden="true" />{running ? 'Deleting…' : `Securely delete ${plan.fileCount.toLocaleString('en-US')} files`}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {running || result ? (
@@ -181,7 +196,7 @@ export function NewDeletionPage() {
                 <ShieldCheck aria-hidden="true" />
                 <div>
                   <strong>{result.failures.length ? `Deletion finished with ${result.failures.length} failure(s)` : 'Secure deletion complete'}</strong>
-                  <small>{result.filesDeleted.toLocaleString('en-US')} of {result.fileCount.toLocaleString('en-US')} files overwritten and removed · {formatBytes(result.bytesOverwritten)} of CSPRNG data written · {result.directoriesRemoved} folders removed</small>
+                  <small>{result.filesDeleted.toLocaleString('en-US')} of {result.fileCount.toLocaleString('en-US')} files overwritten and removed · {formatBytes(result.bytesOverwritten)} of random data written · {result.directoriesRemoved} folders removed</small>
                   <small>Audit log: <code className="flash-erase__path">{result.auditLogPath}</code></small>
                   {result.failures.length ? <ul className="deletion-page__failures">{result.failures.slice(0, 8).map((failure) => <li key={failure.path}><code>{failure.path}</code> — {failure.error}</li>)}</ul> : null}
                 </div>
@@ -202,6 +217,11 @@ export function NewDeletionPage() {
             }} /> : null}
           </> : null}
         </section>
+
+        <AdvancedSection title="How deletion works" summary="Method, standard and the honest limitation for flash media" icon={BookOpen} quiet>
+          <p className="form-hint">File contents are overwritten with an AES-256-CTR keystream before removal — a NIST SP 800-88 Rev. 2 <strong>Clear</strong> at file level. The file is then truncated, renamed to a random name and unlinked, and emptied folders are removed.</p>
+          <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />On flash media, wear-levelling can leave stale copies in unmapped cells. For full assurance, erase the whole drive instead.</p>
+        </AdvancedSection>
       </div>
     </ApplicationShell>
   );

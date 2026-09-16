@@ -7,19 +7,20 @@ const capabilities = [
   { label: 'Registry findings', detail: 'Windows registry artifacts and context', icon: Globe2 },
 ];
 
-export function AdvancedMemoryCapabilities() {
+export function AdvancedMemoryCapabilities({ headingLevel = 'h2' }: { headingLevel?: 'h2' | 'h3' } = {}) {
+  const Heading = headingLevel;
   return (
-    <section className="memory-advanced" aria-labelledby="memory-advanced-title">
-      <header>
-        <h2 id="memory-advanced-title">What advanced analysis would provide</h2>
-        <p>Unavailable until the daemon exposes a verified runtime capability.</p>
-      </header>
-      <div className="memory-advanced__grid">
+    <section className="stack stack--tight" aria-labelledby="memory-advanced-title">
+      <div>
+        <Heading id="memory-advanced-title">What advanced analysis would provide</Heading>
+        <p className="form-hint">Unavailable until the daemon exposes a verified runtime capability.</p>
+      </div>
+      <div className="capability-grid">
         {capabilities.map(({ label, detail, icon: Icon }) => (
-          <article key={label} aria-disabled="true">
+          <article key={label} className="capability-tile" aria-disabled="true">
             <Icon aria-hidden="true" />
             <span><strong>{label}</strong><small>{detail}</small></span>
-            <span className="memory-locked"><LockKeyhole aria-hidden="true" />Unavailable</span>
+            <span className="badge"><LockKeyhole aria-hidden="true" />Unavailable</span>
           </article>
         ))}
       </div>

@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, HardDrive, Loader2, ShieldAlert, ShieldCheck, Usb } from 'lucide-react';
+import { AdvancedSection, PageHeader } from '@recovery/ui';
+import { ArrowLeft, BookOpen, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { BlockDevice, EraseResult } from '../../main/secure-erase/types.js';
 import { ApplicationShell } from './ApplicationShell.js';
 import { CertificatePanel } from '../features/certificate/CertificatePanel.js';
+import { DevicePicker, formatDeviceBytes } from '../features/devices/DevicePicker.js';
 import { trackOperation, useOperationByKind } from '../features/operations/operations-store.js';
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${bytes} B`;
-}
 
 export function FlashErasePage() {
   const [devices, setDevices] = useState<BlockDevice[] | null>(null);
@@ -41,8 +37,6 @@ export function FlashErasePage() {
   }
 
   useEffect(() => { void refresh(); }, []);
-  // Returning to this screen (e.g. from the background-tasks widget) restores the
-  // device whose wipe is in flight, so the live progress is shown again.
   useEffect(() => {
     if (!selected && latestWipe?.device) setSelected(latestWipe.device);
   }, [latestWipe, selected]);
@@ -63,84 +57,38 @@ export function FlashErasePage() {
   }
 
   return (
-    <ApplicationShell title="Secure erase">
-      <div className="flash-erase">
-        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" size={16} />Back to workspace</Link>
-
-        <header className="page-heading">
-          <div>
-            <p className="eyebrow flash-erase__eyebrow">Secure drive eraser</p>
-            <h1>Erase a removable device</h1>
-            <p className="page-heading__description">
-              Overwrites every sector of a USB flash drive with a CSPRNG (AES-256-CTR) keystream in a single pass —
-              a NIST SP 800-88 <strong>Clear</strong> method. The system disk can never be selected.
-            </p>
-          </div>
-          <button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}>Rescan devices</button>
-        </header>
+    <ApplicationShell title="Erase a drive">
+      <div className="page page--narrow">
+        <Link to="/" className="back-link"><ArrowLeft aria-hidden="true" />Home</Link>
+        <PageHeader
+          eyebrow="Securely delete"
+          title="Erase a removable drive"
+          description="Overwrites every byte of a USB drive with random data in a single pass, then issues a signed certificate. Your system drive can never be selected."
+          actions={<button type="button" className="button button--secondary" onClick={() => void refresh()} disabled={running}><RefreshCw aria-hidden="true" />Rescan</button>}
+        />
 
         {loadError ? <p role="alert" className="form-error">{loadError}</p> : null}
-
-        <section className="flash-erase__devices" aria-label="Detected devices">
-          {devices === null ? <p role="status" className="flash-erase__loading"><Loader2 aria-hidden="true" className="spin" /> Scanning connected devices…</p> : null}
-          {devices?.length === 0 ? <p className="empty-state">No physical devices were reported.</p> : null}
-          {devices?.map((device) => {
-            const eligible = device.removable && !device.system;
-            const active = selected === device.device;
-            return (
-              <button
-                key={device.device}
-                type="button"
-                className="flash-erase__device"
-                data-eligible={eligible || undefined}
-                data-active={active || undefined}
-                aria-pressed={active}
-                disabled={!eligible || running}
-                onClick={() => { setSelected(device.device); setConfirmText(''); }}
-              >
-                <span className="flash-erase__device-icon" aria-hidden="true">{device.removable ? <Usb /> : <HardDrive />}</span>
-                <span className="flash-erase__device-body">
-                  <strong>{device.model}</strong>
-                  <small>{formatBytes(device.sizeBytes)} · {device.busType ?? 'unknown bus'} · <code className="flash-erase__path">{device.device}</code></small>
-                </span>
-                <span className="flash-erase__device-badge" data-tone={device.system ? 'system' : eligible ? 'eligible' : 'blocked'}>
-                  {device.system ? 'System disk — protected' : eligible ? 'Removable' : 'Fixed disk — not eligible'}
-                </span>
-              </button>
-            );
-          })}
-        </section>
+        <DevicePicker devices={devices} selected={selected} busy={running} onSelect={(device) => { setSelected(device.device); setConfirmText(''); }} />
 
         {target ? (
-          <section className="flash-erase__panel" aria-label="Erase options">
-            <div className="flash-erase__method">
-              <ShieldCheck aria-hidden="true" />
-              <div>
-                <strong>CSPRNG overwrite — NIST SP 800-88 Clear</strong>
-                <p>A single sequential AES-256-CTR keystream pass over all {formatBytes(target.sizeBytes)}. No key is stored or reused; the transient key exists only in memory and is zeroed after.</p>
-                <p className="flash-erase__limitation">
-                  Honest limitation: on flash media, wear-leveling and over-provisioning mean a logical overwrite may not reach every physical NAND cell. For NIST <strong>Purge</strong> assurance, use a firmware command (ATA Secure Erase / NVMe Sanitize).
-                </p>
-              </div>
-            </div>
-
-            <label className="flash-erase__dryrun">
+          <section className="card stack stack--loose" aria-label="Erase options">
+            <label className="check check--boxed">
               <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} disabled={running} />
               <span>
                 <strong>Dry run (safe)</strong>
-                <small>Writes a real CSPRNG sample to a scratch file to prove the pipeline. The device is <em>not</em> changed. Uncheck to perform the real, irreversible wipe.</small>
+                <small>Runs the whole pipeline against a scratch file so you can see it work. <em>{target.model} is not changed.</em> Untick to perform the real, irreversible wipe.</small>
               </span>
             </label>
 
             {showElevationHint ? (
-              <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> A live wipe needs administrator rights. If it fails with “access denied”, close and relaunch the app as Administrator. If you already launched as admin, you can proceed.</p>
+              <p className="flash-erase__warn"><ShieldAlert aria-hidden="true" /> A real wipe needs administrator rights. If it fails with “access denied”, close the app and relaunch it as Administrator.</p>
             ) : null}
 
             {!dryRun ? (
-              <div className="flash-erase__danger">
+              <div className="danger-zone">
                 <ShieldAlert aria-hidden="true" />
                 <div>
-                  <strong>This permanently destroys everything on {target.model} ({formatBytes(target.sizeBytes)}).</strong>
+                  <strong>This permanently destroys everything on {target.model} ({formatDeviceBytes(target.sizeBytes)}).</strong>
                   <p>To confirm, type the device path exactly: <code className="flash-erase__path">{target.device}</code></p>
                   <input
                     className="flash-erase__confirm"
@@ -150,18 +98,14 @@ export function FlashErasePage() {
                     spellCheck={false}
                     autoComplete="off"
                     disabled={running}
+                    aria-label="Type the device path to confirm"
                   />
                 </div>
               </div>
             ) : null}
 
             <div className="flash-erase__actions">
-              <button
-                type="button"
-                className="button button--danger"
-                disabled={dryRun ? running : !canErase}
-                onClick={() => void erase()}
-              >
+              <button type="button" className={dryRun ? 'button button--primary button--large' : 'button button--danger button--large'} disabled={dryRun ? running : !canErase} onClick={() => void erase()}>
                 <ShieldAlert aria-hidden="true" />
                 {running ? 'Working…' : dryRun ? 'Run dry run' : `Erase ${target.model}`}
               </button>
@@ -201,6 +145,11 @@ export function FlashErasePage() {
               details: `${(target.sizeBytes / 1024 ** 3).toFixed(2)} GB removable device`,
               completedAt: result.completedAt,
             }} /> : null}
+
+            <AdvancedSection title="How the erase works" summary="Method, standards and the honest limitation for flash media" icon={BookOpen} quiet>
+              <p className="form-hint"><strong>CSPRNG overwrite — NIST SP 800-88 Rev. 2 Clear.</strong> A single sequential AES-256-CTR keystream pass over all {formatDeviceBytes(target.sizeBytes)}. No key is stored or reused; the transient key exists only in memory and is zeroed afterwards.</p>
+              <p className="note" data-tone="warning"><ShieldAlert aria-hidden="true" />Honest limitation: on flash media, wear-levelling and over-provisioning mean a logical overwrite may not reach every physical NAND cell. For NIST <strong>Purge</strong> assurance, use a firmware command (ATA Secure Erase / NVMe Sanitize).</p>
+            </AdvancedSection>
           </section>
         ) : null}
       </div>

@@ -1,4 +1,4 @@
-import { AppShell, IconButton } from '@recovery/ui';
+import { AppShell, ThemeToggle } from '@recovery/ui';
 import { CircleCheck, Search } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -61,23 +61,17 @@ export function ApplicationShell({ title, children }: { title: string; children:
           <div className="application-header">
             <strong>{title}</strong>
             <div className="application-header__actions">
-              <IconButton ref={searchTriggerRef} label="Search screens and actions" icon={Search} onClick={() => setSearchOpen(true)} />
-              <select
-                aria-label="Theme"
-                value={preferences.theme}
-                onChange={(event) => updatePreferences({ ...preferences, theme: event.target.value as UiPreferences['theme'] })}
-              >
-                <option value="system">System theme</option>
-                <option value="light">Light theme</option>
-                <option value="dark">Dark theme</option>
-              </select>
+              <button ref={searchTriggerRef} type="button" className="header-search" aria-label="Search screens and actions" onClick={() => setSearchOpen(true)}>
+                <Search aria-hidden="true" /><span>Search</span><kbd>Ctrl K</kbd>
+              </button>
+              <ThemeToggle value={preferences.theme} onChange={(theme) => updatePreferences({ ...preferences, theme })} />
             </div>
           </div>
         )}
         footer={(
           <div className="sidebar-safety-status" role="status">
             <CircleCheck aria-hidden="true" />
-            <span><strong>Source writes blocked</strong><small>Read-only recovery safeguards</small></span>
+            <span><strong>Source writes blocked</strong><small>Your evidence is never modified</small></span>
           </div>
         )}
       >

@@ -1,9 +1,9 @@
 import { JobStatusSchema, type JobStatus } from '@recovery/contracts';
-import { ArrowLeft, FolderLock } from 'lucide-react';
+import { AdvancedSection, CapabilityBanner, PageHeader } from '@recovery/ui';
+import { ArrowLeft, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { activeJobId } from '../../application-state.js';
-import { CapabilityBanner, SurfaceCard } from '@recovery/ui';
 import { AdvancedMemoryCapabilities } from './AdvancedMemoryCapabilities.js';
 
 export function MemoryResultsPage() {
@@ -27,7 +27,19 @@ export function MemoryResultsPage() {
     }).catch((cause) => { if (active) setError(message(cause)); });
     return () => { active = false; };
   }, [caseId]);
-  return <section className="workflow-page memory-results memory-capability"><header className="page-heading"><div><p className="eyebrow">Volatile memory</p><h1>Memory analysis results</h1><p className="page-heading__description">Memory findings remain separate from disk recovery results and are never simulated.</p></div></header>{error ? <p role="alert" className="form-error">{error}</p> : null}{!status && !error ? <p role="status">Checking verified memory-analysis capability…</p> : null}<SurfaceCard title="Verified capability"><CapabilityBanner level="warning" title="Memory analysis capability unavailable" explanation="The verified Volatility capability is unavailable in the current daemon tool state. No process, network, module, or YARA finding is inferred or simulated." /><code className="diagnostic-code">VOLATILITY_UNAVAILABLE</code>{status ? <p>Live job state: {status.stage.replaceAll('_', ' ')}.</p> : null}{status?.limitations.length ? <div className="report-banner-list">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level="warning" title={limitation.code} explanation={limitation.explanation} />)}</div> : null}<p className="form-hint">This renderer cannot configure or verify a Volatility runtime because the typed desktop API exposes no runtime-capability method.</p></SurfaceCard><AdvancedMemoryCapabilities /><footer className="memory-actions"><span><FolderLock aria-hidden="true" />No volatile-memory finding tables are available</span><Link className="button button--secondary button--icon" to={`/cases/${caseId}/memory/options`}><ArrowLeft aria-hidden="true" />Review capability details</Link></footer></section>;
+  return <section className="page page--narrow">
+    <PageHeader eyebrow="Memory" title="Memory analysis results" description="Memory findings stay separate from disk recovery results and are never simulated." />
+    {error ? <p role="alert" className="form-error">{error}</p> : null}
+    {!status && !error ? <p role="status" className="empty-state">Checking verified memory-analysis capability…</p> : null}
+    <CapabilityBanner level="warning" title="Memory analysis capability unavailable" explanation="The verified Volatility capability is unavailable in the current daemon tool state. No process, network, module, or YARA finding is inferred or simulated." action={<code className="diagnostic-code">VOLATILITY_UNAVAILABLE</code>} />
+    {status ? <p className="form-hint">Live job state: {status.stage.replaceAll('_', ' ')}.</p> : null}
+    {status?.limitations.length ? <div className="notes-list">{status.limitations.map((limitation) => <CapabilityBanner key={limitation.code} level="warning" title={limitation.code} explanation={limitation.explanation} />)}</div> : null}
+    <AdvancedSection title="What advanced analysis would provide" summary="Findings this build cannot produce" icon={Info} quiet defaultOpen>
+      <AdvancedMemoryCapabilities headingLevel="h3" />
+      <p className="form-hint">This renderer cannot configure or verify a Volatility runtime because the typed desktop API exposes no runtime-capability method.</p>
+    </AdvancedSection>
+    <div className="button-row"><Link className="button button--secondary" to={`/cases/${caseId}/memory/options`}><ArrowLeft aria-hidden="true" />Review capability details</Link></div>
+  </section>;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : 'Memory-analysis capability could not be checked.'; }

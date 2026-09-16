@@ -1,5 +1,5 @@
 import { RecoveryCaseSchema } from '@recovery/contracts';
-import { FolderOpen, ShieldCheck } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { rememberValidatedCase } from '../../application-state.js';
@@ -34,11 +34,10 @@ export function OpenCaseForm() {
   return <section className="open-case-panel" aria-labelledby="open-case-panel-title">
     <FolderOpen aria-hidden="true" />
     <div>
-      <h2 id="open-case-panel-title">Choose the existing case folder</h2>
-      <p>Select the folder that contains the case manifest. SHUNYA validates it through the recovery service before adding it to Recent cases.</p>
-      <div className="open-case-panel__safety"><ShieldCheck aria-hidden="true" /><span><strong>Opening does not start a scan.</strong><small>Source writes remain blocked.</small></span></div>
+      <h2 id="open-case-panel-title">Choose the case folder</h2>
+      <p>Select the folder a case was saved in. It is checked before anything is opened, and opening a case never starts a scan.</p>
+      <button className="button button--primary" type="button" disabled={opening} onClick={() => void chooseAndOpen()}>{opening ? 'Opening…' : 'Choose case workspace'}</button>
     </div>
-    <button className="button button--primary" type="button" disabled={opening} onClick={() => void chooseAndOpen()}>{opening ? 'Opening workspace…' : 'Choose case workspace'}</button>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
   </section>;
 }
