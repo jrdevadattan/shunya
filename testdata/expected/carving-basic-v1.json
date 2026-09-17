@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "carving-basic-v1",
+  "artifacts": [
+    { "artifactId": "carved_jpeg", "originalPath": null, "expectedMethods": ["carving"], "expectedState": "complete_validated" },
+    { "artifactId": "carved_pdf", "originalPath": null, "expectedMethods": ["carving"], "expectedState": "complete_validated" }
+  ]
+}

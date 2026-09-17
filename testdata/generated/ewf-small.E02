@@ -1,0 +1,2 @@
+RECOVERY TEST FIXTURE SEGMENT 2
+Production EWF parsing and verification are delegated to checksum-pinned libewf tools.

@@ -1,0 +1,25 @@
+{
+  "sourceId": "src_0198",
+  "kind": "physical_device",
+  "displayName": "Samsung NVMe SSD — 4 TB",
+  "stableId": "sha256:34f5d43c",
+  "sizeBytes": "4000787030016",
+  "logicalSectorSize": 512,
+  "physicalSectorSize": 4096,
+  "bus": "nvme",
+  "model": "Samsung SSD",
+  "serialRedacted": "••••A1B2",
+  "systemDisk": false,
+  "mountedReadWrite": false,
+  "encryptedState": "none",
+  "health": "healthy",
+  "capabilities": [
+    {
+      "code": "READ_ONLY_READY",
+      "level": "supported",
+      "title": "Ready for image analysis",
+      "explanation": "The source can be opened without write access.",
+      "recommendedAction": null
+    }
+  ]
+}

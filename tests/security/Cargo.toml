@@ -1,0 +1,22 @@
+[package]
+name = "security-tests"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+exporter = { path = "../../crates/exporter" }
+serde_json.workspace = true
+recovery-ipc = { path = "../../crates/recovery-ipc" }
+tokio.workspace = true
+validation = { path = "../../crates/validation" }
+
+[[test]]
+name = "path_traversal"
+path = "path_traversal.rs"
+[[test]]
+name = "malicious_metadata"
+path = "malicious_metadata.rs"
+[[test]]
+name = "ipc_fuzz"
+path = "ipc-fuzz.rs"

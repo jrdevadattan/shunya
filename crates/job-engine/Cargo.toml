@@ -1,0 +1,19 @@
+[package]
+name = "job-engine"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+recovery-domain = { path = "../recovery-domain" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+case-store = { path = "../case-store" }
+tempfile = "3"

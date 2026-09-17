@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=SIH Recovery Platform
+Exec=/usr/local/bin/recovery-launch
+Terminal=false
+X-GNOME-Autostart-enabled=true

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SIH Recovery Platform
+Comment=Offline-first read-only forensic recovery workstation
+Exec=recovery-platform
+Icon=recovery-platform
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

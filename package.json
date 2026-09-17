@@ -1,0 +1,32 @@
+{
+  "name": "sih-recovery-platform",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild"
+    ],
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@electron-forge/plugin-fuses>@electron/fuses": "2.1.2"
+      }
+    }
+  },
+  "devDependencies": {
+    "lodash": "4.17.21",
+    "pnpm": "10.15.0"
+  },
+  "scripts": {
+    "lint": "corepack pnpm -r lint && cargo clippy --workspace --all-targets -- -D warnings",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test && corepack pnpm test:package && cargo nextest run --workspace --no-tests pass",
+    "test:package": "corepack pnpm --filter @recovery/desktop exec tsx --test ../../tests/platform/package-integrity.test.ts ../../tests/platform/packaging-config.test.ts ../../tests/platform/release-assembly.test.ts ../../tests/platform/tool-staging.test.ts ../../tests/corpus-repro.test.ts ../../tests/security/electron-fuses.test.ts",
+    "test:e2e": "corepack pnpm --filter @recovery/desktop test:e2e",
+    "build": "cargo build --workspace --release && corepack pnpm -r build"
+  }
+}

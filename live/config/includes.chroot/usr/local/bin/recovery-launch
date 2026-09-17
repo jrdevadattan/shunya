@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+export RECOVERY_RUNTIME_MODE=rescue
+export RECOVERY_SESSION_DIR="$(mktemp -d /tmp/recovery-session.XXXXXX)"
+swapoff -a 2>/dev/null || true
+nmcli networking off 2>/dev/null || true
+
+APP=/usr/bin/sih-recovery-platform
+MANIFEST=/opt/recovery/release-manifest.sha256
+if [ ! -x "$APP" ] || [ ! -f "$MANIFEST" ]; then
+  zenity --error --text="Recovery Mode could not verify the application manifest. See /var/log/recovery-launch.log." 2>/dev/null || true
+  exit 1
+fi
+
+cd /opt/recovery
+if ! sha256sum --check --strict release-manifest.sha256 >/var/log/recovery-launch.log 2>&1; then
+  zenity --error --text="Recovery Mode integrity verification failed. No source was opened." 2>/dev/null || true
+  exit 1
+fi
+
+exec "$APP"

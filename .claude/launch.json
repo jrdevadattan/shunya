@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui-preview",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--filter", "@recovery/desktop", "exec", "vite", "--config", "vite.preview.config.ts"],
+      "port": 5180
+    }
+  ]
+}

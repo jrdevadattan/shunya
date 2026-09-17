@@ -1,0 +1,2 @@
+# The recovery helper opens explicitly selected sources read-only. Desktop automounters must ignore block media.
+SUBSYSTEM=="block", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"

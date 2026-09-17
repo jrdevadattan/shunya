@@ -1,0 +1,5 @@
+polkit.addRule(function(action, subject) {
+  if (action.id === "org.sih.recovery.helper" && subject.active && subject.local) {
+    return polkit.Result.AUTH_ADMIN_KEEP;
+  }
+});

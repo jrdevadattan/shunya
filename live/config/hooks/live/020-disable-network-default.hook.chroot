@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+systemctl disable NetworkManager.service NetworkManager-wait-online.service 2>/dev/null || true
+systemctl mask udisks2.service 2>/dev/null || true
+rm -f /etc/xdg/autostart/nm-applet.desktop /etc/xdg/autostart/*volume*.desktop
